@@ -1,0 +1,316 @@
+/**
+ * Centralised repository state (plan section 12).
+ *
+ * Git operations can change several parts of state at once, so every mutating
+ * method re-reads from Git afterwards rather than patching state optimistically.
+ */
+import { GitRepository } from '../git/repository';
+import { GitCallError } from '../git/transport';
+import { layoutGraph } from '../graph/layout';
+import type {
+  Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
+  RepositoryInfo, SquashInspection, SquashResult
+} from '../git/types';
+import { toasts } from './toasts.svelte';
+import { rememberRepo } from './recent';
+
+const LOG_LIMIT = 5000;
+
+class RepoStore {
+  repo = $state<GitRepository | null>(null);
+  info = $state<RepositoryInfo | null>(null);
+
+  commits = $state<Commit[]>([]);
+  truncated = $state(false);
+  branches = $state<BranchSet>({ local: [], remote: [], tags: [] });
+  status = $state<GitStatus | null>(null);
+  head = $state<HeadInfo | null>(null);
+  remotes = $state<string[]>([]);
+
+  /** Selected commit hashes, kept in graph order. */
+  selection = $state<string[]>([]);
+  /** Keyboard cursor. Always a selected commit when the selection is non-empty. */
+  cursor = $state<string | null>(null);
+  /** Anchor for shift-range selection. */
+  private anchor: string | null = null;
+
+  details = $state<CommitDetails | null>(null);
+  detailsFor = $state<string | null>(null);
+
+  opening = $state(false);
+  refreshing = $state(false);
+  /** Label of the Git operation currently running, or null. */
+  busy = $state<string | null>(null);
+  openError = $state<string | null>(null);
+
+  filter = $state('');
+
+  layout = $derived(layoutGraph(this.commits));
+
+  selectedSet = $derived(new Set(this.selection));
+
+  /** Rows surviving the search box, with their original graph row index. */
+  visibleRows = $derived.by(() => {
+    const q = this.filter.trim().toLowerCase();
+    const rows = this.layout.rows;
+    if (!q) return rows;
+    return rows.filter((r) =>
+      r.commit.subject.toLowerCase().includes(q) ||
+      r.commit.author.toLowerCase().includes(q) ||
+      r.commit.hash.startsWith(q) ||
+      r.commit.refs.some((ref) => ref.name.toLowerCase().includes(q))
+    );
+  });
+
+  currentBranch = $derived(this.head?.branch ?? null);
+
+  dirtyFileCount = $derived(
+    this.status ? this.status.files.filter((f) => f.state !== 'untracked').length : 0
+  );
+
+  isDirty = $derived(this.dirtyFileCount > 0);
+
+  commitByHash(hash: string): Commit | undefined {
+    const i = this.layout.index.get(hash);
+    return i === undefined ? undefined : this.commits[i];
+  }
+
+  async open(path: string) {
+    this.opening = true;
+    this.openError = null;
+    try {
+      const repo = await GitRepository.open(path);
+      this.repo = repo;
+      this.info = repo.info;
+      this.selection = [];
+      this.cursor = null;
+      this.anchor = null;
+      this.details = null;
+      this.detailsFor = null;
+      this.filter = '';
+      rememberRepo(repo.info.root, repo.info.name);
+      await this.refresh();
+      // Start on HEAD so the view is never empty.
+      if (this.head?.oid && this.layout.index.has(this.head.oid)) {
+        this.select(this.head.oid, 'replace');
+      }
+    } catch (err) {
+      this.openError = describe(err);
+      this.repo = null;
+      this.info = null;
+    } finally {
+      this.opening = false;
+    }
+  }
+
+  close() {
+    this.repo = null;
+    this.info = null;
+    this.commits = [];
+    this.branches = { local: [], remote: [], tags: [] };
+    this.status = null;
+    this.head = null;
+    this.selection = [];
+    this.cursor = null;
+    this.details = null;
+    this.detailsFor = null;
+  }
+
+  async refresh() {
+    const repo = this.repo;
+    if (!repo) return;
+    this.refreshing = true;
+    try {
+      const [log, branches, status, head, remotes] = await Promise.all([
+        repo.log({ limit: LOG_LIMIT, all: true }),
+        repo.branches(),
+        repo.status(),
+        repo.head(),
+        repo.remotes()
+      ]);
+      this.commits = log.commits;
+      this.truncated = log.truncated;
+      this.branches = branches;
+      this.status = status;
+      this.head = head;
+      this.remotes = remotes.remotes;
+
+      // Drop selected commits that no longer exist (e.g. after a rewrite).
+      const live = new Set(log.commits.map((c) => c.hash));
+      const kept = this.selection.filter((h) => live.has(h));
+      if (kept.length !== this.selection.length) this.selection = kept;
+      if (this.cursor && !live.has(this.cursor)) this.cursor = kept[0] ?? null;
+    } catch (err) {
+      toasts.error('Could not read the repository', describe(err));
+    } finally {
+      this.refreshing = false;
+    }
+  }
+
+  /** Selection modes mirror a normal list: plain click, toggle, range. */
+  select(hash: string, mode: 'replace' | 'toggle' | 'range' = 'replace') {
+    if (mode === 'replace') {
+      this.selection = [hash];
+      this.anchor = hash;
+    } else if (mode === 'toggle') {
+      this.selection = this.selection.includes(hash)
+        ? this.selection.filter((h) => h !== hash)
+        : this.orderHashes([...this.selection, hash]);
+      this.anchor = hash;
+    } else {
+      const rows = this.visibleRows;
+      const from = rows.findIndex((r) => r.commit.hash === (this.anchor ?? hash));
+      const to = rows.findIndex((r) => r.commit.hash === hash);
+      if (from === -1 || to === -1) {
+        this.selection = [hash];
+        this.anchor = hash;
+      } else {
+        const [lo, hi] = from <= to ? [from, to] : [to, from];
+        this.selection = rows.slice(lo, hi + 1).map((r) => r.commit.hash);
+      }
+    }
+    this.cursor = hash;
+  }
+
+  /** Keep a selection in graph order so operations read top-to-bottom. */
+  private orderHashes(hashes: string[]): string[] {
+    const set = new Set(hashes);
+    return this.layout.rows.filter((r) => set.has(r.commit.hash)).map((r) => r.commit.hash);
+  }
+
+  /** Move the keyboard cursor by `delta` rows within the visible list. */
+  moveCursor(delta: number, extend = false) {
+    const rows = this.visibleRows;
+    if (rows.length === 0) return;
+    const current = this.cursor ? rows.findIndex((r) => r.commit.hash === this.cursor) : -1;
+    const next = Math.max(0, Math.min(rows.length - 1, (current === -1 ? 0 : current + delta)));
+    this.select(rows[next].commit.hash, extend ? 'range' : 'replace');
+  }
+
+  async loadDetails(hash: string) {
+    const repo = this.repo;
+    if (!repo) return;
+    this.detailsFor = hash;
+    try {
+      const details = await repo.commitDetails(hash);
+      // A newer selection may have landed while this was in flight.
+      if (this.detailsFor === hash) this.details = details;
+    } catch (err) {
+      if (this.detailsFor === hash) {
+        this.details = null;
+        toasts.error('Could not load commit details', describe(err));
+      }
+    }
+  }
+
+  /** Run a Git operation with one busy label, one refresh and one message. */
+  private async operate<T>(label: string, run: (repo: GitRepository) => Promise<T>, done: string) {
+    const repo = this.repo;
+    if (!repo) return false;
+    this.busy = label;
+    try {
+      await run(repo);
+      await this.refresh();
+      toasts.success(done);
+      return true;
+    } catch (err) {
+      toasts.error(`${label} failed`, describe(err));
+      return false;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  switchBranch(name: string) {
+    return this.operate(`Switching to ${name}`, (r) => r.switchBranch(name), `Switched to ${name}`);
+  }
+
+  createBranch(name: string, from?: string, checkout = true) {
+    return this.operate(
+      `Creating ${name}`,
+      (r) => r.createBranch(name, from, checkout),
+      checkout ? `Created and switched to ${name}` : `Created ${name}`
+    );
+  }
+
+  deleteBranch(name: string, force = false) {
+    return this.operate(`Deleting ${name}`, (r) => r.deleteBranch(name, force), `Deleted ${name}`);
+  }
+
+  renameBranch(from: string, to: string) {
+    return this.operate(`Renaming ${from}`, (r) => r.renameBranch(from, to), `Renamed to ${to}`);
+  }
+
+  checkoutCommit(hash: string) {
+    const short = hash.slice(0, 7);
+    return this.operate(
+      `Checking out ${short}`,
+      (r) => r.checkoutCommit(hash),
+      `HEAD is now at ${short} (detached)`
+    );
+  }
+
+  fetch(remote?: string) {
+    return this.operate('Fetching', (r) => r.fetch(remote), 'Fetch complete');
+  }
+
+  inspectBranch(name: string) {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve(null);
+    return repo.inspectBranch(name).catch(() => null);
+  }
+
+  inspectSquash(hashes: string[]): Promise<SquashInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo
+      .inspectSquash(hashes)
+      .catch((err) => ({ ok: false, problems: [describe(err)] }));
+  }
+
+  commitMessages(hashes: string[]) {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ messages: [] });
+    return repo.commitMessages(hashes).catch(() => ({ messages: [] }));
+  }
+
+  /**
+   * Squash and then select the commit that replaced the selection, so the
+   * user's place in the graph is not lost.
+   */
+  async squash(hashes: string[], message: string): Promise<SquashResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = `Squashing ${hashes.length} commits`;
+    try {
+      const result = await repo.squash(hashes, message);
+      await this.refresh();
+      if (this.layout.index.has(result.commit)) this.select(result.commit, 'replace');
+      toasts.success(
+        `Squashed ${hashes.length} commits into ${result.commit.slice(0, 7)}`,
+        `The branch was at ${result.previousHead.slice(0, 7)} before. Run "git reset --hard ${result.previousHead.slice(0, 12)}" to undo this.`
+      );
+      return result;
+    } catch (err) {
+      toasts.error('Squash failed', describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /** Every branch head that points at a given commit. */
+  branchesAt(hash: string): Branch[] {
+    return [...this.branches.local, ...this.branches.remote].filter((b) => b.oid === hash);
+  }
+}
+
+export function describe(err: unknown): string {
+  if (err instanceof GitCallError) return err.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+export const repoStore = new RepoStore();
+export type { GitStatus, HeadInfo };

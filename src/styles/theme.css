@@ -1,0 +1,147 @@
+/* Gitalia design tokens.
+   Dense, quiet, high-contrast where it matters. Colour is reserved for the
+   graph, refs and state, so the chrome never competes with the history. */
+
+:root {
+  --font-ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --row-height: 24px;
+  --lane-width: 14px;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+
+  /* Light theme */
+  --bg-app: #f4f4f5;
+  --bg-panel: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-sunken: #ebebed;
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.08);
+  --bg-selected: #dbe8f6;
+  --bg-selected-inactive: #e6e6e9;
+
+  --border: #d9d9dd;
+  --border-strong: #c2c2c8;
+
+  --text: #1c1c1f;
+  --text-dim: #63636b;
+  --text-faint: #8d8d96;
+  --text-inverted: #ffffff;
+
+  --accent: #2f6fd0;
+  --accent-hover: #2a62b8;
+  --accent-text: #ffffff;
+  --accent-subtle: rgba(47, 111, 208, 0.12);
+
+  --danger: #c0392b;
+  --danger-subtle: rgba(192, 57, 43, 0.1);
+  --warning: #9a6a00;
+  --warning-subtle: rgba(200, 145, 0, 0.14);
+  --success: #2f7d43;
+
+  --ref-local-bg: #e2edf9;
+  --ref-local-text: #1c4f8f;
+  --ref-remote-bg: #efe8f7;
+  --ref-remote-text: #5b3a8a;
+  --ref-tag-bg: #fdf0da;
+  --ref-tag-text: #7a5410;
+  --ref-head-bg: #2f6fd0;
+  --ref-head-text: #ffffff;
+
+  --shadow-menu: 0 6px 20px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.28);
+  --scrim: rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme='dark'] {
+  --bg-app: #1a1b1e;
+  --bg-panel: #202125;
+  --bg-raised: #292a2f;
+  --bg-sunken: #161719;
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-selected: #294a70;
+  --bg-selected-inactive: #303136;
+
+  --border: #33343a;
+  --border-strong: #45464e;
+
+  --text: #e3e3e6;
+  --text-dim: #9b9ba4;
+  --text-faint: #6d6e77;
+  --text-inverted: #16171a;
+
+  --accent: #4a8fe0;
+  --accent-hover: #5c9be6;
+  --accent-text: #0f1114;
+  --accent-subtle: rgba(74, 143, 224, 0.16);
+
+  --danger: #e06a5c;
+  --danger-subtle: rgba(224, 106, 92, 0.14);
+  --warning: #d9a441;
+  --warning-subtle: rgba(217, 164, 65, 0.15);
+  --success: #63b175;
+
+  --ref-local-bg: #23415f;
+  --ref-local-text: #b9d6f5;
+  --ref-remote-bg: #3b2f52;
+  --ref-remote-text: #d3c2ee;
+  --ref-tag-bg: #4a3b1c;
+  --ref-tag-text: #f0d9a6;
+  --ref-head-bg: #4a8fe0;
+  --ref-head-text: #11151a;
+
+  --shadow-menu: 0 8px 26px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection { background: var(--accent-subtle); }
+
+/* Scrollbars: present but unobtrusive. */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--text-faint); }
+
+.mono { font-family: var(--font-mono); font-size: 11.5px; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
