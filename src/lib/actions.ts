@@ -10,13 +10,16 @@ import { commitStore } from './state/commit.svelte';
 import { confirm, prompt, choose } from './state/dialogs.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
-import { pluralize } from './format';
+import { pluralize, relativeTime } from './format';
 import type { MenuItem } from './menu';
 import { SEPARATOR } from './menu';
-import type { Branch, Commit, ResetMode } from './git/types';
+import type { Branch, Commit, ResetMode, Stash, StashFile } from './git/types';
 import type { Change } from './changes';
 import { KIND_LABEL } from './changes';
 import { diffStore } from './state/diff.svelte';
+
+/** Git's empty tree, the only thing a file with no history can be compared with. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
 /** Mirrors the rules `git check-ref-format` enforces, so we fail before Git does. */
 export function validateBranchName(name: string): string | null {
@@ -934,4 +937,120 @@ export async function abortOperation() {
   });
   if (!ok) return;
   await repoStore.abortOperation();
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The shelf
+ * ------------------------------------------------------------------ */
+
+/**
+ * Put the ticked files aside.
+ *
+ * IntelliJ IDEA calls this shelving. Underneath it is `git stash`, so a change
+ * shelved here is an ordinary stash that the command line can also reach.
+ */
+export async function shelveChanges(changes: Change[]) {
+  if (changes.length === 0) return;
+
+  const untracked = changes.filter((c) => c.kind === 'unversioned');
+  const branch = repoStore.currentBranch ?? 'detached HEAD';
+
+  const message = await prompt({
+    title: changes.length === 1 ? 'Shelve 1 file' : `Shelve ${changes.length} files`,
+    message:
+      'The changes are saved and taken out of your working tree, leaving it as though you had not made them. You can put them back at any time.',
+    facts: [
+      { label: 'Branch', value: branch },
+      { label: 'Files', value: pluralize(changes.length, 'file') },
+      ...(untracked.length > 0
+        ? [{ label: 'Including', value: `${pluralize(untracked.length, 'unversioned file')}, which will be removed from disk until you put them back`, tone: 'warning' as const }]
+        : []),
+      { label: 'Stored as', value: 'a Git stash, so "git stash list" shows it too' }
+    ],
+    input: {
+      label: 'Name',
+      value: '',
+      placeholder: 'What you are setting aside',
+      validate: () => null // Git writes its own name when this is left empty
+    },
+    confirmLabel: 'Shelve'
+  });
+  if (message === null) return;
+
+  await commitStore.shelve(message, changes.map((c) => c.path), untracked.length > 0);
+}
+
+/** Put a shelved change back into the working tree. */
+export async function unshelve(stash: Stash, drop: boolean) {
+  const dirty = repoStore.dirtyFileCount;
+
+  const ok = await confirm({
+    title: drop ? 'Unshelve this change?' : 'Apply this change and keep it shelved?',
+    message: drop
+      ? 'The change goes back into your working tree and comes off the shelf.'
+      : 'The change goes back into your working tree and stays on the shelf as well.',
+    tone: dirty > 0 ? 'warning' : 'normal',
+    facts: [
+      { label: 'Shelved', value: stash.message || '(no name)' },
+      { label: 'From', value: `${stash.branch ?? 'an unknown branch'}, ${relativeTime(stash.date)}` },
+      ...(dirty > 0
+        ? [{
+            label: 'Your work',
+            value: `${pluralize(dirty, 'changed file')} in the working tree. If the shelved change touches the same lines, you will get conflicts to resolve.`,
+            tone: 'warning' as const
+          }]
+        : []),
+      ...(drop
+        ? [{ label: 'If it conflicts', value: 'the change stays on the shelf, so nothing is lost' }]
+        : [])
+    ],
+    confirmLabel: drop ? 'Unshelve' : 'Apply and keep'
+  });
+  if (!ok) return;
+
+  await commitStore.unshelve(stash, drop);
+}
+
+export async function deleteShelved(stash: Stash) {
+  const ok = await confirm({
+    title: 'Delete this shelved change?',
+    message:
+      'The change is thrown away. It is not in any commit and not in your working tree, so this cannot be undone through Gitalia.',
+    tone: 'danger',
+    facts: [
+      { label: 'Shelved', value: stash.message || '(no name)' },
+      { label: 'From', value: `${stash.branch ?? 'an unknown branch'}, ${relativeTime(stash.date)}` },
+      { label: 'Instead', value: 'Cancel and unshelve it first if you want to keep the work.' }
+    ],
+    confirmLabel: 'Delete it'
+  });
+  if (!ok) return;
+  await commitStore.dropShelved(stash);
+}
+
+/** Show what one file inside a shelved change holds. */
+export function showShelvedDiff(stash: Stash, file: StashFile) {
+  diffStore.show({
+    file: file.path,
+    origPath: file.origPath,
+    // A file that was untracked when it was shelved sits in a third parent of
+    // the stash commit, with nothing to compare it against but the empty tree.
+    hash: file.untracked ? `${stash.ref}^3` : stash.ref,
+    base: file.untracked ? EMPTY_TREE : `${stash.ref}^1`,
+    source: `Shelved: ${stash.message || '(no name)'}`
+  });
+}
+
+/** Context menu for a shelved change. */
+export function stashMenuItems(stash: Stash): MenuItem[] {
+  return [
+    { label: 'Unshelve', hint: 'apply and remove', action: () => unshelve(stash, true) },
+    { label: 'Apply and Keep', action: () => unshelve(stash, false) },
+    SEPARATOR,
+    { label: 'Delete…', danger: true, action: () => deleteShelved(stash) },
+    SEPARATOR,
+    { label: 'Copy name', action: () => copy(stash.message || stash.ref, 'name') },
+    { label: 'Copy stash reference', action: () => copy(stash.ref, stash.ref) }
+  ];
 }

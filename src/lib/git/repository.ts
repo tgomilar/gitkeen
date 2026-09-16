@@ -9,7 +9,8 @@ import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
   PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
-  SquashInspection, SquashResult
+  SquashInspection, SquashResult, Stash, StashApplyResult,
+  StashFile, StashResult
 } from './types';
 
 export class GitRepository {
@@ -76,8 +77,38 @@ export class GitRepository {
    * The diff of one file. Leave `hash` out for the working tree against HEAD,
    * or name a commit to see what that commit did to the file.
    */
-  fileDiff(options: { file: string; origPath?: string | null; hash?: string | null; context?: number }): Promise<FileDiff> {
+  fileDiff(options: {
+    file: string;
+    origPath?: string | null;
+    hash?: string | null;
+    /** Names the other side outright, for a diff between two revisions. */
+    base?: string | null;
+    context?: number;
+  }): Promise<FileDiff> {
     return transport.call('diff.file', { path: this.path, ...options });
+  }
+
+  /* The shelf, which is Git's stash. */
+
+  stashes(): Promise<{ stashes: Stash[] }> {
+    return transport.call('stash.list', { path: this.path });
+  }
+
+  stashFiles(ref: string): Promise<{ files: StashFile[] }> {
+    return transport.call('stash.files', { path: this.path, ref });
+  }
+
+  shelve(options: { message: string; paths: string[]; includeUntracked: boolean }): Promise<StashResult> {
+    return transport.call('stash.create', { path: this.path, ...options });
+  }
+
+  /** `drop` makes this an unshelve: put it back, and take it off the shelf. */
+  applyStash(ref: string, sha: string, drop: boolean): Promise<StashApplyResult> {
+    return transport.call('stash.apply', { path: this.path, ref, sha, drop });
+  }
+
+  dropStash(ref: string, sha: string): Promise<{ ok: boolean }> {
+    return transport.call('stash.drop', { path: this.path, ref, sha });
   }
 
   /** What HEAD holds, so the commit panel can describe an amend. */

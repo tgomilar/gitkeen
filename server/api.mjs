@@ -227,6 +227,23 @@ function parseFileDiff(patch) {
   return { status, binary, truncated, added, removed, hunks };
 }
 
+/**
+ * Make sure a stash reference still points at the change the user chose.
+ *
+ * `stash@{1}` is a position, not an identity. Dropping `stash@{0}` renumbers
+ * everything below it, so a screen read a moment ago can name the wrong one.
+ */
+async function verifyStash(path, ref, sha) {
+  if (!sha) return;
+  const { stdout, code } = await runGit(path, ['rev-parse', ref], { allowFailure: true });
+  if (code !== 0 || stdout.trim() !== sha) {
+    throw new GitError(
+      'The shelf has changed since this list was read. Refresh and try again.',
+      { command: `git rev-parse ${ref}`, stderr: '', code: 1 }
+    );
+  }
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -249,7 +266,11 @@ export const methods = {
    */
   async 'log.list'({ path, limit = 2000, all = true }) {
     const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit}`];
-    if (all) args.push('--all', 'HEAD');
+    // `--all` sweeps in everything under refs/, and that includes refs/stash.
+    // A shelved change would then appear in the graph as two commits nobody
+    // asked for, so it is excluded. `--exclude` only applies to the `--all`
+    // that follows it.
+    if (all) args.push('--exclude=refs/stash', '--all', 'HEAD');
     const { stdout, code } = await runGit(path, args, { allowFailure: true });
     // An empty repository has no HEAD to log; that is not an error.
     if (code !== 0) return { commits: [], truncated: false };
@@ -563,6 +584,139 @@ export const methods = {
   },
 
   /**
+   * The shelf.
+   *
+   * Shelving is Git's stash. Keeping the IntelliJ IDEA name for the action and
+   * Git's own mechanism underneath means a shelf made here is a stash like any
+   * other: `git stash list` shows it, and the command line can reach it.
+   */
+  async 'stash.list'({ path }) {
+    const fmt = ['%gd', '%H', '%ct', '%gs'].join(US);
+    const { stdout, code } = await runGit(path, ['stash', 'list', `--format=${fmt}`], { allowFailure: true });
+    if (code !== 0) return { stashes: [] };
+
+    const stashes = [];
+    for (const line of stdout.split('\n')) {
+      if (!line.trim()) continue;
+      const [ref, sha, date, subject] = line.split(US);
+      // Git writes "On <branch>: <message>", or "WIP on <branch>: ..." when
+      // no message was given.
+      const match = (subject ?? '').match(/^(?:WIP on|On) ([^:]+): ?(.*)$/);
+      // Three parents means Git also put untracked files in this stash.
+      const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', sha], { allowFailure: true });
+      stashes.push({
+        ref,
+        sha,
+        date: Number(date) * 1000,
+        branch: match ? match[1] : null,
+        message: match ? match[2] : (subject ?? ''),
+        hasUntracked: ids.trim().split(' ').length > 3
+      });
+    }
+    return { stashes };
+  },
+
+  /** The files one shelved change holds. */
+  async 'stash.files'({ path, ref }) {
+    const files = [];
+
+    const read = async (args, untracked) => {
+      const { stdout } = await runGit(path, args, { allowFailure: true });
+      const records = stdout.split('\0');
+      if (records[records.length - 1] === '') records.pop();
+      for (let i = 0; i < records.length; i++) {
+        if (!records[i].trim()) continue;
+        const [added, removed, ...rest] = records[i].split('\t');
+        const inline = rest.join('\t');
+        const renamed = inline === '';
+        const origPath = renamed ? records[++i] : null;
+        const filePath = renamed ? records[++i] : inline;
+        files.push({
+          path: filePath,
+          origPath,
+          added: added === '-' ? null : Number(added),
+          removed: removed === '-' ? null : Number(removed),
+          binary: added === '-',
+          untracked
+        });
+      }
+    };
+
+    await read(['-c', 'core.quotepath=false', 'stash', 'show', '--numstat', '-z', ref], false);
+
+    // Untracked files are kept in a third parent of the stash commit, which
+    // `git stash show` leaves out unless asked.
+    const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', ref], { allowFailure: true });
+    if (ids.trim().split(' ').length > 3) {
+      await read(
+        ['-c', 'core.quotepath=false', 'diff', '--numstat', '-z', EMPTY_TREE, `${ref}^3`],
+        true
+      );
+    }
+
+    return { files };
+  },
+
+  /**
+   * Put the chosen files on the shelf and take them out of the working tree.
+   *
+   * A pathspec keeps this to the files the user ticked, so the rest of their
+   * work stays where it is.
+   */
+  async 'stash.create'({ path, message, paths, includeUntracked = false }) {
+    const args = ['stash', 'push'];
+    if (includeUntracked) args.push('--include-untracked');
+    if (message && message.trim()) args.push('-m', message.trim());
+    if (Array.isArray(paths) && paths.length > 0) args.push('--', ...paths);
+
+    const { stdout, stderr } = await runGit(path, args);
+    const output = `${stdout}${stderr}`;
+    // Git says this rather than failing, so it has to be read from the output.
+    if (/No local changes to save/i.test(output)) {
+      return { ok: false, empty: true };
+    }
+
+    const { stdout: sha } = await runGit(path, ['rev-parse', 'stash@{0}'], { allowFailure: true });
+    return { ok: true, empty: false, ref: 'stash@{0}', sha: sha.trim() };
+  },
+
+  /**
+   * Take a shelved change back into the working tree.
+   *
+   * `sha` is checked against the ref first. Stash references shift whenever
+   * one is removed, so acting on a stale `stash@{2}` would reach the wrong
+   * change entirely.
+   */
+  async 'stash.apply'({ path, ref, sha, drop = false }) {
+    await verifyStash(path, ref, sha);
+
+    const { stderr, stdout, code } = await runGit(path, ['stash', 'apply', ref], { allowFailure: true });
+    const conflicted = /conflict/i.test(`${stdout}${stderr}`) || code !== 0;
+
+    if (conflicted) {
+      const status = parseStatus(await git(path, STATUS_ARGS));
+      const unmerged = status.files.filter((f) => f.state === 'conflicted');
+      if (unmerged.length === 0 && code !== 0) {
+        throw new GitError((stderr || stdout).trim() || 'The shelved change could not be applied.', {
+          command: `git stash apply ${ref}`, stderr, code
+        });
+      }
+      // Git keeps the stash when applying it conflicts, which is what makes
+      // it safe to resolve: the shelved copy is still there to fall back on.
+      return { ok: true, conflicted: true, dropped: false, conflicts: unmerged.length };
+    }
+
+    if (drop) await git(path, ['stash', 'drop', ref]);
+    return { ok: true, conflicted: false, dropped: drop, conflicts: 0 };
+  },
+
+  async 'stash.drop'({ path, ref, sha }) {
+    await verifyStash(path, ref, sha);
+    await git(path, ['stash', 'drop', ref]);
+    return { ok: true };
+  },
+
+  /**
    * Everything the cherry-pick and revert dialogs need to ask, in one call.
    *
    * `hashes` arrives newest first, the order the graph shows.
@@ -798,16 +952,20 @@ export const methods = {
    * panel would commit, so HEAD is the comparison), or name a commit to see
    * what that commit did to the file.
    */
-  async 'diff.file'({ path, file, origPath = null, hash = null, context = 3 }) {
+  async 'diff.file'({ path, file, origPath = null, hash = null, base = null, context = 3 }) {
     if (!file) throw new GitError('No file was given.', { command: '', stderr: '', code: 1 });
 
     // core.quotepath escapes non-ASCII paths in the patch headers. The status
     // of the file is read from those headers, so keep them readable.
-    const base = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--find-renames'];
+    const common = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--find-renames'];
     let args;
     let untracked = false;
 
-    if (hash) {
+    if (hash && base) {
+      // Both sides named outright. A shelved change needs this: its content
+      // sits between two revisions that are not parent and child.
+      args = [...common, base, hash, '--', ...(origPath ? [file, origPath] : [file])];
+    } else if (hash) {
       const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
       const parents = ids.trim().split(' ').slice(1);
       // Naming only the new path would hide the rename from Git's detection,
@@ -815,10 +973,10 @@ export const methods = {
       const paths = origPath ? [file, origPath] : [file];
       args = parents.length === 0
         // The first commit has no parent, so compare against the empty tree.
-        ? [...base, EMPTY_TREE, hash, '--', ...paths]
+        ? [...common, EMPTY_TREE, hash, '--', ...paths]
         // For a merge, show it against its first parent: that is the change
         // the branch received, which is what the file list already counted.
-        : [...base, parents[0], hash, '--', ...paths];
+        : [...common, parents[0], hash, '--', ...paths];
     } else {
       const status = parseStatus(await git(path, STATUS_ARGS));
       const entry = status.files.find((f) => f.path === file);
@@ -827,7 +985,7 @@ export const methods = {
         // An untracked file is in no tree at all, so nothing can be compared
         // with it. Diffing against an empty file shows it as wholly added.
         ? ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--no-index', '--', '/dev/null', file]
-        : [...base, 'HEAD', '--', file, ...(origPath ? [origPath] : [])];
+        : [...common, 'HEAD', '--', file, ...(origPath ? [origPath] : [])];
     }
 
     // `--no-index` reports differences with exit code 1, and a plain diff can

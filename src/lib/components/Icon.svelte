@@ -8,7 +8,7 @@
   export type IconName =
     | 'branch' | 'local' | 'remote' | 'tag' | 'folder' | 'head'
     // Tool rail and commit panel toolbar.
-    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree'
+    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'shelve'
     // File kinds, so a changed file is recognisable before its name is read.
     | 'file' | 'doc' | 'markup' | 'code' | 'image';
 
@@ -75,6 +75,12 @@
     <path d="M6.2 1.8 8 3.6l1.8-1.8" />
     <path d="M6.2 14.2 8 12.4l1.8 1.8" />
     <path d="M2.4 8h11.2" />
+  {:else if name === 'shelve'}
+    <!-- A tray with work being lowered into it, to be taken out later. -->
+    <path d="M8 1.9v5.6" />
+    <path d="M5.6 5.3 8 7.7l2.4-2.4" />
+    <path d="M2.2 9.4h3.1a2.7 2.7 0 0 0 5.4 0h3.1" />
+    <path d="M2.2 9.4v3.7a1 1 0 0 0 1 1h9.6a1 1 0 0 0 1-1V9.4" />
   {:else if name === 'tree'}
     <!-- A folder with its files indented under it. -->
     <path d="M2.6 3.2h3.3l1 1.2h6.5" />

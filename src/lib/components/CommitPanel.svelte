@@ -11,14 +11,17 @@
   import ChangeRow from './ChangeRow.svelte';
   import ChangeTreeNode from './ChangeTreeNode.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import ShelfSection from './ShelfSection.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
   import {
-    commitChanges, commitAndPush, rollbackChanges, changeMenuItems, showWorkingTreeDiff
+    commitChanges, commitAndPush, rollbackChanges, changeMenuItems, showWorkingTreeDiff,
+    shelveChanges, stashMenuItems
   } from '../actions';
   import { buildChangeTree } from '../changes';
   import { pluralize } from '../format';
   import type { Change } from '../changes';
+  import type { Stash } from '../git/types';
   import type { MenuItem } from '../menu';
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -41,7 +44,7 @@
 
   /** Every collapsible key on screen, for the collapse-all button. */
   const allKeys = $derived.by(() => {
-    const keys = groups.map((g) => g.key);
+    const keys = [...groups.map((g) => g.key), 'shelf'];
     if (!commitStore.groupByDirectory) return keys;
     const walk = (nodes: ReturnType<typeof buildChangeTree>) => {
       for (const node of nodes) {
@@ -61,6 +64,11 @@
   function openMenu(change: Change, event: MouseEvent) {
     event.preventDefault();
     menu = { x: event.clientX, y: event.clientY, items: changeMenuItems(change) };
+  }
+
+  function openStashMenu(stash: Stash, event: MouseEvent) {
+    event.preventDefault();
+    menu = { x: event.clientX, y: event.clientY, items: stashMenuItems(stash) };
   }
 
   /** ⌘⏎ commits, the shortcut IntelliJ uses from the message box. */
@@ -97,6 +105,18 @@
       aria-label="Roll back ticked files"
     >
       <Icon name="rollback" size={14} />
+    </button>
+
+    <button
+      class="tool"
+      onclick={() => shelveChanges(checkedChanges)}
+      disabled={checkedChanges.length === 0}
+      title={checkedChanges.length === 0
+        ? 'Tick the files to shelve'
+        : `Set the ${checkedChanges.length} ticked ${checkedChanges.length === 1 ? 'file' : 'files'} aside, and take them out of the working tree`}
+      aria-label="Shelve ticked files"
+    >
+      <Icon name="shelve" size={14} />
     </button>
 
     <span class="gap"></span>
@@ -198,6 +218,14 @@
           {/if}
         {/if}
       {/each}
+    {/if}
+
+    {#if !empty || repoStore.stashes.length > 0}
+      <ShelfSection
+        open={!commitStore.collapsed.has('shelf')}
+        ontoggle={() => commitStore.toggleCollapsed('shelf')}
+        onmenu={openStashMenu}
+      />
     {/if}
   </div>
 

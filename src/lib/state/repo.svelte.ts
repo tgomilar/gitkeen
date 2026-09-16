@@ -9,7 +9,7 @@ import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
-  RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult
+  RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult, Stash
 } from '../git/types';
 import { toasts } from './toasts.svelte';
 import { rememberRepo } from './recent';
@@ -26,6 +26,8 @@ class RepoStore {
   status = $state<GitStatus | null>(null);
   head = $state<HeadInfo | null>(null);
   remotes = $state<string[]>([]);
+  /** The shelf, which is Git's stash list. Newest first. */
+  stashes = $state<Stash[]>([]);
 
   /** Selected commit hashes, kept in graph order. */
   selection = $state<string[]>([]);
@@ -110,6 +112,7 @@ class RepoStore {
     this.branches = { local: [], remote: [], tags: [] };
     this.status = null;
     this.head = null;
+    this.stashes = [];
     this.selection = [];
     this.cursor = null;
     this.details = null;
@@ -121,12 +124,13 @@ class RepoStore {
     if (!repo) return;
     this.refreshing = true;
     try {
-      const [log, branches, status, head, remotes] = await Promise.all([
+      const [log, branches, status, head, remotes, stashes] = await Promise.all([
         repo.log({ limit: LOG_LIMIT, all: true }),
         repo.branches(),
         repo.status(),
         repo.head(),
-        repo.remotes()
+        repo.remotes(),
+        repo.stashes()
       ]);
       this.commits = log.commits;
       this.truncated = log.truncated;
@@ -134,6 +138,7 @@ class RepoStore {
       this.status = status;
       this.head = head;
       this.remotes = remotes.remotes;
+      this.stashes = stashes.stashes;
 
       // Drop selected commits that no longer exist (e.g. after a rewrite).
       const live = new Set(log.commits.map((c) => c.hash));

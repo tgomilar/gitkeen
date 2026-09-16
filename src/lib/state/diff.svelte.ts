@@ -16,6 +16,8 @@ export interface DiffRequest {
   origPath?: string | null;
   /** The commit to show, or null for the working tree against HEAD. */
   hash?: string | null;
+  /** Names the other side outright, when it is not the commit's parent. */
+  base?: string | null;
   /** What the header says this diff belongs to, such as a short hash. */
   source: string;
 }
@@ -60,7 +62,8 @@ class DiffStore {
       const diff = await repo.fileDiff({
         file: request.file,
         origPath: request.origPath ?? null,
-        hash: request.hash ?? null
+        hash: request.hash ?? null,
+        base: request.base ?? null
       });
       if (mine === this.token) this.diff = diff;
     } catch (err) {

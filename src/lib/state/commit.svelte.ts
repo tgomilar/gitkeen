@@ -15,7 +15,7 @@ import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
 import { toChange } from '../changes';
 import type { Change } from '../changes';
-import type { HeadCommit } from '../git/types';
+import type { HeadCommit, Stash, StashFile } from '../git/types';
 
 class CommitStore {
   message = $state('');
@@ -33,6 +33,10 @@ class CommitStore {
   groupByDirectory = $state(false);
   /** The row the user last clicked. It drives the diff viewer. */
   selected = $state<string | null>(null);
+
+  /** Shelved changes the user has opened, and the files each one holds. */
+  shelfOpen = $state<Set<string>>(new Set());
+  shelfFiles = $state<Record<string, StashFile[]>>({});
 
   head = $state<HeadCommit | null>(null);
   busy = $state<string | null>(null);
@@ -236,6 +240,94 @@ class CommitStore {
     await repoStore.refresh();
     if (!result) return false;
     toasts.success(`Pushed ${result.branch}`, result.output || null);
+    return true;
+  }
+
+  /**
+   * Show or hide the files inside a shelved change.
+   *
+   * The file list costs a Git call each, so it is read the first time the
+   * change is opened and kept until the shelf is read again.
+   */
+  async toggleShelf(stash: Stash) {
+    const next = new Set(this.shelfOpen);
+    if (next.has(stash.sha)) {
+      next.delete(stash.sha);
+      this.shelfOpen = next;
+      return;
+    }
+    next.add(stash.sha);
+    this.shelfOpen = next;
+
+    if (this.shelfFiles[stash.sha]) return;
+    const repo = repoStore.repo;
+    if (!repo) return;
+    try {
+      const { files } = await repo.stashFiles(stash.ref);
+      this.shelfFiles = { ...this.shelfFiles, [stash.sha]: files };
+    } catch (err) {
+      toasts.error('Could not read the shelved change', describe(err));
+    }
+  }
+
+  /** Put the chosen files on the shelf and take them out of the working tree. */
+  async shelve(message: string, paths: string[], includeUntracked: boolean) {
+    const repo = repoStore.repo;
+    if (!repo) return false;
+    const result = await this.run('Shelving', () => repo.shelve({ message, paths, includeUntracked }));
+    await repoStore.refresh();
+    if (!result) return false;
+
+    if (result.empty) {
+      toasts.info('Nothing was shelved', 'Git found no change in the files you chose.');
+      return false;
+    }
+
+    // Shelved files are gone from the working tree, so the ticks that named
+    // them mean nothing now.
+    const done = new Set(paths);
+    this.excluded = new Set([...this.excluded].filter((p) => !done.has(p)));
+    this.included = new Set([...this.included].filter((p) => !done.has(p)));
+
+    toasts.success(
+      `Shelved ${paths.length} ${paths.length === 1 ? 'file' : 'files'}`,
+      'Find it under Shelf in this panel, or with "git stash list".'
+    );
+    return true;
+  }
+
+  /** Put a shelved change back. `drop` also takes it off the shelf. */
+  async unshelve(stash: Stash, drop: boolean) {
+    const repo = repoStore.repo;
+    if (!repo) return false;
+    const result = await this.run(drop ? 'Unshelving' : 'Applying the shelved change', () =>
+      repo.applyStash(stash.ref, stash.sha, drop)
+    );
+    await repoStore.refresh();
+    if (!result) return false;
+
+    if (result.conflicted) {
+      toasts.error(
+        `The shelved change did not fit cleanly`,
+        `${result.conflicts} ${result.conflicts === 1 ? 'file has' : 'files have'} conflicts. The change is still on the shelf, so nothing is lost. Resolve the files, then drop it yourself.`
+      );
+      return false;
+    }
+
+    toasts.success(
+      drop ? 'Unshelved the change' : 'Applied the shelved change',
+      drop ? null : 'It is still on the shelf.'
+    );
+    return true;
+  }
+
+  async dropShelved(stash: Stash) {
+    const repo = repoStore.repo;
+    if (!repo) return false;
+    const result = await this.run('Deleting the shelved change', () => repo.dropStash(stash.ref, stash.sha));
+    await repoStore.refresh();
+    if (!result) return false;
+    toasts.success('Deleted the shelved change');
     return true;
   }
 
