@@ -2,14 +2,16 @@
   import { dialogs } from '../state/dialogs.svelte';
 
   let value = $state('');
+  let choice = $state('');
   let error = $state<string | null>(null);
   let field = $state<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   const request = $derived(dialogs.current);
 
-  // Reset the field whenever a new dialog opens.
+  // Reset the controls whenever a new dialog opens.
   $effect(() => {
     const req = dialogs.current;
+    if (req?.choices) choice = req.chosen ?? req.choices[0]?.value ?? '';
     if (req?.input) {
       value = req.input.value;
       error = null;
@@ -30,7 +32,9 @@
   function submit() {
     const req = dialogs.current;
     if (!req) return;
-    if (req.input) {
+    if (req.choices) {
+      dialogs.settle(choice);
+    } else if (req.input) {
       const trimmed = value.trim();
       const problem = req.input.validate?.(trimmed) ?? (trimmed ? null : 'A value is required.');
       if (problem) { error = problem; return; }
@@ -87,6 +91,27 @@
           <dd class:warn={fact.tone === 'warning'} class:bad={fact.tone === 'danger'}>{fact.value}</dd>
         {/each}
       </dl>
+    {/if}
+
+    {#if request.choices}
+      <div class="choices" role="radiogroup" aria-label={request.title}>
+        {#each request.choices as option (option.value)}
+          <label class="choice" class:on={choice === option.value}>
+            <input type="radio" bind:group={choice} value={option.value} />
+            <span class="dot" aria-hidden="true"></span>
+            <span class="text">
+              <span class="choice-label">{option.label}</span>
+              {#if option.detail}
+                <span
+                  class="choice-detail"
+                  class:warn={option.tone === 'warning'}
+                  class:bad={option.tone === 'danger'}
+                >{option.detail}</span>
+              {/if}
+            </span>
+          </label>
+        {/each}
+      </div>
     {/if}
 
     {#if request.input}
@@ -249,6 +274,57 @@
     color: var(--text-faint);
     font-size: 11px;
   }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 12px 0 2px;
+  }
+
+  .choice {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 7px 9px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .choice:hover { background: var(--bg-hover); }
+  .choice.on { background: var(--accent-subtle); border-color: var(--accent); }
+
+  .choice input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .dot {
+    flex: none;
+    width: 13px;
+    height: 13px;
+    margin-top: 2px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--bg-panel);
+  }
+  .choice.on .dot {
+    border-color: var(--accent);
+    border-width: 4px;
+  }
+  /* The radio itself is invisible, so its focus ring is drawn here. */
+  .choice input:focus-visible + .dot {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .choice-label { font-size: 12.5px; font-weight: 500; }
+  .choice-detail { color: var(--text-dim); font-size: 11.5px; line-height: 1.45; }
+  .choice-detail.warn { color: var(--warning); }
+  .choice-detail.bad { color: var(--danger); }
 
   .error {
     margin: 6px 0 0;

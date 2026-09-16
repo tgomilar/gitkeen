@@ -7,13 +7,13 @@
  */
 import { repoStore } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
-import { confirm, prompt } from './state/dialogs.svelte';
+import { confirm, prompt, choose } from './state/dialogs.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize } from './format';
 import type { MenuItem } from './menu';
 import { SEPARATOR } from './menu';
-import type { Branch, Commit } from './git/types';
+import type { Branch, Commit, ResetMode } from './git/types';
 import type { Change } from './changes';
 import { KIND_LABEL } from './changes';
 import { diffStore } from './state/diff.svelte';
@@ -311,6 +311,14 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
         disabled: !squashable.ok,
         action: () => squashCommits(selected)
       },
+      {
+        label: `Cherry-Pick ${selection.length} Commits…`,
+        action: () => cherryPickCommits(selected)
+      },
+      {
+        label: `Revert ${selection.length} Commits…`,
+        action: () => revertCommits(selected)
+      },
       SEPARATOR,
       {
         label: 'Copy hashes',
@@ -340,6 +348,8 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
   }
   if (items.length) items.push(SEPARATOR);
 
+  const isHead = commit.hash === repoStore.head?.oid;
+
   items.push(
     {
       label: 'Create branch from here…',
@@ -350,6 +360,21 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       label: 'Check out commit',
       hint: 'detached',
       action: () => checkoutCommit(commit)
+    },
+    SEPARATOR,
+    {
+      label: 'Cherry-Pick…',
+      hint: commit.parents.length > 1 ? 'a merge cannot be copied' : 'copy onto this branch',
+      disabled: commit.parents.length > 1,
+      action: () => cherryPickCommits([commit])
+    },
+    { label: 'Revert…', action: () => revertCommits([commit]) },
+    {
+      label: 'Reset Current Branch to Here…',
+      hint: isHead ? 'already here' : undefined,
+      disabled: isHead,
+      danger: true,
+      action: () => resetToCommit(commit)
     },
     SEPARATOR,
     { label: 'Copy commit hash', action: () => copy(commit.hash, 'commit hash') },
@@ -614,9 +639,26 @@ export function showCommitDiff(
 /** Context menu for a file in the commit panel. */
 export function changeMenuItems(change: Change): MenuItem[] {
   const ticked = commitStore.isChecked(change.path);
-  return [
+  const items: MenuItem[] = [
     { label: 'Show Diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
-    SEPARATOR,
+    SEPARATOR
+  ];
+
+  // Staging a conflicted file is how Git is told it is dealt with, and it is
+  // the only thing standing between a stopped operation and continuing it.
+  if (change.kind === 'conflict') {
+    items.push(
+      {
+        label: 'Mark as Resolved',
+        hint: 'lets the operation continue',
+        action: () => commitStore.markResolved([change.path])
+      },
+      SEPARATOR
+    );
+  }
+
+  return [
+    ...items,
     {
       label: ticked ? 'Exclude from commit' : 'Include in commit',
       hint: commitStore.forced ? 'a merge is in progress' : undefined,
@@ -638,4 +680,258 @@ export function changeMenuItems(change: Change): MenuItem[] {
       action: () => copy(`${repoStore.info?.root ?? ''}/${change.path}`, 'full path')
     }
   ];
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Copying, undoing and moving commits
+ * ------------------------------------------------------------------ */
+
+/** Shared opening: run the probe, and show any reason it cannot go ahead. */
+async function blockedByProbe(
+  title: string,
+  problems: string[],
+  count: number
+): Promise<void> {
+  await confirm({
+    title,
+    message: problems.join('\n\n'),
+    tone: 'warning',
+    facts: [{ label: 'Selected', value: pluralize(count, 'commit') }],
+    confirmLabel: 'Close',
+    cancelLabel: 'Back'
+  });
+}
+
+/** A short list of the commits an operation would touch. */
+function commitFacts(commits: Commit[], limit = 4): DialogFact[] {
+  const facts = commits
+    .slice(0, limit)
+    .map((c) => ({ label: 'Commit', value: `${c.shortHash}  ${c.subject}` }));
+  if (commits.length > limit) {
+    facts.push({ label: 'And', value: `${commits.length - limit} more` });
+  }
+  return facts;
+}
+
+/**
+ * Copy commits onto the current branch.
+ *
+ * `commits` arrives newest first. They are applied oldest first, so they land
+ * in the order they were written.
+ */
+export async function cherryPickCommits(commits: Commit[]) {
+  if (commits.length === 0) return;
+  const hashes = commits.map((c) => c.hash);
+  const inspection = await repoStore.inspectApply(hashes, 'cherry-pick');
+
+  if (!inspection.ok) {
+    await blockedByProbe('These commits cannot be copied', inspection.problems, commits.length);
+    return;
+  }
+
+  const warnings = inspection.warnings ?? [];
+  const ok = await confirm({
+    title: commits.length === 1 ? 'Copy this commit?' : `Copy ${commits.length} commits?`,
+    message:
+      'Each commit is applied again on top of this branch, as a new commit with a new hash. The originals stay where they are.',
+    tone: warnings.length > 0 ? 'warning' : 'normal',
+    facts: [
+      { label: 'Onto', value: inspection.branch ?? 'detached HEAD' },
+      ...commitFacts(commits),
+      ...warnings.map((value) => ({ label: 'Note', value, tone: 'warning' as const })),
+      { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+    ],
+    confirmLabel: commits.length === 1 ? 'Copy commit' : `Copy ${commits.length} commits`
+  });
+  if (!ok) return;
+
+  await repoStore.cherryPick(hashes);
+}
+
+/**
+ * Undo commits by making new ones that reverse them.
+ *
+ * Applied newest first, which is the order that works: undoing an older change
+ * before a newer one built on it would conflict for no reason.
+ */
+export async function revertCommits(commits: Commit[]) {
+  if (commits.length === 0) return;
+  const hashes = commits.map((c) => c.hash);
+  const inspection = await repoStore.inspectApply(hashes, 'revert');
+
+  if (!inspection.ok) {
+    await blockedByProbe('These commits cannot be reverted', inspection.problems, commits.length);
+    return;
+  }
+
+  const merges = commits.filter((c) => c.parents.length > 1);
+  const warnings = inspection.warnings ?? [];
+
+  const ok = await confirm({
+    title: commits.length === 1 ? 'Revert this commit?' : `Revert ${commits.length} commits?`,
+    message:
+      'Nothing is removed from history. Gitalia adds a new commit that undoes the change, so the record of both stays.',
+    tone: warnings.length > 0 || merges.length > 0 ? 'warning' : 'normal',
+    facts: [
+      { label: 'On', value: inspection.branch ?? 'detached HEAD' },
+      ...commitFacts(commits),
+      ...(merges.length > 0
+        ? [{
+            label: 'Merge commit',
+            // A merge joins two histories, so Git has to be told which one to
+            // treat as the trunk. The first parent is the branch merged into.
+            value: 'A merge joins two histories. Gitalia undoes it against the first parent, which is the branch it was merged into.',
+            tone: 'warning' as const
+          }]
+        : []),
+      ...warnings.map((value) => ({ label: 'Note', value, tone: 'warning' as const })),
+      { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+    ],
+    confirmLabel: commits.length === 1 ? 'Revert commit' : `Revert ${commits.length} commits`
+  });
+  if (!ok) return;
+
+  await repoStore.revert(hashes);
+}
+
+/**
+ * Move the current branch to another commit.
+ *
+ * The plan asks for dangerous operations to be shown before they run
+ * (section 3.2). Reset is the sharpest of them, because `--hard` throws away
+ * uncommitted work without asking, so the dialog states the cost of each mode
+ * beside the mode itself.
+ */
+export async function resetToCommit(commit: Commit) {
+  const inspection = await repoStore.inspectReset(commit.hash);
+  if (!inspection.ok) {
+    await confirm({
+      title: 'Cannot reset now',
+      message: inspection.problems.join('\n\n'),
+      tone: 'warning',
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return;
+  }
+
+  const dropped = inspection.dropped ?? 0;
+  const gained = inspection.gained ?? 0;
+  const dirty = inspection.dirty ?? 0;
+  const published = inspection.published ?? [];
+
+  if (dropped === 0 && gained === 0) {
+    await confirm({
+      title: 'The branch is already here',
+      message: `${inspection.branch ?? 'HEAD'} already points at ${commit.shortHash}, so a reset would change nothing.`,
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return;
+  }
+
+  const facts: DialogFact[] = [
+    { label: 'Branch', value: inspection.branch ?? 'detached HEAD' },
+    { label: 'Moving to', value: `${commit.shortHash}  ${commit.subject}` }
+  ];
+
+  if (dropped > 0) {
+    facts.push({
+      label: 'Leaving behind',
+      value: `${pluralize(dropped, 'commit')} would no longer be on this branch`,
+      tone: 'warning'
+    });
+    facts.push(
+      published.length > 0
+        ? { label: 'Still on', value: `${published.join(', ')}, so those commits can be recovered from there` }
+        : {
+            label: 'Recovery',
+            value: 'Those commits are only here. They stay in the reflog for a while, and the message after the reset tells you how to return.',
+            tone: 'warning'
+          }
+    );
+  }
+  if (gained > 0) {
+    facts.push({ label: 'Moving forward', value: `${pluralize(gained, 'commit')} would join this branch` });
+  }
+  if (dirty > 0) {
+    facts.push({ label: 'Uncommitted', value: `${pluralize(dirty, 'changed file')} in your working tree`, tone: 'warning' });
+  }
+
+  const mode = await choose({
+    title: `Reset ${inspection.branch ?? 'HEAD'} to ${commit.shortHash}?`,
+    message: 'The branch label moves. What happens to the files in your working tree is up to you.',
+    tone: dropped > 0 ? 'warning' : 'normal',
+    facts,
+    chosen: 'mixed',
+    choices: [
+      {
+        value: 'soft',
+        label: 'Soft',
+        detail:
+          'Your files do not change. Everything from the commits you leave behind is kept staged, ready to be committed again.'
+      },
+      {
+        value: 'mixed',
+        label: 'Mixed',
+        detail:
+          'Your files do not change, and nothing is staged. This is the usual choice.'
+      },
+      {
+        value: 'hard',
+        label: 'Hard',
+        tone: 'danger',
+        detail:
+          dirty > 0
+            ? `Your files are made to match ${commit.shortHash}. The ${pluralize(dirty, 'changed file')} you have not committed will be destroyed and cannot be recovered.`
+            : `Your files are made to match ${commit.shortHash}. Any uncommitted work would be destroyed.`
+      }
+    ],
+    confirmLabel: 'Reset'
+  });
+  if (!mode) return;
+
+  // A hard reset is the one action here that destroys work Git has never seen,
+  // so it is confirmed twice when there is work to destroy.
+  if (mode === 'hard' && dirty > 0) {
+    const sure = await confirm({
+      title: 'Destroy your uncommitted work?',
+      message:
+        'A hard reset overwrites the files in your working tree. Changes Git has never seen cannot be recovered by any means.',
+      tone: 'danger',
+      facts: [
+        { label: 'Losing', value: `${pluralize(dirty, 'changed file')}`, tone: 'danger' },
+        { label: 'Untracked files', value: `${inspection.untracked ?? 0} are left alone` },
+        { label: 'Instead', value: 'Cancel and commit or stash the changes first.' }
+      ],
+      confirmLabel: 'Destroy them'
+    });
+    if (!sure) return;
+  }
+
+  await repoStore.reset(commit.hash, mode as ResetMode);
+}
+
+/** Abandon a half-finished merge, rebase, cherry-pick or revert. */
+export async function abortOperation() {
+  const operation = repoStore.status?.operation;
+  if (!operation) return;
+  const conflicts = repoStore.status?.files.filter((f) => f.state === 'conflicted').length ?? 0;
+
+  const ok = await confirm({
+    title: `Abandon the ${operation}?`,
+    message: `The branch goes back to where it was before the ${operation} started. Any conflict resolution you have done is thrown away.`,
+    tone: 'danger',
+    facts: [
+      { label: 'Operation', value: operation },
+      ...(conflicts > 0
+        ? [{ label: 'Unresolved', value: pluralize(conflicts, 'conflicted file'), tone: 'warning' as const }]
+        : []),
+      { label: 'After this', value: 'the working tree is as it was before it started' }
+    ],
+    confirmLabel: `Abandon the ${operation}`
+  });
+  if (!ok) return;
+  await repoStore.abortOperation();
 }

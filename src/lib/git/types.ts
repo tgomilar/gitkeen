@@ -156,6 +156,72 @@ export interface FileDiff {
   hunks: DiffHunk[];
 }
 
+/** A commit as the cherry-pick and revert dialogs need to describe it. */
+export interface ApplyCommit {
+  hash: string;
+  shortHash: string;
+  subject: string;
+  parents: string[];
+  isMerge: boolean;
+  /** True when this commit is already reachable from HEAD. */
+  inHistory: boolean;
+}
+
+export interface ApplyInspection {
+  ok: boolean;
+  /** Reasons the operation cannot run, written for the user. */
+  problems: string[];
+  /** Things worth knowing that do not block it. */
+  warnings?: string[];
+  commits?: ApplyCommit[];
+  branch?: string | null;
+  detached?: boolean;
+  dirty?: number;
+  operation?: OperationState;
+}
+
+export interface ApplyResult {
+  ok: boolean;
+  /** True when Git stopped on a conflict and left the operation open. */
+  conflicted: boolean;
+  operation?: OperationState;
+  applied?: number;
+  previousHead: string;
+  head?: string;
+}
+
+export type ResetMode = 'soft' | 'mixed' | 'hard';
+
+export interface ResetInspection {
+  ok: boolean;
+  problems: string[];
+  target?: string;
+  head?: string;
+  /** Commits that would leave this branch. */
+  dropped?: number;
+  /** Commits that would join it, when resetting forward. */
+  gained?: number;
+  dirty?: number;
+  untracked?: number;
+  branch?: string | null;
+  detached?: boolean;
+  /** Remote branches that still hold the commits being dropped. */
+  published?: string[];
+}
+
+export interface ResetResult {
+  ok: boolean;
+  previousHead: string;
+  head: string;
+  mode: ResetMode;
+}
+
+export interface OperationResult {
+  ok: boolean;
+  operation: OperationState;
+  finished?: boolean;
+}
+
 export interface BranchInspection {
   isMerged: boolean;
   onRemote: string[];

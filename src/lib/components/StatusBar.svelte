@@ -1,6 +1,7 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
   import { pluralize } from '../format';
+  import { abortOperation } from '../actions';
 
   const status = $derived(repoStore.status);
 
@@ -27,7 +28,23 @@
   {/if}
 
   {#if status?.operation}
+    <!-- A stopped operation is the one state a user can get stranded in, so
+         the way out of it lives here rather than behind a menu. -->
     <span class="item warn">{operationLabel[status.operation] ?? status.operation}</span>
+    <button
+      class="act"
+      onclick={() => repoStore.continueOperation()}
+      disabled={!!repoStore.busy || conflicts > 0}
+      title={conflicts > 0
+        ? `Resolve ${pluralize(conflicts, 'conflicted file')} first`
+        : `Carry on with the ${status.operation}`}
+    >Continue</button>
+    <button
+      class="act danger"
+      onclick={abortOperation}
+      disabled={!!repoStore.busy}
+      title="Put the branch back as it was before the {status.operation} started"
+    >Abandon…</button>
   {/if}
 
   {#if conflicts > 0}
@@ -65,6 +82,19 @@
   }
 
   .spacer { flex: 1; }
+  .act {
+    padding: 0 7px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 10.5px;
+    line-height: 16px;
+  }
+  .act:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .act.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+  .act:disabled { opacity: 0.45; cursor: default; }
+
   .item.dim { color: var(--text-faint); }
   .item.warn { color: var(--warning); }
   .item.bad { color: var(--danger); font-weight: 600; }

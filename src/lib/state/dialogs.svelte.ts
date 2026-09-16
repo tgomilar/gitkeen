@@ -22,6 +22,15 @@ export interface DialogInput {
   validate?: (value: string) => string | null;
 }
 
+/** One option of a choice dialog, such as a reset mode. */
+export interface DialogChoice {
+  value: string;
+  label: string;
+  /** What picking this option does, written for someone about to pick it. */
+  detail?: string;
+  tone?: 'normal' | 'warning' | 'danger';
+}
+
 export interface DialogRequest {
   id: number;
   title: string;
@@ -31,6 +40,9 @@ export interface DialogRequest {
   confirmLabel: string;
   cancelLabel: string;
   input?: DialogInput;
+  choices?: DialogChoice[];
+  /** The option selected when the dialog opens. */
+  chosen?: string;
   resolve: (value: string | boolean | null) => void;
 }
 
@@ -64,6 +76,32 @@ class DialogStore {
     return result === true;
   }
 
+  /**
+   * Pick one of several ways to do something, with the cost of each stated
+   * next to it. Resolves with the chosen value, or null if cancelled.
+   */
+  async choose(opts: {
+    title: string;
+    message?: string;
+    facts?: DialogFact[];
+    choices: DialogChoice[];
+    chosen?: string;
+    tone?: 'normal' | 'warning' | 'danger';
+    confirmLabel?: string;
+  }): Promise<string | null> {
+    const result = await this.open({
+      title: opts.title,
+      message: opts.message,
+      facts: opts.facts,
+      tone: opts.tone ?? 'normal',
+      confirmLabel: opts.confirmLabel ?? 'Continue',
+      cancelLabel: 'Cancel',
+      choices: opts.choices,
+      chosen: opts.chosen ?? opts.choices[0]?.value
+    });
+    return typeof result === 'string' ? result : null;
+  }
+
   async prompt(opts: {
     title: string;
     message?: string;
@@ -94,3 +132,4 @@ class DialogStore {
 export const dialogs = new DialogStore();
 export const confirm = dialogs.confirm.bind(dialogs);
 export const prompt = dialogs.prompt.bind(dialogs);
+export const choose = dialogs.choose.bind(dialogs);

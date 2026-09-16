@@ -563,6 +563,234 @@ export const methods = {
   },
 
   /**
+   * Everything the cherry-pick and revert dialogs need to ask, in one call.
+   *
+   * `hashes` arrives newest first, the order the graph shows.
+   */
+  async 'commits.inspectApply'({ path, hashes, mode }) {
+    const problems = [];
+    const warnings = [];
+
+    if (!Array.isArray(hashes) || hashes.length === 0) {
+      return { ok: false, problems: ['Select at least one commit.'] };
+    }
+
+    const commits = [];
+    for (const hash of hashes) {
+      const { stdout, code } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+      if (code !== 0) return { ok: false, problems: [`Commit ${hash.slice(0, 7)} no longer exists.`] };
+      const ids = stdout.trim().split(' ');
+      const { stdout: subject } = await runGit(path, ['show', '-s', '--pretty=format:%s', hash], { allowFailure: true });
+      const { code: present } = await runGit(path, ['merge-base', '--is-ancestor', hash, 'HEAD'], { allowFailure: true });
+      commits.push({
+        hash,
+        shortHash: hash.slice(0, 7),
+        subject: subject.trim(),
+        parents: ids.slice(1),
+        isMerge: ids.length > 2,
+        inHistory: present === 0
+      });
+    }
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const operation = await detectOperation(path);
+    const dirty = status.files.filter((f) => f.state !== 'untracked').length;
+
+    if (operation) {
+      problems.push(`A ${operation} is already in progress. Finish or abort it first.`);
+    }
+    if (dirty > 0) {
+      // Both commands merge into the working tree, and Git refuses to start
+      // when that would overwrite a change the user has not committed.
+      problems.push(
+        `You have ${dirty} uncommitted ${dirty === 1 ? 'change' : 'changes'}. Commit or stash them first.`
+      );
+    }
+
+    const merges = commits.filter((c) => c.isMerge);
+    if (merges.length > 0 && mode === 'cherry-pick') {
+      problems.push(
+        `${merges.length === 1 ? 'A merge commit is' : `${merges.length} merge commits are`} selected. Copying a merge needs a side of it to be chosen, which Gitalia cannot do yet.`
+      );
+    }
+
+    if (mode === 'cherry-pick') {
+      const already = commits.filter((c) => c.inHistory);
+      if (already.length > 0) {
+        warnings.push(
+          `${already.length === 1 ? 'This commit is' : `${already.length} of these commits are`} already in the history of this branch. Copying again would repeat the change.`
+        );
+      }
+    } else {
+      const absent = commits.filter((c) => !c.inHistory);
+      if (absent.length > 0) {
+        warnings.push(
+          `${absent.length === 1 ? 'This commit is' : `${absent.length} of these commits are`} not in the history of this branch, so there is nothing here to undo.`
+        );
+      }
+    }
+
+    return {
+      ok: problems.length === 0,
+      problems,
+      warnings,
+      commits,
+      branch: status.branch,
+      detached: status.detached,
+      dirty,
+      operation
+    };
+  },
+
+  /**
+   * Copy commits onto the current branch.
+   *
+   * `hashes` arrives newest first and is applied oldest first, so the commits
+   * land in the order they were originally written.
+   */
+  async 'commits.cherryPick'({ path, hashes }) {
+    const order = [...hashes].reverse();
+    const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    try {
+      await git(path, ['cherry-pick', ...order]);
+    } catch (err) {
+      // A conflict leaves the operation open on purpose: the user resolves it
+      // and continues. The panel and the status bar both say it is running.
+      const operation = await detectOperation(path);
+      if (operation) return { ok: false, conflicted: true, operation, previousHead: before.trim() };
+      throw err;
+    }
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return { ok: true, conflicted: false, applied: order.length, previousHead: before.trim(), head: after.trim() };
+  },
+
+  /**
+   * Undo commits with new commits that reverse them.
+   *
+   * Applied newest first, which is the order that works: undoing an older
+   * change before a newer one built on it would conflict.
+   */
+  async 'commits.revert'({ path, hashes, mainline = 1 }) {
+    const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const args = ['revert', '--no-edit'];
+    // A merge has two sides, so Git needs to be told which one to keep. The
+    // first parent is the branch the merge was made on.
+    for (const hash of hashes) {
+      const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+      if (ids.trim().split(' ').length > 2) args.push('-m', String(mainline));
+      break;
+    }
+    try {
+      await git(path, [...args, ...hashes]);
+    } catch (err) {
+      const operation = await detectOperation(path);
+      if (operation) return { ok: false, conflicted: true, operation, previousHead: before.trim() };
+      throw err;
+    }
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return { ok: true, conflicted: false, applied: hashes.length, previousHead: before.trim(), head: after.trim() };
+  },
+
+  /**
+   * What a reset would cost, so the dialog can state it before anything moves.
+   */
+  async 'branch.inspectReset'({ path, target }) {
+    const { stdout: resolved, code } = await runGit(path, ['rev-parse', '--verify', `${target}^{commit}`], { allowFailure: true });
+    if (code !== 0) return { ok: false, problems: [`Cannot find ${target}.`] };
+    const oid = resolved.trim();
+
+    const { stdout: head } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const { stdout: dropped } = await runGit(path, ['rev-list', '--count', `${oid}..HEAD`], { allowFailure: true });
+    const { stdout: gained } = await runGit(path, ['rev-list', '--count', `HEAD..${oid}`], { allowFailure: true });
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const operation = await detectOperation(path);
+
+    // Commits that also sit on a remote are recoverable from there, which
+    // changes how alarming the dialog needs to be.
+    const published = [];
+    if (Number(dropped.trim()) > 0) {
+      const { stdout: remoteRefs } = await runGit(path, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes'], { allowFailure: true });
+      for (const ref of remoteRefs.split('\n').map((r) => r.trim()).filter(Boolean)) {
+        if (ref.endsWith('/HEAD')) continue;
+        const { code: contains } = await runGit(path, ['merge-base', '--is-ancestor', head.trim(), ref], { allowFailure: true });
+        if (contains === 0) published.push(ref);
+      }
+    }
+
+    return {
+      ok: !operation,
+      problems: operation ? [`A ${operation} is in progress. Finish or abort it first.`] : [],
+      target: oid,
+      head: head.trim(),
+      dropped: Number(dropped.trim() || 0),
+      gained: Number(gained.trim() || 0),
+      dirty: status.files.filter((f) => f.state !== 'untracked').length,
+      untracked: status.files.filter((f) => f.state === 'untracked').length,
+      branch: status.branch,
+      detached: status.detached,
+      published
+    };
+  },
+
+  async 'branch.reset'({ path, target, mode = 'mixed' }) {
+    const allowed = ['soft', 'mixed', 'hard'];
+    if (!allowed.includes(mode)) {
+      throw new GitError(`Unknown reset mode: ${mode}`, { command: '', stderr: '', code: 1 });
+    }
+    const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    await git(path, ['reset', `--${mode}`, target]);
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return { ok: true, previousHead: before.trim(), head: after.trim(), mode };
+  },
+
+  /** Abandon the half-finished operation and put the branch back. */
+  async 'repo.abortOperation'({ path }) {
+    const operation = await detectOperation(path);
+    if (!operation) return { ok: true, operation: null };
+    const command = {
+      rebase: ['rebase', '--abort'],
+      merge: ['merge', '--abort'],
+      'cherry-pick': ['cherry-pick', '--abort'],
+      revert: ['revert', '--abort'],
+      bisect: ['bisect', 'reset']
+    }[operation];
+    await git(path, command);
+    return { ok: true, operation };
+  },
+
+  /**
+   * Carry on once the conflicts are resolved.
+   *
+   * A merge has no continue of its own: resolving it and committing is what
+   * finishes it. `GIT_EDITOR=true` keeps Git from trying to open an editor
+   * for the message it already has.
+   */
+  async 'repo.continueOperation'({ path }) {
+    const operation = await detectOperation(path);
+    if (!operation) return { ok: true, operation: null };
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const unresolved = status.files.filter((f) => f.state === 'conflicted');
+    if (unresolved.length > 0) {
+      throw new GitError(
+        `${unresolved.length} ${unresolved.length === 1 ? 'file still has' : 'files still have'} conflicts:\n  ${unresolved.map((f) => f.path).join('\n  ')}\n\nResolve them, then continue.`,
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+
+    const command = {
+      rebase: ['rebase', '--continue'],
+      merge: ['commit', '--no-edit'],
+      'cherry-pick': ['cherry-pick', '--continue'],
+      revert: ['revert', '--continue'],
+      bisect: ['bisect', 'reset']
+    }[operation];
+    await git(path, command, { env: { GIT_EDITOR: 'true' } });
+    return { ok: true, operation, finished: (await detectOperation(path)) === null };
+  },
+
+  /**
    * The diff of one file, either as it sits in the working tree or as one
    * commit changed it.
    *
@@ -730,6 +958,39 @@ export const methods = {
 
     const { stdout: created } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: created.trim(), files: known.length, partial: !operation };
+  },
+
+  /**
+   * Tell Git that a conflicted file is dealt with.
+   *
+   * Adding the file to the index is what marks a conflict resolved. Without
+   * this the user would have to reach for a terminal in the middle of a
+   * cherry-pick, which is the one moment they are least able to.
+   */
+  async 'changes.markResolved'({ path, paths }) {
+    if (!Array.isArray(paths) || paths.length === 0) return { ok: true, resolved: 0 };
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const wanted = new Set(paths);
+    const conflicted = status.files.filter((f) => wanted.has(f.path) && f.state === 'conflicted');
+    if (conflicted.length === 0) return { ok: true, resolved: 0 };
+
+    const markers = [];
+    for (const file of conflicted) {
+      // A file still holding Git's markers is almost certainly not resolved,
+      // and staging it would commit "<<<<<<<" into the history.
+      const { stdout } = await runGit(path, ['grep', '-c', '-e', '^<<<<<<< ', '--', file.path], { allowFailure: true });
+      if (stdout.trim()) markers.push(file.path);
+    }
+    if (markers.length > 0) {
+      throw new GitError(
+        `These files still contain conflict markers:\n  ${markers.join('\n  ')}\n\nEdit them so the markers are gone, then mark them resolved again. If a file is meant to contain that text, stage it with "git add" instead.`,
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+
+    await git(path, ['add', '--', ...conflicted.map((f) => f.path)]);
+    return { ok: true, resolved: conflicted.length };
   },
 
   /**

@@ -6,8 +6,8 @@ editor. Your editor writes code. Gitalia manages your history.
 
 This repository holds Prototype 1, as defined in
 `standalone-git-management-app-plan.md`. It covers one workflow: open a
-repository*, read its history, select commits, switch branches, and commit
-your work.
+repository*, read its history, select commits, switch branches, commit your
+work, and change the history you already have.
 
 ## What works today
 
@@ -24,6 +24,10 @@ your work.
 | Commit details | Read the full message and the list of changed files. |
 | Commit panel | Tick the files you want, write a message, and commit. |
 | Diff | Read what changed in a file, unified or side by side. |
+| Cherry-pick | Copy one or more commits onto the current branch. |
+| Revert | Undo a commit with a new commit that reverses it. |
+| Reset | Move the current branch to another commit, in one of three modes. |
+| Conflicts | Mark files resolved, then continue or abandon the operation. |
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish the current branch, and create it on the remote if it is new. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
@@ -148,10 +152,73 @@ Gitalia handles these cases and says which one applies:
 | A permission change | A note that Git recorded a change although the text is the same. |
 | A very large file | The first 800 lines, with a button to draw more. Above 20000 lines the rest is not read at all. |
 
+## Copying, undoing and moving commits
+
+Right click a commit in the graph. Select several commits first to act on all
+of them at once.
+
+| Action | What it does |
+|---|---|
+| Cherry-Pick | Applies the commit again on top of the current branch, as a new commit with a new hash. The original stays where it is. |
+| Revert | Adds a new commit that undoes the change. Nothing is removed from the history. |
+| Reset Current Branch to Here | Moves the branch to this commit. |
+
+Gitalia asks Git about the state of the repository before it offers to run any
+of these, and says what it found.
+
+| Case | What happens |
+|---|---|
+| The working tree has uncommitted changes | Cherry-pick and revert are refused, because Git would overwrite your work. |
+| Another operation is unfinished | All three are refused until you finish or abandon it. |
+| A merge commit is selected | Cherry-pick is switched off. Revert explains that it undoes the merge against the first parent, which is the branch the merge was made on. |
+| The commit is already in this branch | Cherry-pick warns you that copying it would repeat the change. |
+| The commit is not in this branch | Revert warns you that there is nothing here to undo. |
+
+Cherry-picking several commits applies them oldest first, so they land in the
+order they were written. Reverting several applies them newest first, which is
+the order that works: undoing an old change before a newer one built on it
+would conflict for no reason.
+
+### Reset
+
+Reset is the sharpest action in the application, so the dialog states the cost
+of each mode beside the mode itself.
+
+| Mode | Your files | The staging area |
+|---|---|---|
+| Soft | Not changed | Everything from the commits you leave behind is kept staged, ready to commit again |
+| Mixed | Not changed | Nothing is staged. This is the usual choice |
+| Hard | Made to match the target commit, so uncommitted work is destroyed | Nothing is staged |
+
+Before anything moves, the dialog tells you how many commits would leave the
+branch, whether a remote still holds them, and how many files you have not
+committed. Choosing **Hard** while you have uncommitted work asks a second
+time, because that work cannot be recovered by any means. After the reset, the
+message tells you where the branch pointed before, so you can put it back.
+
+### When an operation stops on a conflict
+
+Cherry-pick and revert both change files, so both can stop on a conflict. Git
+then waits. The status bar shows which operation is open and offers two ways
+out.
+
+| Button | What it does |
+|---|---|
+| Continue | Carries on. It stays switched off until no file has a conflict left. |
+| Abandon | Puts the branch back as it was before the operation started. |
+
+Open the commit panel to see the conflicted files. Edit each one so Git's
+markers are gone, then right click it and choose **Mark as Resolved**. Gitalia
+refuses to mark a file that still contains markers, so a line such as
+`<<<<<<<` cannot reach your history by accident.
+
+There is no conflict editor in Gitalia yet. The plan puts a three way merge
+view in the next phase.
+
 ## What is not built yet
 
-Pull, cherry-pick, revert, reset, interactive rebase, stash and conflict
-resolution all come later. The plan document lists the order.
+Pull, interactive rebase, stash and a conflict editor all come later. The plan
+document lists the order.
 
 The diff viewer has no syntax colouring yet, and you cannot stage or roll back
 a single hunk from it. Those are the next steps for it.

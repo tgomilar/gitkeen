@@ -239,6 +239,22 @@ class CommitStore {
     return true;
   }
 
+  /** Mark conflicted files as dealt with, so the operation can continue. */
+  async markResolved(paths: string[]) {
+    const repo = repoStore.repo;
+    if (!repo || paths.length === 0) return false;
+    const result = await this.run('Marking as resolved', () => repo.markResolved(paths));
+    await repoStore.refresh();
+    if (!result) return false;
+    toasts.success(
+      `Marked ${result.resolved} ${result.resolved === 1 ? 'file' : 'files'} as resolved`,
+      repoStore.status?.files.some((f) => f.state === 'conflicted')
+        ? 'Other files still have conflicts.'
+        : 'You can continue the operation from the status bar.'
+    );
+    return true;
+  }
+
   async rollback(paths: string[]) {
     const repo = repoStore.repo;
     if (!repo || paths.length === 0) return false;

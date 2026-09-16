@@ -8,8 +8,8 @@ import { GitRepository } from '../git/repository';
 import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
-  Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
-  RepositoryInfo, SquashInspection, SquashResult
+  ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
+  RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult
 } from '../git/types';
 import { toasts } from './toasts.svelte';
 import { rememberRepo } from './recent';
@@ -258,6 +258,120 @@ class RepoStore {
     const repo = this.repo;
     if (!repo) return Promise.resolve(null);
     return repo.inspectBranch(name).catch(() => null);
+  }
+
+  inspectApply(hashes: string[], mode: 'cherry-pick' | 'revert'): Promise<ApplyInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.inspectApply(hashes, mode).catch((err) => ({ ok: false, problems: [describe(err)] }));
+  }
+
+  inspectReset(target: string): Promise<ResetInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.inspectReset(target).catch((err) => ({ ok: false, problems: [describe(err)] }));
+  }
+
+  /**
+   * Cherry-pick or revert.
+   *
+   * A conflict is not a failure. Git stops and waits, so the result says so
+   * and the status bar offers to continue or to abandon it.
+   */
+  private async apply(
+    label: string,
+    run: (repo: GitRepository) => Promise<ApplyResult>,
+    describeDone: (result: ApplyResult) => string
+  ): Promise<ApplyResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = label;
+    try {
+      const result = await run(repo);
+      await this.refresh();
+      if (result.conflicted) {
+        toasts.error(
+          `${label} stopped on a conflict`,
+          'Resolve the conflicted files, then continue or abandon it from the status bar.'
+        );
+      } else {
+        toasts.success(describeDone(result), `The branch was at ${result.previousHead.slice(0, 7)} before.`);
+      }
+      return result;
+    } catch (err) {
+      toasts.error(`${label} failed`, describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  cherryPick(hashes: string[]) {
+    const label = hashes.length === 1 ? 'Copying 1 commit' : `Copying ${hashes.length} commits`;
+    return this.apply(
+      label,
+      (r) => r.cherryPick(hashes),
+      (result) => `Copied ${result.applied} ${result.applied === 1 ? 'commit' : 'commits'} onto ${this.currentBranch ?? 'HEAD'}`
+    );
+  }
+
+  revert(hashes: string[], mainline = 1) {
+    const label = hashes.length === 1 ? 'Reverting 1 commit' : `Reverting ${hashes.length} commits`;
+    return this.apply(
+      label,
+      (r) => r.revert(hashes, mainline),
+      (result) => `Reverted ${result.applied} ${result.applied === 1 ? 'commit' : 'commits'}`
+    );
+  }
+
+  async reset(target: string, mode: ResetMode) {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = 'Resetting';
+    try {
+      const result = await repo.reset(target, mode);
+      await this.refresh();
+      if (this.layout.index.has(result.head)) this.select(result.head, 'replace');
+      toasts.success(
+        `${this.currentBranch ?? 'HEAD'} is now at ${result.head.slice(0, 7)}`,
+        `It was at ${result.previousHead.slice(0, 7)} before. Run "git reset --${mode} ${result.previousHead.slice(0, 12)}" to put it back.`
+      );
+      return result;
+    } catch (err) {
+      toasts.error('Reset failed', describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  abortOperation() {
+    const name = this.status?.operation ?? 'operation';
+    return this.operate(`Abandoning the ${name}`, (r) => r.abortOperation(), `The ${name} was abandoned`);
+  }
+
+  async continueOperation() {
+    const name = this.status?.operation ?? 'operation';
+    const repo = this.repo;
+    if (!repo) return false;
+    this.busy = `Continuing the ${name}`;
+    try {
+      const result = await repo.continueOperation();
+      await this.refresh();
+      toasts.success(
+        result.finished ? `The ${name} finished` : `The ${name} moved on`,
+        result.finished ? null : 'There is more to resolve.'
+      );
+      return true;
+    } catch (err) {
+      toasts.error(`Could not continue the ${name}`, describe(err));
+      await this.refresh();
+      return false;
+    } finally {
+      this.busy = null;
+    }
   }
 
   inspectSquash(hashes: string[]): Promise<SquashInspection> {

@@ -6,8 +6,9 @@
  */
 import { transport } from './transport';
 import type {
-  BranchSet, BranchInspection, CommitDetails, CommitMessage, CommitResult, FileDiff, GitStatus,
-  HeadCommit, HeadInfo, LogPage, PushResult, RepositoryInfo, RollbackResult,
+  ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
+  CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
+  PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult
 } from './types';
 
@@ -89,6 +90,11 @@ export class GitRepository {
     return transport.call('changes.commit', { path: this.path, paths, message, amend });
   }
 
+  /** Mark conflicted files as dealt with, so an operation can continue. */
+  markResolved(paths: string[]): Promise<{ ok: boolean; resolved: number }> {
+    return transport.call('changes.markResolved', { path: this.path, paths });
+  }
+
   /** Throw away the working-tree changes to these paths. */
   rollback(paths: string[]): Promise<RollbackResult> {
     return transport.call('changes.rollback', { path: this.path, paths });
@@ -106,6 +112,40 @@ export class GitRepository {
   /** Full messages, used to seed the squash dialog. Newest first. */
   commitMessages(hashes: string[]): Promise<{ messages: CommitMessage[] }> {
     return transport.call('commits.messages', { path: this.path, hashes });
+  }
+
+  /** Safety probe for a cherry-pick or a revert. Hashes come newest first. */
+  inspectApply(hashes: string[], mode: 'cherry-pick' | 'revert'): Promise<ApplyInspection> {
+    return transport.call('commits.inspectApply', { path: this.path, hashes, mode });
+  }
+
+  /** Copy commits onto the current branch. Hashes come newest first. */
+  cherryPick(hashes: string[]): Promise<ApplyResult> {
+    return transport.call('commits.cherryPick', { path: this.path, hashes });
+  }
+
+  /** Undo commits with new commits that reverse them. */
+  revert(hashes: string[], mainline = 1): Promise<ApplyResult> {
+    return transport.call('commits.revert', { path: this.path, hashes, mainline });
+  }
+
+  /** What a reset would cost, read before anything moves. */
+  inspectReset(target: string): Promise<ResetInspection> {
+    return transport.call('branch.inspectReset', { path: this.path, target });
+  }
+
+  reset(target: string, mode: ResetMode): Promise<ResetResult> {
+    return transport.call('branch.reset', { path: this.path, target, mode });
+  }
+
+  /** Abandon a half-finished merge, rebase, cherry-pick or revert. */
+  abortOperation(): Promise<OperationResult> {
+    return transport.call('repo.abortOperation', { path: this.path });
+  }
+
+  /** Carry on with one, once its conflicts are resolved. */
+  continueOperation(): Promise<OperationResult> {
+    return transport.call('repo.continueOperation', { path: this.path });
   }
 
   /** Everything the squash dialog needs to know. Hashes come newest first. */
