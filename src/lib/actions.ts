@@ -6,6 +6,7 @@
  * (plan section 18).
  */
 import { repoStore } from './state/repo.svelte';
+import { commitStore } from './state/commit.svelte';
 import { confirm, prompt } from './state/dialogs.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
@@ -13,6 +14,8 @@ import { pluralize } from './format';
 import type { MenuItem } from './menu';
 import { SEPARATOR } from './menu';
 import type { Branch, Commit } from './git/types';
+import type { Change } from './changes';
+import { KIND_LABEL } from './changes';
 
 /** Mirrors the rules `git check-ref-format` enforces, so we fail before Git does. */
 export function validateBranchName(name: string): string | null {
@@ -395,5 +398,217 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
     },
     SEPARATOR,
     { label: 'Copy branch name', action: () => copy(branch.name, branch.name) }
+  ];
+}
+
+
+/* ------------------------------------------------------------------ *
+ * The commit panel
+ * ------------------------------------------------------------------ */
+
+/** The remote a branch with no upstream would be published to. */
+export function defaultRemote(): string | null {
+  const remotes = repoStore.remotes;
+  if (remotes.length === 0) return null;
+  return remotes.includes('origin') ? 'origin' : remotes[0];
+}
+
+/**
+ * Checks that have to happen before anything is written, in the order a
+ * person would think of them. Returns false when the commit must not run.
+ */
+async function confirmCommit(): Promise<boolean> {
+  const ticked = new Set(commitStore.checkedPaths);
+  const conflicted = commitStore.conflicts.filter((c) => ticked.has(c.path));
+
+  // Git refuses to commit an unmerged path, so say why before it does.
+  if (conflicted.length > 0) {
+    await confirm({
+      title: 'Resolve the conflicts first',
+      message:
+        'These files still hold conflict markers from an unfinished merge. Git will not commit a file until its conflict is marked resolved.',
+      tone: 'warning',
+      facts: conflicted.slice(0, 6).map((c) => ({ label: 'Conflict', value: c.path, tone: 'danger' as const })),
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return false;
+  }
+
+  if (commitStore.forced) {
+    const operation = repoStore.status?.operation ?? 'merge';
+    const total = commitStore.changes.length + commitStore.unversioned.length;
+    const ok = await confirm({
+      title: `A ${operation} is in progress`,
+      message:
+        `Git cannot commit part of the working tree while a ${operation} is unfinished, so this commit takes everything in it. The tick boxes do not apply.`,
+      tone: 'warning',
+      facts: [
+        { label: 'Operation', value: operation, tone: 'warning' },
+        { label: 'Files', value: `all ${total} of them` }
+      ],
+      confirmLabel: 'Commit everything'
+    });
+    if (!ok) return false;
+  }
+
+  const head = commitStore.head;
+  if (commitStore.amend && head?.pushed) {
+    const ok = await confirm({
+      title: 'This commit is already pushed',
+      message:
+        'Amending replaces the commit with a new one, so the branch no longer matches the remote. Publishing it afterwards needs a force push, and anyone who already pulled it keeps the old copy.',
+      tone: 'danger',
+      facts: [
+        { label: 'Commit', value: `${head.hash?.slice(0, 7)}  ${head.subject}` },
+        { label: 'Already on', value: head.pushed, tone: 'danger' },
+        { label: 'After this', value: 'a force push would be needed', tone: 'warning' }
+      ],
+      confirmLabel: 'Amend anyway'
+    });
+    if (!ok) return false;
+  }
+
+  if (commitStore.amend && head?.isMerge) {
+    const ok = await confirm({
+      title: 'You are amending a merge commit',
+      message:
+        'A merge commit records how two histories came together. Amending keeps both parents, but the commit is still replaced.',
+      tone: 'warning',
+      facts: [{ label: 'Commit', value: `${head.hash?.slice(0, 7)}  ${head.subject}` }],
+      confirmLabel: 'Amend the merge'
+    });
+    if (!ok) return false;
+  }
+
+  return true;
+}
+
+export async function commitChanges(): Promise<boolean> {
+  if (!commitStore.canCommit) return false;
+  if (!(await confirmCommit())) return false;
+  return (await commitStore.commit()) !== null;
+}
+
+/** Commit, then offer to publish the branch, stating where it would go. */
+export async function commitAndPush() {
+  if (!(await commitChanges())) return;
+
+  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
+  const remote = defaultRemote();
+
+  if (!branch) {
+    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
+    return;
+  }
+  if (!branch.upstream && !remote) {
+    toasts.error('No remote configured', `Add a remote before pushing ${branch.name}.`);
+    return;
+  }
+
+  const ok = await confirm({
+    title: `Push ${branch.name}?`,
+    message: branch.upstream
+      ? 'Your commits are sent to the remote branch this one tracks.'
+      : 'This branch has never been pushed. It will be created on the remote and set as the branch to track.',
+    facts: [
+      { label: 'Branch', value: branch.name },
+      { label: 'Target', value: branch.upstream ?? `${remote}/${branch.name} (new)` },
+      {
+        label: 'Sending',
+        // Without an upstream there is nothing to count against, so Git's
+        // "ahead" is 0 and saying so would be misleading.
+        value: branch.upstream
+          ? pluralize(branch.ahead, 'commit')
+          : 'every commit on this branch that the remote does not already have'
+      },
+      ...(branch.behind > 0
+        ? [{
+            label: 'Behind',
+            value: `${pluralize(branch.behind, 'commit')} on the remote you do not have. Git will refuse the push; pull first.`,
+            tone: 'warning' as const
+          }]
+        : [])
+    ],
+    tone: branch.behind > 0 ? 'warning' : 'normal',
+    confirmLabel: 'Push'
+  });
+  if (!ok) return;
+
+  await commitStore.push(
+    branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
+  );
+}
+
+/** Throw away the working-tree changes to these files, after saying what goes. */
+export async function rollbackChanges(changes: Change[]) {
+  if (changes.length === 0) return;
+
+  // A file Git has never seen has no committed version to go back to, and
+  // Gitalia will not delete it, so there is nothing to undo.
+  const tracked = changes.filter((c) => c.kind !== 'unversioned');
+  if (tracked.length === 0) {
+    await confirm({
+      title: 'Nothing to roll back',
+      message:
+        'These files are not under version control, so there is no committed version to restore. Delete them in your file manager if you no longer want them.',
+      tone: 'warning',
+      facts: changes.slice(0, 6).map((c) => ({ label: 'Unversioned', value: c.path })),
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return;
+  }
+
+  const newFiles = tracked.filter((c) => c.kind === 'added');
+  const ok = await confirm({
+    title: tracked.length === 1 ? `Roll back ${tracked[0].name}?` : `Roll back ${tracked.length} files?`,
+    message:
+      'The changes you made to these files are thrown away and cannot be recovered. Files that were newly added become unversioned again; nothing is deleted from disk.',
+    tone: 'danger',
+    facts: [
+      ...tracked.slice(0, 6).map((c) => ({
+        label: KIND_LABEL[c.kind],
+        value: c.path,
+        tone: 'danger' as const
+      })),
+      ...(tracked.length > 6
+        ? [{ label: 'And', value: `${tracked.length - 6} more`, tone: 'danger' as const }]
+        : []),
+      ...(newFiles.length > 0
+        ? [{ label: 'Kept on disk', value: pluralize(newFiles.length, 'new file') }]
+        : [])
+    ],
+    confirmLabel: 'Roll back'
+  });
+  if (!ok) return;
+
+  await commitStore.rollback(tracked.map((c) => c.path));
+}
+
+/** Context menu for a file in the commit panel. */
+export function changeMenuItems(change: Change): MenuItem[] {
+  const ticked = commitStore.isChecked(change.path);
+  return [
+    {
+      label: ticked ? 'Exclude from commit' : 'Include in commit',
+      hint: commitStore.forced ? 'a merge is in progress' : undefined,
+      disabled: commitStore.forced,
+      action: () => commitStore.toggle(change)
+    },
+    SEPARATOR,
+    {
+      label: 'Roll back…',
+      danger: true,
+      hint: change.kind === 'unversioned' ? 'not versioned' : undefined,
+      disabled: change.kind === 'unversioned',
+      action: () => rollbackChanges([change])
+    },
+    SEPARATOR,
+    { label: 'Copy path', action: () => copy(change.path, change.path) },
+    {
+      label: 'Copy full path',
+      action: () => copy(`${repoStore.info?.root ?? ''}/${change.path}`, 'full path')
+    }
   ];
 }

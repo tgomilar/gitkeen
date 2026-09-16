@@ -126,7 +126,7 @@
             </li>
           {/each}
         </ul>
-        <p class="pending">Diffs land with the changes panel in the next pass.</p>
+        <p class="pending">A side-by-side diff viewer is not built yet.</p>
       {:else}
         <p class="pending">Loading commit…</p>
       {/if}

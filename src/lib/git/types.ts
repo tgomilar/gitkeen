@@ -83,6 +83,36 @@ export interface CommitDetails {
   files: CommitFileStat[];
 }
 
+export interface HeadCommit {
+  exists: boolean;
+  hash: string | null;
+  message: string;
+  subject: string;
+  isMerge: boolean;
+  /** The upstream branch that already holds this commit, or null. */
+  pushed: string | null;
+}
+
+export interface CommitResult {
+  ok: boolean;
+  commit: string;
+  files: number;
+  /** False when a merge forced the whole index to be committed. */
+  partial: boolean;
+}
+
+export interface RollbackResult {
+  ok: boolean;
+  restored: number;
+  unstaged: number;
+}
+
+export interface PushResult {
+  ok: boolean;
+  branch: string;
+  output: string;
+}
+
 export interface BranchInspection {
   isMerged: boolean;
   onRemote: string[];

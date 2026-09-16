@@ -50,6 +50,15 @@
   --ref-head-bg: #2f6fd0;
   --ref-head-text: #ffffff;
 
+  /* File status colours in the commit panel. They carry meaning, so they are
+     the one place outside the graph where colour is allowed to speak. */
+  --change-modified: #1a56b8;
+  --change-added: #2f7d43;
+  --change-deleted: #7c7c85;
+  --change-renamed: #1a56b8;
+  --change-conflict: #c0392b;
+  --change-unversioned: #8a5a2b;
+
   --shadow-menu: 0 6px 20px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.28);
   --scrim: rgba(0, 0, 0, 0.35);
@@ -92,6 +101,13 @@
   --ref-tag-text: #f0d9a6;
   --ref-head-bg: #4a8fe0;
   --ref-head-text: #11151a;
+
+  --change-modified: #6c9fe8;
+  --change-added: #63b175;
+  --change-deleted: #85868f;
+  --change-renamed: #6c9fe8;
+  --change-conflict: #e06a5c;
+  --change-unversioned: #c08457;
 
   --shadow-menu: 0 8px 26px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.7);

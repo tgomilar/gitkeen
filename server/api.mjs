@@ -80,13 +80,32 @@ function parseLog(stdout) {
   return commits;
 }
 
-/** porcelain=v2 is the stable machine format; v1 is ambiguous with odd paths. */
+/**
+ * porcelain=v2 is the stable machine format; v1 is ambiguous with odd paths.
+ *
+ * `-z` matters as much as the format does. Without it Git C-quotes any path
+ * holding a space, a quote or a non-ASCII byte, so `üñî code.txt` arrives as
+ * `"\303\274\303\261\303\256 code.txt"`. Those paths are handed straight back
+ * to Git when a commit runs, so they have to survive the round trip intact.
+ */
+const STATUS_ARGS = [
+  'status', '--porcelain=v2', '--branch', '-z',
+  // Git collapses an untracked directory into one `?  .idea/` row. The commit
+  // panel lists files, not folders, so ask for every one of them.
+  '--untracked-files=all'
+];
+
 function parseStatus(stdout) {
   const files = [];
   let branch = null, upstream = null, oid = null;
   let ahead = 0, behind = 0, detached = false;
 
-  for (const line of stdout.split('\n')) {
+  // -z terminates every record with a NUL, so the last split piece is empty.
+  const records = stdout.split('\0');
+  if (records[records.length - 1] === '') records.pop();
+
+  for (let i = 0; i < records.length; i++) {
+    const line = records[i];
     if (!line) continue;
     if (line.startsWith('# ')) {
       const [, key, ...rest] = line.split(' ');
@@ -105,9 +124,15 @@ function parseStatus(stdout) {
       const p = line.split(' ');
       files.push({ path: p.slice(8).join(' '), index: p[1][0], worktree: p[1][1], state: 'tracked' });
     } else if (type === '2') {
+      // A rename spends two records: the fields, then the path it came from.
       const p = line.split(' ');
-      const [path, origPath] = p.slice(9).join(' ').split('\t');
-      files.push({ path, origPath, index: p[1][0], worktree: p[1][1], state: 'renamed' });
+      files.push({
+        path: p.slice(9).join(' '),
+        origPath: records[++i] ?? undefined,
+        index: p[1][0],
+        worktree: p[1][1],
+        state: 'renamed'
+      });
     } else if (type === 'u') {
       const p = line.split(' ');
       files.push({ path: p.slice(10).join(' '), index: p[1][0], worktree: p[1][1], state: 'conflicted' });
@@ -130,7 +155,7 @@ export const methods = {
   },
 
   async 'repo.status'({ path }) {
-    const status = parseStatus(await git(path, ['status', '--porcelain=v2', '--branch']));
+    const status = parseStatus(await git(path, STATUS_ARGS));
     return { ...status, operation: await detectOperation(path) };
   },
 
@@ -323,7 +348,7 @@ export const methods = {
       );
     }
 
-    const status = parseStatus(await git(path, ['status', '--porcelain=v2', '--branch']));
+    const status = parseStatus(await git(path, STATUS_ARGS));
     const dirty = status.files.filter((f) => f.state !== 'untracked').length;
     if (dirty > 0) {
       problems.push(`You have ${dirty} uncommitted ${dirty === 1 ? 'change' : 'changes'}. Commit or stash them before squashing.`);
@@ -432,6 +457,175 @@ export const methods = {
 
     const { stdout: newHead } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: newHead.trim(), previousHead: head, replayed: inspection.replayed };
+  },
+
+  /**
+   * What the commit panel needs to know about HEAD before offering "Amend".
+   *
+   * Amending a commit that is already on a remote means a force push later,
+   * so the panel has to be able to say that before the box is ticked.
+   */
+  async 'commit.head'({ path }) {
+    const { stdout: oid, code } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    if (code !== 0) {
+      return { exists: false, hash: null, message: '', subject: '', isMerge: false, pushed: null };
+    }
+    const hash = oid.trim();
+    const message = (await git(path, ['show', '-s', '--pretty=format:%B', hash])).replace(/\s+$/, '');
+    const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+
+    // Only the upstream of the current branch matters here. Scanning every
+    // remote ref would cost one process per branch for an answer nobody reads.
+    let pushed = null;
+    const { stdout: up, code: upCode } = await runGit(
+      path, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { allowFailure: true }
+    );
+    if (upCode === 0 && up.trim()) {
+      const upstream = up.trim();
+      const { code: contains } = await runGit(path, ['merge-base', '--is-ancestor', hash, upstream], { allowFailure: true });
+      if (contains === 0) pushed = upstream;
+    }
+
+    return {
+      exists: true,
+      hash,
+      message,
+      subject: message.split('\n')[0],
+      isMerge: ids.trim().split(' ').length > 2,
+      pushed
+    };
+  },
+
+  /**
+   * Commit exactly the files the user ticked, the way IntelliJ IDEA does.
+   *
+   * Ticking a box stages nothing. Only here does anything reach Git, and the
+   * commit carries a pathspec, so a file that was already staged but left
+   * unticked stays staged and uncommitted instead of being swept in.
+   *
+   * Two cases break that rule and are handled as such:
+   *  - An untracked file cannot be named in a pathspec until Git knows it, so
+   *    those are added first.
+   *  - Git refuses a partial commit while a merge is unfinished, so during any
+   *    in-progress operation the ticked files are staged and the whole index
+   *    is committed. The panel says so before the button is pressed.
+   */
+  async 'changes.commit'({ path, paths, message, amend = false }) {
+    if (!message || !message.trim()) {
+      throw new GitError('A commit message is required.', { command: '', stderr: '', code: 1 });
+    }
+    if (!Array.isArray(paths) || paths.length === 0) {
+      throw new GitError('Select at least one file to commit.', { command: '', stderr: '', code: 1 });
+    }
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const operation = await detectOperation(path);
+    const wanted = new Set(paths);
+    const known = status.files.filter((f) => wanted.has(f.path));
+
+    const missing = paths.filter((p) => !status.files.some((f) => f.path === p));
+    if (missing.length > 0) {
+      throw new GitError(
+        `These files have changed since the list was read:\n  ${missing.join('\n  ')}\n\nRefresh and try again.`,
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+
+    // A rename is one row on screen but two paths to Git. A pathspec commit
+    // that named only the new one would leave the deletion of the old name
+    // staged and uncommitted, splitting the rename in two.
+    const pathspec = [];
+    for (const file of known) {
+      pathspec.push(file.path);
+      if (file.origPath) pathspec.push(file.origPath);
+    }
+
+    // `git add` cannot take that old name: it is gone from the working tree
+    // and gone from the index, because the rename is already recorded there.
+    const stageable = known.map((f) => f.path);
+
+    const untracked = known.filter((f) => f.state === 'untracked').map((f) => f.path);
+    if (untracked.length > 0) await git(path, ['add', '--', ...untracked]);
+
+    const args = ['commit'];
+    if (amend) args.push('--amend');
+    args.push('-m', message.trim());
+
+    if (operation) {
+      // Partial commits are impossible mid-merge, so stage and commit it all.
+      await git(path, ['add', '--', ...stageable]);
+    } else {
+      args.push('--', ...pathspec);
+    }
+
+    try {
+      await git(path, args);
+    } catch (err) {
+      // Undo the staging done for untracked files, so a refused commit (a
+      // failing hook, say) leaves the working tree exactly as it was found.
+      if (untracked.length > 0 && !operation) {
+        await runGit(path, ['reset', '-q', '--', ...untracked], { allowFailure: true });
+      }
+      throw err;
+    }
+
+    const { stdout: created } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return { ok: true, commit: created.trim(), files: known.length, partial: !operation };
+  },
+
+  /**
+   * Throw away the working-tree changes to these files.
+   *
+   * A file that exists in HEAD goes back to its committed content. A file that
+   * was newly added to the index has no committed content to go back to, so it
+   * is unstaged and left on disk as an untracked file, which is where it came
+   * from. Nothing is ever deleted.
+   */
+  async 'changes.rollback'({ path, paths }) {
+    if (!Array.isArray(paths) || paths.length === 0) return { ok: true, restored: 0, unstaged: 0 };
+
+    const inHead = [], notInHead = [];
+    for (const p of paths) {
+      const { code } = await runGit(path, ['cat-file', '-e', `HEAD:${p}`], { allowFailure: true });
+      (code === 0 ? inHead : notInHead).push(p);
+    }
+
+    // The old name of a rename has to come back too, or the file is duplicated.
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    for (const file of status.files) {
+      if (!file.origPath || !paths.includes(file.path)) continue;
+      if (!inHead.includes(file.origPath)) inHead.push(file.origPath);
+    }
+
+    if (notInHead.length > 0) await git(path, ['reset', '-q', '--', ...notInHead]);
+    if (inHead.length > 0) {
+      await git(path, ['reset', '-q', '--', ...inHead]);
+      await git(path, ['checkout', '--', ...inHead]);
+    }
+    return { ok: true, restored: inHead.length, unstaged: notInHead.length };
+  },
+
+  /**
+   * Push the current branch. Never forced: Git rejects a push that would lose
+   * commits, and that rejection is the safety check.
+   */
+  async 'repo.push'({ path, remote = null, setUpstream = false }) {
+    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+    if (code !== 0) {
+      throw new GitError(
+        'HEAD is detached, so there is no branch to push. Create a branch here first.',
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+    const branch = sym.trim();
+    const args = ['push'];
+    if (setUpstream || remote) {
+      if (!remote) throw new GitError('No remote to push to.', { command: '', stderr: '', code: 1 });
+      if (setUpstream) args.push('--set-upstream');
+      args.push(remote, branch);
+    }
+    const { stderr } = await runGit(path, args);
+    return { ok: true, branch, output: stderr.trim() };
   },
 
   /**

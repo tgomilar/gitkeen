@@ -1,6 +1,9 @@
 <script lang="ts">
   import TitleBar from './lib/components/TitleBar.svelte';
   import BranchSidebar from './lib/components/BranchSidebar.svelte';
+  import ToolRail from './lib/components/ToolRail.svelte';
+  import type { DockPanel } from './lib/components/ToolRail.svelte';
+  import CommitPanel from './lib/components/CommitPanel.svelte';
   import GraphView from './lib/components/GraphView.svelte';
   import CommitDetails from './lib/components/CommitDetails.svelte';
   import StatusBar from './lib/components/StatusBar.svelte';
@@ -8,22 +11,29 @@
   import Dialog from './lib/components/Dialog.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
+  import { tick } from 'svelte';
   import { repoStore } from './lib/state/repo.svelte';
+  import { commitStore } from './lib/state/commit.svelte';
   import { commitMenuItems, createBranchFrom } from './lib/actions';
   import type { MenuItem } from './lib/menu';
 
   const THEME_KEY = 'gitalia.theme';
   const SIDEBAR_KEY = 'gitalia.sidebar-width';
   const DETAILS_KEY = 'gitalia.details-height';
+  const DOCK_KEY = 'gitalia.dock';
 
   let theme = $state<'light' | 'dark'>(
     (localStorage.getItem(THEME_KEY) as 'light' | 'dark' | null) ?? 'dark'
   );
   let sidebarWidth = $state(Number(localStorage.getItem(SIDEBAR_KEY)) || 230);
   let detailsHeight = $state(Number(localStorage.getItem(DETAILS_KEY)) || 240);
+  let dock = $state<DockPanel>(
+    (localStorage.getItem(DOCK_KEY) as DockPanel | null) ?? 'branches'
+  );
 
   let titleBar = $state<ReturnType<typeof TitleBar> | null>(null);
   let graphView = $state<ReturnType<typeof GraphView> | null>(null);
+  let commitPanel = $state<ReturnType<typeof CommitPanel> | null>(null);
   let keyboardMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   $effect(() => {
@@ -31,10 +41,25 @@
     localStorage.setItem(THEME_KEY, theme);
   });
 
+  $effect(() => {
+    localStorage.setItem(DOCK_KEY, dock);
+  });
+
   // Keep the cursor visible whenever it moves for any reason.
   $effect(() => {
     repoStore.cursor;
     graphView?.revealCursor();
+  });
+
+  // A commit message and its ticked files belong to one repository, so they
+  // go when it does. Done here rather than inside the store, which would put
+  // an import cycle between the two stores.
+  let dockedRoot: string | null = null;
+  $effect(() => {
+    const root = repoStore.info?.root ?? null;
+    if (root === dockedRoot) return;
+    dockedRoot = root;
+    commitStore.reset();
   });
 
   function toggleTheme() {
@@ -92,7 +117,7 @@
     // shortcut to the browser. Reload in particular must keep working here.
     if (!repoStore.repo) return;
 
-    if (mod && event.key.toLowerCase() === 'k') {
+    if (mod && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       titleBar?.focusSearch();
       return;
@@ -106,6 +131,14 @@
     if (mod && event.shiftKey && event.key.toLowerCase() === 'f') {
       event.preventDefault();
       repoStore.fetch();
+      return;
+    }
+    // ⌘K is taken by the graph search, so the commit box gets ⌘⇧K.
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      dock = 'commit';
+      // The panel may not be mounted yet, so wait for the render it triggers.
+      tick().then(() => commitPanel?.focusMessage());
       return;
     }
     if (mod && event.shiftKey && event.key.toLowerCase() === 'b') {
@@ -167,18 +200,28 @@
     <TitleBar bind:this={titleBar} onclose={() => repoStore.close()} {theme} ontheme={toggleTheme} />
 
     <div class="body">
+      <ToolRail
+        active={dock}
+        changeCount={repoStore.dirtyFileCount}
+        onselect={(panel) => (dock = panel)}
+      />
+
       <div class="sidebar" style="width: {sidebarWidth}px">
-        <BranchSidebar />
+        {#if dock === 'commit'}
+          <CommitPanel bind:this={commitPanel} />
+        {:else}
+          <BranchSidebar />
+        {/if}
       </div>
 
       <div
         class="divider vertical"
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize branch panel"
+        aria-label="Resize side panel"
         use:resizer={{
           axis: 'x',
-          apply: (d) => (sidebarWidth = Math.min(460, Math.max(160, sidebarWidth + d))),
+          apply: (d) => (sidebarWidth = Math.min(560, Math.max(190, sidebarWidth + d))),
           commit: () => localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
         }}
       ></div>

@@ -6,8 +6,9 @@
  */
 import { transport } from './transport';
 import type {
-  BranchSet, BranchInspection, CommitDetails, CommitMessage, GitStatus,
-  HeadInfo, LogPage, RepositoryInfo, SquashInspection, SquashResult
+  BranchSet, BranchInspection, CommitDetails, CommitMessage, CommitResult, GitStatus,
+  HeadCommit, HeadInfo, LogPage, PushResult, RepositoryInfo, RollbackResult,
+  SquashInspection, SquashResult
 } from './types';
 
 export class GitRepository {
@@ -68,6 +69,25 @@ export class GitRepository {
 
   fetch(remote?: string): Promise<{ output: string }> {
     return transport.call('repo.fetch', { path: this.path, remote });
+  }
+
+  /** What HEAD holds, so the commit panel can describe an amend. */
+  headCommit(): Promise<HeadCommit> {
+    return transport.call('commit.head', { path: this.path });
+  }
+
+  /** Commit exactly these paths, leaving anything else staged where it is. */
+  commit(paths: string[], message: string, amend = false): Promise<CommitResult> {
+    return transport.call('changes.commit', { path: this.path, paths, message, amend });
+  }
+
+  /** Throw away the working-tree changes to these paths. */
+  rollback(paths: string[]): Promise<RollbackResult> {
+    return transport.call('changes.rollback', { path: this.path, paths });
+  }
+
+  push(options: { remote?: string; setUpstream?: boolean } = {}): Promise<PushResult> {
+    return transport.call('repo.push', { path: this.path, ...options });
   }
 
   /** Safety probe run before offering a destructive branch action. */

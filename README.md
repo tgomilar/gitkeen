@@ -6,7 +6,8 @@ editor. Your editor writes code. Gitalia manages your history.
 
 This repository holds Prototype 1, as defined in
 `standalone-git-management-app-plan.md`. It covers one workflow: open a
-repository*, read its history, select commits, and switch branches.
+repository*, read its history, select commits, switch branches, and commit
+your work.
 
 ## What works today
 
@@ -21,12 +22,15 @@ repository*, read its history, select commits, and switch branches.
 | Branches | Switch, create, rename and delete local branches. |
 | Remote branches | Check out a remote branch as a local branch. |
 | Commit details | Read the full message and the list of changed files. |
+| Commit panel | Tick the files you want, write a message, and commit. |
+| Roll back | Throw away your changes to chosen files. |
+| Push | Publish the current branch, and create it on the remote if it is new. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Safety | Read what a destructive action will do before it runs. |
 | Themes | Switch between a dark and a light theme. |
 
-Fetch is available. Push and pull are not yet built.
+Fetch and push are available. Pull is not yet built.
 
 ## How squashing works
 
@@ -58,10 +62,68 @@ If the commits already exist on a remote, the dialog warns you that a force
 push would be needed. After a squash, the message tells you where the branch
 pointed before, so you can undo it with `git reset --hard`.
 
+## How the commit panel works
+
+Choose **Commit** in the rail on the left. The panel lists everything in your
+working tree that differs from the last commit, in two groups.
+
+| Group | What it holds | Ticked at the start |
+|---|---|---|
+| Changes | Files Git already tracks: edited, added, deleted or renamed. | Yes |
+| Unversioned Files | Files Git has never seen. | No |
+
+Unversioned files start unticked on purpose. A build folder or an editor
+setting file should never join a commit because you failed to notice it.
+
+Ticking a box runs no Git command. It only records that the file belongs in the
+next commit. This is how IntelliJ IDEA behaves, and it means Gitalia never
+disturbs what you prepared in Git yourself. Only the Commit button writes
+anything.
+
+When you press Commit, Gitalia commits exactly the ticked files. A file you
+prepared with `git add` but left unticked stays prepared and uncommitted. A
+renamed file is one row on screen, and Gitalia sends both the old name and the
+new name to Git, so the rename is recorded as a rename.
+
+The colour of a file name tells you its state.
+
+| Colour | Meaning |
+|---|---|
+| Blue | The file is edited or renamed. |
+| Green | The file is new and already prepared for the next commit. |
+| Grey, with a line through it | The file is deleted. |
+| Brown | Git has never seen this file. |
+| Red | The file has a merge conflict. |
+
+Tick **Amend** to replace the previous commit instead of making a new one. The
+box fills the message field with the message of that commit, and gives your own
+text back if you untick it. If the commit you are replacing already exists on a
+remote, Gitalia says so first, because publishing the replacement would need a
+force push.
+
+Two situations change these rules, and the panel says so on screen.
+
+1. While a merge or a rebase is unfinished, Git refuses to commit part of the
+   working tree. The tick boxes stop applying and the commit takes everything.
+2. A file with a merge conflict cannot be committed until you resolve it.
+   Gitalia names those files instead of letting Git fail with its own message.
+
+Right click a file for **Roll back**, which throws away your changes to it. A
+file that was newly added becomes unversioned again and stays on disk. Gitalia
+never deletes a file.
+
+The toolbar above the list can group the files by folder, expand and collapse
+those folders, and read the working tree again.
+
 ## What is not built yet
 
-Staging, diffs, cherry-pick, revert, reset, interactive rebase, stash and
+Diffs, pull, cherry-pick, revert, reset, interactive rebase, stash and
 conflict resolution all come later. The plan document lists the order.
+
+Gitalia does not offer a separate staging area. It follows the IntelliJ IDEA
+model, where a tick box decides what goes into the commit. If you prepare files
+with `git add` outside Gitalia, your work is kept: those files are marked
+`staged` in the list, and Gitalia only commits them when you tick them.
 
 ## Requirements
 
@@ -105,6 +167,8 @@ The plan asks for a keyboard first application. These keys work now.
 | Command or Control with K | Move the cursor to the search box. |
 | Command or Control with R | Reload the repository state. |
 | Command or Control with Shift and F | Fetch from all remotes. |
+| Command or Control with Shift and K | Open the commit panel and start typing a message. |
+| Command or Control with Enter | Commit, while the message box has the cursor. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
 
 ## How it is built
@@ -146,8 +210,11 @@ in use.
 | `src/lib/graph/layout.ts` | Turns the commit graph into columns for drawing. |
 | `src/lib/state/` | Repository state, dialogs and messages. |
 | `src/lib/actions.ts` | Every user action, with its safety check attached. |
+| `src/lib/changes.ts` | Turns the file list from Git into the rows the commit panel draws. |
 | `src/lib/components/` | The Svelte* components. |
-| `src/lib/components/Icon.svelte` | The small glyphs used in the branch panel. |
+| `src/lib/components/Icon.svelte` | The small glyphs used across the panels. |
+| `src/lib/components/CommitPanel.svelte` | The commit panel. |
+| `src/lib/state/commit.svelte.ts` | Which files are ticked, and the commit itself. |
 
 ### The graph
 
@@ -191,34 +258,5 @@ aborts it, which leaves the branch where it started.
    browser data.
 4. The backend runs only during development. There is no packaged application
    yet.
-
-## Glossary
-
-Every term marked with an asterisk (*) in this document is explained here.
-
-**Git**: The version control program that records the history of a project. It
-stores every change as a commit, and it can show, compare and undo them.
-
-**Hash**: The long identifier that Git gives to every commit, for example
-`f08795d`. No two commits share one.
-
-**HTTP**: HyperText Transfer Protocol. The rules that a web browser uses to ask
-a server for data.
-
-**IntelliJ IDEA**: A commercial development environment made by JetBrains. It
-is well known for its Git tools, which this project takes as its standard.
-
-**Node.js**: A program that runs JavaScript outside a web browser. Gitalia uses
-it to run Git commands and to build the user interface.
-
-**Repository**: A folder whose history Git records. It contains your files and a
-hidden `.git` folder holding every past version.
-
-**Rust**: A programming language used for fast and safe programs. Tauri uses it.
-
-**Svelte**: A toolkit for building user interfaces. It turns components into
-plain JavaScript when the project is built.
-
-**Tauri**: A toolkit for building desktop applications. The window shows a web
-page, and the program behind it is written in Rust. Applications built this way
-are much smaller than ones built with Electron.
+5. Gitalia does not watch the folder for changes. Press Refresh, or Command
+   with R, after you edit files in your editor.
