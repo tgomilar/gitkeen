@@ -13,15 +13,18 @@
     collapsed: Set<string>;
     disabled: boolean;
     isChecked: (path: string) => boolean;
+    selected: string | null;
     groupState: (paths: string[]) => 'all' | 'some' | 'none';
     ontoggleNode: (key: string) => void;
     ontoggleCheck: (changes: Change[], on: boolean) => void;
+    onselect: (change: Change) => void;
+    onopen: (change: Change) => void;
     onmenu: (change: Change, event: MouseEvent) => void;
   }
 
   let {
-    node, depth, collapsed, disabled, isChecked, groupState,
-    ontoggleNode, ontoggleCheck, onmenu
+    node, depth, collapsed, disabled, isChecked, selected, groupState,
+    ontoggleNode, ontoggleCheck, onselect, onopen, onmenu
   }: Props = $props();
 
   const indent = $derived(8 + depth * 13);
@@ -37,8 +40,11 @@
     indent={indent + 14}
     showDir={false}
     checked={isChecked(change.path)}
+    selected={selected === change.path}
     {disabled}
     ontoggle={() => ontoggleCheck([change], !isChecked(change.path))}
+    onselect={() => onselect(change)}
+    onopen={() => onopen(change)}
     onmenu={(e) => onmenu(change, e)}
   />
 {:else}
@@ -64,9 +70,12 @@
         {collapsed}
         {disabled}
         {isChecked}
+        {selected}
         {groupState}
         {ontoggleNode}
         {ontoggleCheck}
+        {onselect}
+        {onopen}
         {onmenu}
       />
     {/each}

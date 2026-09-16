@@ -73,6 +73,8 @@ export interface HeadInfo {
 
 export interface CommitFileStat {
   path: string;
+  /** The name the file had before this commit renamed it, or null. */
+  origPath: string | null;
   added: number | null;
   removed: number | null;
   binary: boolean;
@@ -111,6 +113,47 @@ export interface PushResult {
   ok: boolean;
   branch: string;
   output: string;
+}
+
+export type DiffLineKind = 'context' | 'add' | 'del';
+
+export interface DiffLine {
+  kind: DiffLineKind;
+  /** Line number on the left, or null when the line is an addition. */
+  oldNumber: number | null;
+  /** Line number on the right, or null when the line is a deletion. */
+  newNumber: number | null;
+  text: string;
+  /** Git's "\ No newline at end of file" applies to this line. */
+  noNewline?: boolean;
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  /** The text Git puts after the @@ marker, usually the enclosing function. */
+  heading: string;
+  lines: DiffLine[];
+}
+
+export type DiffStatus = 'added' | 'deleted' | 'modified' | 'renamed';
+
+export interface FileDiff {
+  path: string;
+  origPath: string | null;
+  /** The commit this diff belongs to, or null for the working tree. */
+  hash: string | null;
+  status: DiffStatus;
+  binary: boolean;
+  /** True when the diff was cut short because the file is very large. */
+  truncated: boolean;
+  /** True when Git records a change with no difference in the text. */
+  empty: boolean;
+  added: number;
+  removed: number;
+  hunks: DiffHunk[];
 }
 
 export interface BranchInspection {

@@ -2,10 +2,13 @@
   /**
    * One changed file.
    *
-   * The whole row is a label, so a click anywhere on it ticks the box. The
-   * colour of the name carries the file's state, the way IntelliJ IDEA does
-   * it: blue for edited, green for new, grey and struck through for deleted,
-   * brown for a file Git has never seen.
+   * The box and the name do different things, as they do in IntelliJ IDEA. The
+   * box decides whether the file joins the commit. The name selects the file,
+   * and opens its diff on a double click or on Enter.
+   *
+   * The colour of the name carries the file's state: blue for edited, green
+   * for new, grey and struck through for deleted, brown for a file Git has
+   * never seen.
    */
   import Icon from './Icon.svelte';
   import TriCheckbox from './TriCheckbox.svelte';
@@ -19,41 +22,60 @@
     /** Flat lists put the folder beside the name; a tree already shows it. */
     showDir: boolean;
     checked: boolean;
+    selected: boolean;
     disabled: boolean;
     ontoggle: () => void;
+    onselect: () => void;
+    onopen: () => void;
     onmenu: (event: MouseEvent) => void;
   }
 
-  let { change, indent, showDir, checked, disabled, ontoggle, onmenu }: Props = $props();
+  let {
+    change, indent, showDir, checked, selected, disabled,
+    ontoggle, onselect, onopen, onmenu
+  }: Props = $props();
+
+  function onkeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      onopen();
+    }
+  }
 </script>
 
-<label
-  class="row {change.kind}"
-  style="padding-left: {indent}px"
-  title={describeChange(change)}
-  oncontextmenu={onmenu}
->
+<div class="row {change.kind}" class:selected style="padding-left: {indent}px">
   <TriCheckbox
     checkState={checked ? 'all' : 'none'}
     {disabled}
     label="Include {change.path} in the commit"
     onchange={ontoggle}
   />
-  <span class="glyph" aria-hidden="true"><Icon name={fileIcon(change.name)} size={14} /></span>
-  <span class="name">{change.name}</span>
-  {#if change.file.origPath}
-    <span class="from" title="Renamed from {change.file.origPath}">← {change.file.origPath}</span>
-  {:else if showDir && change.dir}
-    <span class="dir">{change.dir}</span>
-  {/if}
-  {#if change.kind === 'conflict'}
-    <span class="flag">conflict</span>
-  {:else if change.staged}
-    <!-- Ticking a box never stages, so a file already in the index is worth
-         pointing out: the user put it there by other means. -->
-    <span class="flag staged" title="Already staged. {KIND_LABEL[change.kind]}.">staged</span>
-  {/if}
-</label>
+  <button
+    class="open"
+    title="{describeChange(change)}&#10;&#10;Double click to see the diff."
+    onclick={onselect}
+    ondblclick={onopen}
+    oncontextmenu={onmenu}
+    {onkeydown}
+  >
+    <span class="glyph" aria-hidden="true"><Icon name={fileIcon(change.name)} size={14} /></span>
+    <span class="name">{change.name}</span>
+    {#if change.file.origPath}
+      <span class="from">← {change.file.origPath}</span>
+    {:else if showDir && change.dir}
+      <span class="dir">{change.dir}</span>
+    {:else}
+      <span class="dir"></span>
+    {/if}
+    {#if change.kind === 'conflict'}
+      <span class="flag">conflict</span>
+    {:else if change.staged}
+      <!-- Ticking a box never stages, so a file already in the index is worth
+           pointing out: the user put it there by other means. -->
+      <span class="flag staged" title="Already staged. {KIND_LABEL[change.kind]}.">staged</span>
+    {/if}
+  </button>
+</div>
 
 <style>
   .row {
@@ -63,9 +85,22 @@
     height: 22px;
     padding-right: 8px;
     white-space: nowrap;
-    cursor: default;
   }
   .row:hover { background: var(--bg-hover); }
+  .row.selected { background: var(--bg-selected); }
+
+  .open {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    text-align: left;
+  }
 
   .glyph { flex: none; display: flex; color: var(--text-faint); }
 

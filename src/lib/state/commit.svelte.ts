@@ -31,6 +31,8 @@ class CommitStore {
   /** Collapsed group and folder keys. */
   collapsed = $state<Set<string>>(new Set());
   groupByDirectory = $state(false);
+  /** The row the user last clicked. It drives the diff viewer. */
+  selected = $state<string | null>(null);
 
   head = $state<HeadCommit | null>(null);
   busy = $state<string | null>(null);
@@ -134,6 +136,7 @@ class CommitStore {
     this.amend = false;
     this.excluded = new Set();
     this.included = new Set();
+    this.selected = null;
     this.head = null;
     this.headFor = null;
   }

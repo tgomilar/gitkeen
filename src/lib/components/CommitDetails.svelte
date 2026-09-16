@@ -2,7 +2,7 @@
   import { repoStore } from '../state/repo.svelte';
   import { absoluteTime, relativeTime, initials, authorColor, pluralize } from '../format';
   import { toasts } from '../state/toasts.svelte';
-  import { canSquash, squashCommits } from '../actions';
+  import { canSquash, squashCommits, showCommitDiff } from '../actions';
   import type { Commit } from '../git/types';
 
   const selected = $derived(
@@ -116,7 +116,13 @@
         <ul class="files">
           {#each details.files as file}
             <li>
-              <span class="path" title={file.path}><bdi dir="ltr">{file.path}</bdi></span>
+              <button
+                class="path"
+                title={file.origPath ? `${file.path}\nrenamed from ${file.origPath}` : file.path}
+                onclick={() => showCommitDiff(selected, file)}
+              >
+                <bdi dir="ltr">{file.path}</bdi>
+              </button>
               {#if file.binary}
                 <span class="stat bin">binary</span>
               {:else}
@@ -126,7 +132,7 @@
             </li>
           {/each}
         </ul>
-        <p class="pending">A side-by-side diff viewer is not built yet.</p>
+        <p class="pending">Choose a file to see what this commit did to it.</p>
       {:else}
         <p class="pending">Loading commit…</p>
       {/if}
@@ -258,6 +264,9 @@
 
   .path {
     flex: 1;
+    padding: 0;
+    background: none;
+    border: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -269,6 +278,7 @@
     font-family: var(--font-mono);
     font-size: 11.5px;
   }
+  .path:hover { color: var(--accent); text-decoration: underline; }
 
   .stat {
     font-family: var(--font-mono);

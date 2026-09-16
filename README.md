@@ -23,6 +23,7 @@ your work.
 | Remote branches | Check out a remote branch as a local branch. |
 | Commit details | Read the full message and the list of changed files. |
 | Commit panel | Tick the files you want, write a message, and commit. |
+| Diff | Read what changed in a file, unified or side by side. |
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish the current branch, and create it on the remote if it is new. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
@@ -108,17 +109,52 @@ Two situations change these rules, and the panel says so on screen.
 2. A file with a merge conflict cannot be committed until you resolve it.
    Gitalia names those files instead of letting Git fail with its own message.
 
-Right click a file for **Roll back**, which throws away your changes to it. A
+Click a file name to select it. Double click it, or press Enter, to read its
+diff. Right click it for **Roll back**, which throws away your changes to it. A
 file that was newly added becomes unversioned again and stays on disk. Gitalia
 never deletes a file.
 
 The toolbar above the list can group the files by folder, expand and collapse
 those folders, and read the working tree again.
 
+## How the diff viewer works
+
+There are two ways in.
+
+1. In the commit panel, double click a file. You see the working tree compared
+   with the last commit: exactly what committing that file would record.
+2. In the commit details below the graph, click a file. You see what that one
+   commit did to it.
+
+The viewer covers the window, because a side by side comparison needs the
+width. Press Escape to close it.
+
+| Control | What it does |
+|---|---|
+| Unified | One column. Removed lines and added lines follow each other. |
+| Side by side | Two columns. The old file on the left, the new one on the right. |
+
+Both layouts mark the words that changed inside a line, so a line where one
+name was edited does not read as a line that was rewritten. When two lines have
+almost nothing in common, the whole line is marked instead, because marking
+every word would be harder to read than marking none.
+
+Gitalia handles these cases and says which one applies:
+
+| Case | What you see |
+|---|---|
+| A renamed file | The old name in the header. If only the name changed, the viewer says so. |
+| A binary file | A note that the file changed. Comparing images and other binary files comes later. |
+| A permission change | A note that Git recorded a change although the text is the same. |
+| A very large file | The first 800 lines, with a button to draw more. Above 20000 lines the rest is not read at all. |
+
 ## What is not built yet
 
-Diffs, pull, cherry-pick, revert, reset, interactive rebase, stash and
-conflict resolution all come later. The plan document lists the order.
+Pull, cherry-pick, revert, reset, interactive rebase, stash and conflict
+resolution all come later. The plan document lists the order.
+
+The diff viewer has no syntax colouring yet, and you cannot stage or roll back
+a single hunk from it. Those are the next steps for it.
 
 Gitalia does not offer a separate staging area. It follows the IntelliJ IDEA
 model, where a tick box decides what goes into the commit. If you prepare files
@@ -169,6 +205,8 @@ The plan asks for a keyboard first application. These keys work now.
 | Command or Control with Shift and F | Fetch from all remotes. |
 | Command or Control with Shift and K | Open the commit panel and start typing a message. |
 | Command or Control with Enter | Commit, while the message box has the cursor. |
+| Enter | Read the diff of the selected file in the commit panel. |
+| Escape | Close the diff viewer. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
 
 ## How it is built
@@ -211,9 +249,11 @@ in use.
 | `src/lib/state/` | Repository state, dialogs and messages. |
 | `src/lib/actions.ts` | Every user action, with its safety check attached. |
 | `src/lib/changes.ts` | Turns the file list from Git into the rows the commit panel draws. |
+| `src/lib/diff.ts` | Pairs removed lines with added ones, and finds the words that changed. |
 | `src/lib/components/` | The Svelte* components. |
 | `src/lib/components/Icon.svelte` | The small glyphs used across the panels. |
 | `src/lib/components/CommitPanel.svelte` | The commit panel. |
+| `src/lib/components/DiffViewer.svelte` | The diff viewer. |
 | `src/lib/state/commit.svelte.ts` | Which files are ticked, and the commit itself. |
 
 ### The graph

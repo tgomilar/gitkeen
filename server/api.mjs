@@ -14,6 +14,10 @@ import { tmpdir } from 'node:os';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REBASE_HELPER = join(HERE, 'rebase-helper.mjs');
 
+// Git's empty tree object. Diffing the first commit against it shows every
+// file as added, because there is no parent commit to compare with.
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
 const US = '\x1f'; // field separator
 const RS = '\x1e'; // record separator
 
@@ -143,6 +147,86 @@ function parseStatus(stdout) {
   return { branch, upstream, oid, ahead, behind, detached, files };
 }
 
+/**
+ * A cap on how much of one file's diff is parsed.
+ *
+ * A generated file can produce a patch with hundreds of thousands of lines.
+ * Nobody reads that, and sending it would stall the page, so the viewer is
+ * told the diff was cut short instead.
+ */
+const MAX_DIFF_LINES = 20000;
+
+/**
+ * Turn one file's unified diff into structured hunks.
+ *
+ * Only the parts the viewer draws are kept. Git's own headers carry the same
+ * paths that were passed in, so they are read for the file's status and then
+ * thrown away.
+ */
+function parseFileDiff(patch) {
+  const hunks = [];
+  let status = 'modified';
+  let binary = false;
+  let truncated = false;
+  let added = 0, removed = 0;
+  let hunk = null;
+  let oldNumber = 0, newNumber = 0;
+  let total = 0;
+
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('new file mode')) { status = 'added'; continue; }
+    if (line.startsWith('deleted file mode')) { status = 'deleted'; continue; }
+    if (line.startsWith('rename from') || line.startsWith('rename to')) { status = 'renamed'; continue; }
+    if (line.startsWith('Binary files') || line.startsWith('GIT binary patch')) { binary = true; continue; }
+
+    if (line.startsWith('@@')) {
+      // @@ -oldStart,oldLines +newStart,newLines @@ optional context
+      const m = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/);
+      if (!m) continue;
+      oldNumber = Number(m[1]);
+      newNumber = Number(m[3]);
+      hunk = {
+        oldStart: oldNumber,
+        oldLines: m[2] === undefined ? 1 : Number(m[2]),
+        newStart: newNumber,
+        newLines: m[4] === undefined ? 1 : Number(m[4]),
+        heading: m[5] ?? '',
+        lines: []
+      };
+      hunks.push(hunk);
+      continue;
+    }
+
+    if (!hunk) continue; // still in the header
+
+    if (total >= MAX_DIFF_LINES) { truncated = true; break; }
+
+    const marker = line[0];
+    if (marker === '+') {
+      hunk.lines.push({ kind: 'add', oldNumber: null, newNumber: newNumber++, text: line.slice(1) });
+      added++; total++;
+    } else if (marker === '-') {
+      hunk.lines.push({ kind: 'del', oldNumber: oldNumber++, newNumber: null, text: line.slice(1) });
+      removed++; total++;
+    } else if (marker === ' ') {
+      hunk.lines.push({ kind: 'context', oldNumber: oldNumber++, newNumber: newNumber++, text: line.slice(1) });
+      total++;
+    } else if (marker === '\\') {
+      // "\ No newline at end of file" describes the line above it.
+      const last = hunk.lines[hunk.lines.length - 1];
+      if (last) last.noNewline = true;
+    }
+  }
+
+  if (truncated) {
+    // A half-read hunk would draw with wrong line numbers below the cut.
+    const last = hunks[hunks.length - 1];
+    if (last && last.lines.length === 0) hunks.pop();
+  }
+
+  return { status, binary, truncated, added, removed, hunks };
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -217,16 +301,35 @@ export const methods = {
     return { remotes: out.split('\n').map((s) => s.trim()).filter(Boolean) };
   },
 
-  /** Full body plus per-file stats for the details pane. */
+  /**
+   * Full body plus per-file stats for the details pane.
+   *
+   * `-z` is needed for the same reason as in `git status`: without it a path
+   * holding a space or a non-ASCII byte comes back quoted and escaped. It also
+   * settles renames, which `--numstat` otherwise writes as the single
+   * unusable string "old.txt => new.txt".
+   */
   async 'commit.details'({ path, hash }) {
     const body = await git(path, ['show', '-s', `--pretty=format:%B`, hash]);
-    const stat = await git(path, ['show', '--numstat', '--pretty=format:', hash]);
+    const stat = await git(path, ['-c', 'core.quotepath=false', 'show', '--numstat', '-z', '--pretty=format:', hash]);
+
+    const records = stat.split('\0');
+    if (records[records.length - 1] === '') records.pop();
+
     const files = [];
-    for (const line of stat.split('\n')) {
-      if (!line.trim()) continue;
-      const [added, removed, ...rest] = line.split('\t');
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      if (!record.trim()) continue;
+      const [added, removed, ...rest] = record.split('\t');
+      // A rename leaves the path field empty and spends the next two records
+      // on the old name and the new one.
+      const inline = rest.join('\t');
+      const renamed = inline === '';
+      const origPath = renamed ? records[++i] : null;
+      const filePath = renamed ? records[++i] : inline;
       files.push({
-        path: rest.join('\t'),
+        path: filePath,
+        origPath,
         added: added === '-' ? null : Number(added),
         removed: removed === '-' ? null : Number(removed),
         binary: added === '-'
@@ -457,6 +560,62 @@ export const methods = {
 
     const { stdout: newHead } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: newHead.trim(), previousHead: head, replayed: inspection.replayed };
+  },
+
+  /**
+   * The diff of one file, either as it sits in the working tree or as one
+   * commit changed it.
+   *
+   * `hash` picks which: leave it out for the working tree (what the commit
+   * panel would commit, so HEAD is the comparison), or name a commit to see
+   * what that commit did to the file.
+   */
+  async 'diff.file'({ path, file, origPath = null, hash = null, context = 3 }) {
+    if (!file) throw new GitError('No file was given.', { command: '', stderr: '', code: 1 });
+
+    // core.quotepath escapes non-ASCII paths in the patch headers. The status
+    // of the file is read from those headers, so keep them readable.
+    const base = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--find-renames'];
+    let args;
+    let untracked = false;
+
+    if (hash) {
+      const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+      const parents = ids.trim().split(' ').slice(1);
+      // Naming only the new path would hide the rename from Git's detection,
+      // and the file would read as newly added with its history cut off.
+      const paths = origPath ? [file, origPath] : [file];
+      args = parents.length === 0
+        // The first commit has no parent, so compare against the empty tree.
+        ? [...base, EMPTY_TREE, hash, '--', ...paths]
+        // For a merge, show it against its first parent: that is the change
+        // the branch received, which is what the file list already counted.
+        : [...base, parents[0], hash, '--', ...paths];
+    } else {
+      const status = parseStatus(await git(path, STATUS_ARGS));
+      const entry = status.files.find((f) => f.path === file);
+      untracked = entry?.state === 'untracked';
+      args = untracked
+        // An untracked file is in no tree at all, so nothing can be compared
+        // with it. Diffing against an empty file shows it as wholly added.
+        ? ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--no-index', '--', '/dev/null', file]
+        : [...base, 'HEAD', '--', file, ...(origPath ? [origPath] : [])];
+    }
+
+    // `--no-index` reports differences with exit code 1, and a plain diff can
+    // fail when the file is gone; neither is an error worth showing.
+    const { stdout } = await runGit(path, args, { allowFailure: true });
+    const parsed = parseFileDiff(stdout);
+    if (untracked) parsed.status = 'added';
+
+    return {
+      path: file,
+      origPath,
+      hash,
+      ...parsed,
+      /** No hunks and not binary means a change Git records outside the text. */
+      empty: !parsed.binary && parsed.hunks.length === 0
+    };
   },
 
   /**

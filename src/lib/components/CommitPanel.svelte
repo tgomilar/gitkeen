@@ -13,7 +13,9 @@
   import ContextMenu from './ContextMenu.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
-  import { commitChanges, commitAndPush, rollbackChanges, changeMenuItems } from '../actions';
+  import {
+    commitChanges, commitAndPush, rollbackChanges, changeMenuItems, showWorkingTreeDiff
+  } from '../actions';
   import { buildChangeTree } from '../changes';
   import { pluralize } from '../format';
   import type { Change } from '../changes';
@@ -169,9 +171,12 @@
                 collapsed={commitStore.collapsed}
                 disabled={commitStore.forced}
                 isChecked={(p) => commitStore.isChecked(p)}
+                selected={commitStore.selected}
                 groupState={(p) => commitStore.groupState(p)}
                 ontoggleNode={(key) => commitStore.toggleCollapsed(key)}
                 ontoggleCheck={(items, on) => commitStore.setChecked(items, on)}
+                onselect={(c) => (commitStore.selected = c.path)}
+                onopen={showWorkingTreeDiff}
                 onmenu={openMenu}
               />
             {/each}
@@ -182,8 +187,11 @@
                 indent={22}
                 showDir={true}
                 checked={commitStore.isChecked(change.path)}
+                selected={commitStore.selected === change.path}
                 disabled={commitStore.forced}
                 ontoggle={() => commitStore.toggle(change)}
+                onselect={() => (commitStore.selected = change.path)}
+                onopen={() => showWorkingTreeDiff(change)}
                 onmenu={(e) => openMenu(change, e)}
               />
             {/each}

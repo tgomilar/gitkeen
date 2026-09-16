@@ -16,6 +16,7 @@ import { SEPARATOR } from './menu';
 import type { Branch, Commit } from './git/types';
 import type { Change } from './changes';
 import { KIND_LABEL } from './changes';
+import { diffStore } from './state/diff.svelte';
 
 /** Mirrors the rules `git check-ref-format` enforces, so we fail before Git does. */
 export function validateBranchName(name: string): string | null {
@@ -586,10 +587,36 @@ export async function rollbackChanges(changes: Change[]) {
   await commitStore.rollback(tracked.map((c) => c.path));
 }
 
+/** Show what a working tree file would bring to the next commit. */
+export function showWorkingTreeDiff(change: Change) {
+  commitStore.selected = change.path;
+  diffStore.show({
+    file: change.path,
+    origPath: change.file.origPath ?? null,
+    hash: null,
+    source: 'Working tree against HEAD'
+  });
+}
+
+/** Show what one commit did to one file. */
+export function showCommitDiff(
+  commit: { hash: string; shortHash: string; subject: string },
+  file: { path: string; origPath: string | null }
+) {
+  diffStore.show({
+    file: file.path,
+    origPath: file.origPath,
+    hash: commit.hash,
+    source: `${commit.shortHash}  ${commit.subject}`
+  });
+}
+
 /** Context menu for a file in the commit panel. */
 export function changeMenuItems(change: Change): MenuItem[] {
   const ticked = commitStore.isChecked(change.path);
   return [
+    { label: 'Show Diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
+    SEPARATOR,
     {
       label: ticked ? 'Exclude from commit' : 'Include in commit',
       hint: commitStore.forced ? 'a merge is in progress' : undefined,

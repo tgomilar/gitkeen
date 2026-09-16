@@ -11,9 +11,11 @@
   import Dialog from './lib/components/Dialog.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
+  import DiffViewer from './lib/components/DiffViewer.svelte';
   import { tick } from 'svelte';
   import { repoStore } from './lib/state/repo.svelte';
   import { commitStore } from './lib/state/commit.svelte';
+  import { diffStore } from './lib/state/diff.svelte';
   import { commitMenuItems, createBranchFrom } from './lib/actions';
   import type { MenuItem } from './lib/menu';
 
@@ -116,6 +118,10 @@
     // With no repository open there is nothing to drive, so leave every
     // shortcut to the browser. Reload in particular must keep working here.
     if (!repoStore.repo) return;
+
+    // The diff viewer covers the application, so while it is open it owns the
+    // keyboard. Its own Escape handler closes it.
+    if (diffStore.open) return;
 
     if (mod && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
@@ -249,6 +255,7 @@
   </div>
 {/if}
 
+<DiffViewer />
 <Dialog />
 <Toasts />
 

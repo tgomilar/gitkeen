@@ -6,7 +6,7 @@
  */
 import { transport } from './transport';
 import type {
-  BranchSet, BranchInspection, CommitDetails, CommitMessage, CommitResult, GitStatus,
+  BranchSet, BranchInspection, CommitDetails, CommitMessage, CommitResult, FileDiff, GitStatus,
   HeadCommit, HeadInfo, LogPage, PushResult, RepositoryInfo, RollbackResult,
   SquashInspection, SquashResult
 } from './types';
@@ -69,6 +69,14 @@ export class GitRepository {
 
   fetch(remote?: string): Promise<{ output: string }> {
     return transport.call('repo.fetch', { path: this.path, remote });
+  }
+
+  /**
+   * The diff of one file. Leave `hash` out for the working tree against HEAD,
+   * or name a commit to see what that commit did to the file.
+   */
+  fileDiff(options: { file: string; origPath?: string | null; hash?: string | null; context?: number }): Promise<FileDiff> {
+    return transport.call('diff.file', { path: this.path, ...options });
   }
 
   /** What HEAD holds, so the commit panel can describe an amend. */
