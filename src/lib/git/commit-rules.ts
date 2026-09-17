@@ -17,11 +17,20 @@ const HEADER = /^(?<type>[^(!:]+)(?:\((?<scope>[^)]*)\))?(?<bang>!)?: (?<subject
 
 const PASS: MessageCheck = { ok: true, problems: [], blocking: [] };
 
-/** A one-line description of the rules, for the hint under the message box. */
+/**
+ * A one-line description of the rules, for the hint under the message box.
+ *
+ * The file the rules came from is not named here: the panel prints it after
+ * the hint, so naming it in both places is what produced the stuttering
+ * "commit-msg ... · commit-msg" hint.
+ */
 export function describeRules(config: CommitRules | null | undefined): string | null {
   if (!config) return null;
+  // A hook is a script, so we cannot say what it does — only that it runs. It
+  // may rewrite the message rather than check it, and it may accept anything,
+  // which is why nothing is blocked before Git itself refuses.
   if (config.source === 'hook') {
-    return `${config.file} checks the message when you commit`;
+    return 'runs on the message when you commit';
   }
   if (config.source !== 'commitlint') return null;
 
