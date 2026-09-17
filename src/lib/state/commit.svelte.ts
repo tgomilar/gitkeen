@@ -15,6 +15,7 @@ import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
 import { toChange } from '../changes';
 import type { Change } from '../changes';
+import { checkMessage, describeRules } from '../git/commit-rules';
 import type { HeadCommit, Stash, StashFile } from '../git/types';
 
 class CommitStore {
@@ -64,10 +65,23 @@ class CommitStore {
 
   checkedPaths = $derived(this.all.filter((c) => this.checked.has(c.path)).map((c) => c.path));
 
+  /**
+   * The rules this repository holds commit messages to, and how the message
+   * being typed measures up. Both are read straight from the open repository,
+   * so opening a different project changes what the panel asks for.
+   */
+  rules = $derived(repoStore.info?.commitRules ?? null);
+
+  messageCheck = $derived(checkMessage(this.message, this.rules));
+
+  /** The one-line format reminder shown under the message box. */
+  rulesHint = $derived(describeRules(this.rules));
+
   /** Amending replaces a commit, so there is one even with nothing ticked. */
   canCommit = $derived(
     !this.busy &&
       !!this.message.trim() &&
+      this.messageCheck.blocking.length === 0 &&
       (this.checkedPaths.length > 0 || (this.amend && !!this.head?.exists))
   );
 
@@ -75,6 +89,12 @@ class CommitStore {
   blockedReason = $derived.by(() => {
     if (this.busy) return this.busy;
     if (!this.message.trim()) return 'Write a commit message first.';
+    const blocking = this.messageCheck.blocking;
+    if (blocking.length > 0) {
+      return blocking.length === 1
+        ? blocking[0].message
+        : `The message breaks ${blocking.length} rules in ${this.rules?.file}.`;
+    }
     if (this.checkedPaths.length === 0 && !(this.amend && this.head?.exists)) {
       return 'Tick at least one file to commit.';
     }

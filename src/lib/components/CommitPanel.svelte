@@ -259,7 +259,36 @@
       placeholder="Commit Message"
       spellcheck="true"
       aria-label="Commit message"
+      aria-invalid={commitStore.messageCheck.blocking.length > 0}
+      aria-describedby="commit-rules"
+      class:invalid={commitStore.messageCheck.blocking.length > 0}
     ></textarea>
+
+    <!--
+      The rules the message is held to, and how it currently measures up.
+      Kept directly under the box so the reason a commit is blocked is read
+      in the same glance as the message that caused it.
+    -->
+    <div class="rules" id="commit-rules" aria-live="polite">
+      {#if commitStore.messageCheck.problems.length > 0}
+        {#each commitStore.messageCheck.problems as problem (problem.rule)}
+          <p class="problem" class:warning={problem.level === 1}>
+            <span class="mark" aria-hidden="true">{problem.level === 1 ? '⚠' : '✖'}</span>
+            {problem.message}
+          </p>
+        {/each}
+        {#if commitStore.rules?.file}
+          <p class="origin">from {commitStore.rules.file}</p>
+        {/if}
+      {:else if commitStore.rulesHint}
+        <p class="hint">
+          {commitStore.rulesHint}
+          {#if commitStore.rules?.file}
+            <span class="origin">· {commitStore.rules.file}</span>
+          {/if}
+        </p>
+      {/if}
+    </div>
 
     <div class="buttons">
       <button
@@ -469,6 +498,44 @@
     resize: vertical;
   }
   textarea:focus { border-color: var(--accent); outline: none; background: var(--bg-panel); }
+  textarea.invalid { border-color: var(--danger); }
+  textarea.invalid:focus { border-color: var(--danger); }
+
+  .rules:empty { display: none; }
+  .rules {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: -2px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .problem {
+    display: flex;
+    gap: 5px;
+    margin: 0;
+    color: var(--danger);
+  }
+  .problem.warning { color: var(--warning); }
+
+  .mark {
+    flex: none;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+
+  .hint {
+    margin: 0;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+
+  .origin {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .problem + .origin { padding-left: 15px; }
 
   .buttons {
     display: flex;

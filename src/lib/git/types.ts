@@ -63,6 +63,42 @@ export interface RepositoryInfo {
   root: string;
   name: string;
   gitVersion: string;
+  /** How this repository expects commit messages to be written. */
+  commitRules?: CommitRules;
+}
+
+/** One commitlint rule, as read from the repository's own config. */
+export interface CommitRule {
+  /** commitlint levels: 0 off, 1 warning, 2 error. */
+  level: number;
+  applicable: 'always' | 'never';
+  value: string[] | string | number | null;
+}
+
+export interface CommitRules {
+  /** Where the rules came from, which decides whether they are enforced. */
+  source: 'commitlint' | 'hook' | 'none';
+  /** The file the rules were read from, shown so the user can go and read it. */
+  file: string | null;
+  /** True only when the rules can be both read and checked before committing. */
+  enforced: boolean;
+  rules: Record<string, CommitRule>;
+  /** Allowed types, used for the hint under the message box. */
+  types: string[] | null;
+  maxHeader: number | null;
+}
+
+export interface MessageProblem {
+  rule: string;
+  message: string;
+  level: number;
+}
+
+export interface MessageCheck {
+  ok: boolean;
+  problems: MessageProblem[];
+  /** The subset that turns the Commit button off. */
+  blocking: MessageProblem[];
 }
 
 export interface HeadInfo {
