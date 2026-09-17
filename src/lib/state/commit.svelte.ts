@@ -13,10 +13,11 @@
  */
 import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
+import { choose, prompt } from './dialogs.svelte';
 import { toChange } from '../changes';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
-import type { HeadCommit, Stash, StashFile } from '../git/types';
+import type { HeadCommit, Stash, StashFile, SuggestProviders, KeyStatus } from '../git/types';
 
 class CommitStore {
   message = $state('');
@@ -28,6 +29,12 @@ class CommitStore {
   private excluded = $state<Set<string>>(new Set());
   /** Unversioned files the user put into the commit. */
   private included = $state<Set<string>>(new Set());
+
+  /**
+   * Which AI providers the backend has a key for. Null until asked, empty
+   * when none are set, which is what hides the Suggest button.
+   */
+  suggestProviders = $state<SuggestProviders | null>(null);
 
   /** Collapsed group and folder keys. */
   collapsed = $state<Set<string>>(new Set());
@@ -218,6 +225,129 @@ class CommitStore {
     } finally {
       this.busy = null;
     }
+  }
+
+  /**
+   * Ask the backend whether a suggestion can be offered at all.
+   *
+   * Asked once when a repository opens. A missing key is not an error: it
+   * simply means the button is never shown.
+   */
+  async loadSuggestProviders() {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    try {
+      this.suggestProviders = await repo.suggestProviders();
+    } catch {
+      this.suggestProviders = { available: [], preferred: null, models: {} };
+    }
+  }
+
+  /**
+   * Connect a provider by pasting a key.
+   *
+   * There is no browser sign-in to offer: neither Anthropic nor OpenAI issues
+   * inference keys through an authorisation flow, so a key from their console
+   * is the only thing that works. It is sent straight to the backend and saved
+   * outside every repository; it is never held in the browser and never read
+   * back, so changing it means pasting a new one.
+   */
+  async connectProvider(): Promise<boolean> {
+    const repo = repoStore.repo;
+    if (!repo) return false;
+
+    let status: KeyStatus;
+    try {
+      status = await repo.keyStatus();
+    } catch (err) {
+      toasts.error('Could not read the settings', describe(err));
+      return false;
+    }
+
+    const labels: Record<string, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
+    const chosen = await choose({
+      title: 'Connect an AI provider',
+      message: `Paste a key from the provider's console. It is saved in ${status.file}, outside every repository.`,
+      choices: Object.entries(labels).map(([value, label]) => {
+        const state = status.providers[value];
+        return {
+          value,
+          label,
+          detail: state?.source === 'environment'
+            ? `Currently using ${state.variable} from the environment`
+            : state?.saved
+              ? 'A key is saved. Pasting a new one replaces it.'
+              : `Not connected. Or set ${state?.variable ?? ''} instead.`
+        };
+      }),
+      confirmLabel: 'Continue'
+    });
+    if (!chosen) return false;
+
+    const key = await prompt({
+      title: `${labels[chosen]} key`,
+      message: status.providers[chosen]?.saved
+        ? 'Paste a new key to replace the saved one, or leave it empty to disconnect.'
+        : 'Paste the key. Leave it empty to cancel.',
+      input: {
+        label: 'API key',
+        value: '',
+        placeholder: chosen === 'anthropic' ? 'sk-ant-…' : 'sk-…',
+        // An empty value means "disconnect", so it cannot be rejected here.
+        validate: () => null
+      },
+      confirmLabel: 'Save'
+    });
+    if (key === null) return false;
+
+    const saved = await this.run('Saving the key', () => repo.setKey(chosen, key));
+    if (!saved) return false;
+
+    await this.loadSuggestProviders();
+    toasts.success(
+      key.trim() ? `Connected ${labels[chosen]}` : `Disconnected ${labels[chosen]}`,
+      key.trim() ? 'The Suggest button is ready to use.' : null
+    );
+    return true;
+  }
+
+  canSuggest = $derived(
+    !this.busy &&
+      (this.suggestProviders?.available.length ?? 0) > 0 &&
+      (this.checkedPaths.length > 0 || (this.amend && !!this.head?.exists))
+  );
+
+  /**
+   * Fill the message box with a suggested subject.
+   *
+   * What is written is only a suggestion: it lands in the box as if typed, so
+   * it is checked by the same rules and edited before committing like anything
+   * else. A suggestion that still breaks a rule is written anyway, because the
+   * panel already shows what is wrong with it and a half-right line is easier
+   * to fix than an empty box.
+   */
+  async suggest(provider: string | null = null): Promise<boolean> {
+    const repo = repoStore.repo;
+    if (!repo || !this.canSuggest) return false;
+
+    const result = await this.run('Suggesting', () =>
+      repo.suggest(this.checkedPaths, { provider, amend: this.amend })
+    );
+    if (!result) return false;
+
+    this.message = result.subject;
+    if (this.amend) this.draft = result.subject;
+
+    if (result.clipped) {
+      toasts.info('Suggested from part of the diff', 'The change was too large to send in full.');
+    }
+    if (!result.ok) {
+      toasts.info(
+        'The suggestion breaks the commit rules',
+        'It is in the box so you can correct it.'
+      );
+    }
+    return true;
   }
 
   /** Commit the ticked files. Returns the new hash, or null if it failed. */

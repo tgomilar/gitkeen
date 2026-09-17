@@ -88,6 +88,40 @@ export interface CommitRules {
   maxHeader: number | null;
 }
 
+/** Where one provider's key comes from. The key itself is never sent here. */
+export interface KeyState {
+  configured: boolean;
+  /** 'environment' wins over 'saved'; null when there is no key at all. */
+  source: 'environment' | 'saved' | null;
+  variable: string;
+  saved: boolean;
+}
+
+export interface KeyStatus {
+  /** The file keys are saved in, shown so the user knows where it lives. */
+  file: string;
+  providers: Record<string, KeyState>;
+}
+
+/** Which AI providers have a key, reported so the panel can hide the button. */
+export interface SuggestProviders {
+  available: string[];
+  preferred: string | null;
+  models: Record<string, string>;
+}
+
+/** A suggested subject line, already checked against the repository's rules. */
+export interface Suggestion {
+  subject: string;
+  provider: string;
+  model: string;
+  /** True when the diff was too large to send whole. */
+  clipped: boolean;
+  problems: MessageProblem[];
+  /** False when the suggestion still breaks a blocking rule after a retry. */
+  ok: boolean;
+}
+
 export interface MessageProblem {
   rule: string;
   message: string;

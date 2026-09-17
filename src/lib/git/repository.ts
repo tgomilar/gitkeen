@@ -10,7 +10,8 @@ import type {
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
   PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult,
-  StashFile, StashResult, StatsRange, StatsReport
+  StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
+  KeyStatus
 } from './types';
 
 export class GitRepository {
@@ -130,6 +131,31 @@ export class GitRepository {
   /** Commit exactly these paths, leaving anything else staged where it is. */
   commit(paths: string[], message: string, amend = false): Promise<CommitResult> {
     return transport.call('changes.commit', { path: this.path, paths, message, amend });
+  }
+
+  /** Where each AI key comes from. Never returns a key. */
+  keyStatus(): Promise<KeyStatus> {
+    return transport.call('settings.keyStatus', {});
+  }
+
+  /** Save an AI key, or clear it by passing an empty string. */
+  setKey(provider: string, key: string): Promise<KeyStatus> {
+    return transport.call('settings.setKey', { provider, key });
+  }
+
+  /** Which AI providers are configured on the backend. */
+  suggestProviders(): Promise<SuggestProviders> {
+    return transport.call('commit.suggestProviders', {});
+  }
+
+  /** Ask for a commit subject describing exactly these paths. */
+  suggest(paths: string[], options: { provider?: string | null; amend?: boolean } = {}): Promise<Suggestion> {
+    return transport.call('commit.suggest', {
+      path: this.path,
+      paths,
+      provider: options.provider ?? null,
+      amend: options.amend ?? false
+    });
   }
 
   /** Mark conflicted files as dealt with, so an operation can continue. */

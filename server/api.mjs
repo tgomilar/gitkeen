@@ -7,6 +7,8 @@
  */
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
+import { suggestSubject, suggestionProviders } from './suggest.mjs';
+import { keyStatus, writeKey } from './settings.mjs';
 import { access, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1535,6 +1537,112 @@ export const methods = {
 
     const { stdout: created } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: created.trim(), files: known.length, partial: !operation };
+  },
+
+  /**
+   * Which AI providers are configured, so the panel knows whether to offer a
+   * suggestion at all. Reports only names and models, never a key.
+   */
+  async 'commit.suggestProviders'() {
+    return suggestionProviders();
+  },
+
+  /**
+   * Where each AI key comes from, for the settings panel. Reports presence
+   * and origin only: a saved key is never sent back to the browser.
+   */
+  async 'settings.keyStatus'() {
+    return keyStatus();
+  },
+
+  /**
+   * Save or clear an AI key. An empty key removes it, which is "Disconnect".
+   */
+  async 'settings.setKey'({ provider, key }) {
+    if (!provider) throw new GitError('No provider was given.', { command: '', stderr: '', code: 1 });
+    try {
+      return await writeKey(provider, key ?? '');
+    } catch (err) {
+      throw new GitError(`Could not save the key: ${err?.message ?? err}`, { command: '', stderr: '', code: 1 });
+    }
+  },
+
+  /**
+   * Suggest a commit subject for the ticked files.
+   *
+   * The diff is built from the same file set `changes.commit` would use, so
+   * the suggestion describes the commit that is actually about to be made and
+   * not the whole working tree. The repository's own rules are read here and
+   * the answer is checked against them before it is returned, which keeps a
+   * suggestion from arriving in a state the Commit button would refuse.
+   */
+  async 'commit.suggest'({ path, paths, provider = null, amend = false }) {
+    if (!Array.isArray(paths) || paths.length === 0) {
+      if (!amend) {
+        throw new GitError('Tick at least one file to describe.', { command: '', stderr: '', code: 1 });
+      }
+    }
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const wanted = new Set(paths ?? []);
+    const known = status.files.filter((f) => wanted.has(f.path));
+
+    // A rename is two paths to Git, exactly as it is when committing: naming
+    // only the new one would show the change as an unexplained whole-file add.
+    const pathspec = [];
+    const untracked = [];
+    for (const file of known) {
+      pathspec.push(file.path);
+      if (file.origPath) pathspec.push(file.origPath);
+      if (file.state === 'untracked') untracked.push(file.path);
+    }
+
+    const common = ['-c', 'core.quotepath=false', 'diff', '--unified=3', '--find-renames'];
+    const parts = [];
+    const stats = [];
+
+    // Tracked changes, against HEAD, which is the state the commit starts from.
+    const tracked = pathspec.filter((p) => !untracked.includes(p));
+    if (tracked.length > 0) {
+      const { stdout } = await runGit(path, [...common, 'HEAD', '--', ...tracked], { allowFailure: true });
+      if (stdout.trim()) parts.push(stdout);
+      const { stdout: stat } = await runGit(path, [...common, '--stat', 'HEAD', '--', ...tracked], { allowFailure: true });
+      if (stat.trim()) stats.push(stat);
+    }
+
+    // An untracked file is in no tree, so there is nothing to compare it with.
+    // Diffing against an empty file shows it as wholly added, which is what it is.
+    for (const file of untracked) {
+      const { stdout } = await runGit(
+        path,
+        ['-c', 'core.quotepath=false', 'diff', '--unified=3', '--no-index', '--', '/dev/null', file],
+        { allowFailure: true }
+      );
+      if (stdout.trim()) parts.push(stdout);
+      stats.push(` ${file} | new file`);
+    }
+
+    // Amending with nothing ticked describes the commit being replaced.
+    if (parts.length === 0 && amend) {
+      const { stdout } = await runGit(path, [...common, 'HEAD~1', 'HEAD'], { allowFailure: true });
+      if (stdout.trim()) parts.push(stdout);
+      const { stdout: stat } = await runGit(path, [...common, '--stat', 'HEAD~1', 'HEAD'], { allowFailure: true });
+      if (stat.trim()) stats.push(stat);
+    }
+
+    const diff = parts.join('\n');
+    if (!diff.trim()) {
+      throw new GitError('There is no change to describe.', { command: '', stderr: '', code: 1 });
+    }
+
+    const rules = await readCommitRules(path);
+    return suggestSubject({
+      diff,
+      stat: stats.join('\n'),
+      rules,
+      provider,
+      validate: (subject) => validateMessage(subject, rules)
+    });
   },
 
   /**

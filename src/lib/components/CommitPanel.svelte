@@ -42,6 +42,14 @@
     commitStore.syncHead(repoStore.head?.oid ?? null);
   });
 
+  /**
+   * Ask once per repository whether a suggestion can be offered. The answer
+   * depends on the backend's environment, not on anything on screen.
+   */
+  $effect(() => {
+    if (repoStore.info?.root) commitStore.loadSuggestProviders();
+  });
+
   /** Every collapsible key on screen, for the collapse-all button. */
   const allKeys = $derived.by(() => {
     const keys = [...groups.map((g) => g.key), 'shelf'];
@@ -309,6 +317,33 @@
       >
         Commit and Push…
       </button>
+      <!--
+        Suggest once a provider is configured, and an invitation to connect one
+        before that. Showing nothing at all would leave the feature invisible
+        to anyone who has not already set a key.
+      -->
+      {#if (commitStore.suggestProviders?.available.length ?? 0) > 0}
+        <button
+          class="secondary suggest"
+          onclick={() => commitStore.suggest()}
+          disabled={!commitStore.canSuggest}
+          title={commitStore.canSuggest
+            ? `Write a subject describing the ticked files, using ${commitStore.suggestProviders?.models[
+                commitStore.suggestProviders.preferred ?? ''
+              ]}`
+            : 'Tick at least one file to describe'}
+        >
+          Suggest
+        </button>
+      {:else if commitStore.suggestProviders}
+        <button
+          class="secondary suggest"
+          onclick={() => commitStore.connectProvider()}
+          title="Connect Anthropic or OpenAI to suggest commit messages"
+        >
+          Suggest…
+        </button>
+      {/if}
       <span class="summary">
         {#if commitStore.busy}
           {commitStore.busy}…
