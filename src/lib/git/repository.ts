@@ -33,7 +33,8 @@ export class GitRepository {
     return transport.call('head.read', { path: this.path });
   }
 
-  log(options: { limit?: number; all?: boolean } = {}): Promise<LogPage> {
+  /** `refs` narrows the log to what those refs reach, e.g. a single branch. */
+  log(options: { limit?: number; all?: boolean; refs?: string[] } = {}): Promise<LogPage> {
     return transport.call('log.list', { path: this.path, ...options });
   }
 

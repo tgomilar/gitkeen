@@ -264,13 +264,20 @@ export const methods = {
    * `--date-order` keeps a commit below its children without the aggressive
    * reordering `--topo-order` does, which is what makes lanes look stable.
    */
-  async 'log.list'({ path, limit = 2000, all = true }) {
+  async 'log.list'({ path, limit = 2000, all = true, refs = null }) {
     const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit}`];
-    // `--all` sweeps in everything under refs/, and that includes refs/stash.
-    // A shelved change would then appear in the graph as two commits nobody
-    // asked for, so it is excluded. `--exclude` only applies to the `--all`
-    // that follows it.
-    if (all) args.push('--exclude=refs/stash', '--all', 'HEAD');
+    const scoped = Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string' && ref.trim()) : [];
+    if (scoped.length > 0) {
+      // Only what is reachable from these refs, so the graph shows the history
+      // of the branch the user picked rather than every branch in the repo.
+      args.push(...scoped, '--');
+    } else if (all) {
+      // `--all` sweeps in everything under refs/, and that includes refs/stash.
+      // A shelved change would then appear in the graph as two commits nobody
+      // asked for, so it is excluded. `--exclude` only applies to the `--all`
+      // that follows it.
+      args.push('--exclude=refs/stash', '--all', 'HEAD');
+    }
     const { stdout, code } = await runGit(path, args, { allowFailure: true });
     // An empty repository has no HEAD to log; that is not an error.
     if (code !== 0) return { commits: [], truncated: false };

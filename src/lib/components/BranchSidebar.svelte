@@ -51,6 +51,14 @@
     sectionsClosed = next;
   }
 
+  /**
+   * A single click narrows the commit list to that branch. It changes nothing
+   * in Git, so it is safe as the plain-click action.
+   */
+  function selectBranch(branch: Branch, kind: 'local' | 'remote' | 'tag') {
+    repoStore.setScope({ ref: branch.name, kind });
+  }
+
   function activate(branch: Branch, kind: 'local' | 'remote' | 'tag') {
     if (kind === 'local') switchToBranch(branch.name);
     else if (kind === 'remote') checkoutRemoteBranch(branch);
@@ -69,8 +77,16 @@
     repoStore.branches.local.find((b) => b.name === repoStore.currentBranch) ?? null
   );
 
-  /** Jump the graph to the commit HEAD points at. */
-  function revealHead() {
+  /** The ref this section holds that the commit list is narrowed to, if any. */
+  function selectedRef(kind: 'local' | 'remote' | 'tag') {
+    const scope = repoStore.scope;
+    return scope && scope.kind === kind ? scope.ref : null;
+  }
+
+  /** Show the current branch's commits, and jump to the commit HEAD is at. */
+  async function selectHead() {
+    const branch = repoStore.currentBranch;
+    if (branch) await repoStore.setScope({ ref: branch, kind: 'local' });
     const oid = head?.oid;
     if (oid && repoStore.layout.index.has(oid)) repoStore.select(oid, 'replace');
   }
@@ -107,7 +123,8 @@
       <button
         class="node branch current"
         class:detached={head?.detached}
-        onclick={revealHead}
+        class:selected={!!repoStore.currentBranch && selectedRef('local') === repoStore.currentBranch}
+        onclick={selectHead}
         oncontextmenu={openHeadMenu}
         title={head?.detached ? `Detached at ${head.oid}` : (repoStore.currentBranch ?? '')}
       >
@@ -151,7 +168,9 @@
                 kind={section.kind}
                 {collapsed}
                 currentBranch={repoStore.currentBranch}
+                selectedRef={selectedRef(section.kind)}
                 ontoggle={toggleNode}
+                onselect={(b) => selectBranch(b, section.kind)}
                 onactivate={(b) => activate(b, section.kind)}
                 onmenu={(b, e) => openMenu(b, section.kind, e)}
               />
@@ -162,7 +181,7 @@
     {/each}
   </div>
 
-  <p class="hint">Double-click a branch to switch. Right-click for more.</p>
+  <p class="hint">Click a branch to see its commits. Double-click to switch.</p>
 </aside>
 
 {#if menu}
@@ -285,6 +304,8 @@
   .node.detached .name { color: var(--warning); font-weight: 500; }
 
   .node.current { background: var(--accent-subtle); }
+  .node.selected { background: var(--bg-selected); }
+  .node.selected:hover { background: var(--bg-selected); }
 
   .glyph {
     flex: none;

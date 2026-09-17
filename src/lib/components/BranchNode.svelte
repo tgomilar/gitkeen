@@ -12,16 +12,20 @@
     kind: 'local' | 'remote' | 'tag';
     collapsed: Set<string>;
     currentBranch: string | null;
+    /** Name of the ref the commit list is narrowed to, if it is one of these. */
+    selectedRef: string | null;
     ontoggle: (path: string) => void;
+    onselect: (branch: Branch) => void;
     onactivate: (branch: Branch) => void;
     onmenu: (branch: Branch, event: MouseEvent) => void;
   }
 
-  let { node, depth, kind, collapsed, currentBranch, ontoggle, onactivate, onmenu }: Props = $props();
+  let { node, depth, kind, collapsed, currentBranch, selectedRef, ontoggle, onselect, onactivate, onmenu }: Props = $props();
 
   const isFolder = $derived(!node.branch && node.children.length > 0);
   const isOpen = $derived(!collapsed.has(node.path));
   const isCurrent = $derived(!!node.branch && kind === 'local' && node.branch.name === currentBranch);
+  const isSelected = $derived(!!node.branch && node.branch.name === selectedRef);
   const indent = $derived(6 + depth * 12);
   /** A tag is a label on a commit, so it gets its own glyph. */
   const leafIcon = $derived<IconName>(kind === 'tag' ? 'tag' : 'branch');
@@ -41,7 +45,8 @@
   </button>
   {#if isOpen}
     {#each node.children as child (child.path + (child.branch ? ':b' : ''))}
-      <Self node={child} depth={depth + 1} {kind} {collapsed} {currentBranch} {ontoggle} {onactivate} {onmenu} />
+      <Self node={child} depth={depth + 1} {kind} {collapsed} {currentBranch} {selectedRef}
+            {ontoggle} {onselect} {onactivate} {onmenu} />
     {/each}
   {/if}
 {:else if node.branch}
@@ -49,8 +54,11 @@
   <button
     class="node branch"
     class:current={isCurrent}
+    class:selected={isSelected}
     style="padding-left: {indent}px"
     title={branch.name}
+    aria-pressed={isSelected}
+    onclick={() => onselect(branch)}
     ondblclick={() => onactivate(branch)}
     oncontextmenu={(e) => onmenu(branch, e)}
     onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onactivate(branch); } }}
@@ -122,6 +130,10 @@
 
   .branch.current .name { font-weight: 600; }
   .branch.current { background: var(--accent-subtle); }
+
+  /* The branch whose commits the graph is showing. */
+  .branch.selected { background: var(--bg-selected); }
+  .branch.selected:hover { background: var(--bg-selected); }
 
   .track {
     display: flex;

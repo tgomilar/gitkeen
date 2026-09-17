@@ -82,7 +82,15 @@
 <div class="graph-view">
   <div class="head-row">
     <div class="col-graph" style="width: {graphWidth}px" aria-hidden="true"></div>
-    <div class="col-subject">Commit</div>
+    <div class="col-subject">
+      <span>Commit</span>
+      {#if repoStore.scope}
+        <span class="scope" title="Only commits reachable from {repoStore.scope.ref}">
+          {repoStore.scope.ref}
+        </span>
+        <button class="scope-clear" onclick={() => repoStore.setScope(null)}>All branches</button>
+      {/if}
+    </div>
     <div class="col-author">Author</div>
     <div class="col-date">Date</div>
     <div class="col-hash">Hash</div>
@@ -157,6 +165,40 @@
     text-transform: uppercase;
     letter-spacing: 0.055em;
   }
+
+  .col-subject {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  /* Names the branch the list is narrowed to, with the way back out. */
+  .scope {
+    flex: none;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 5px;
+    border-radius: var(--radius-sm);
+    background: var(--ref-local-bg);
+    color: var(--ref-local-text);
+    font-size: 10.5px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .scope-clear {
+    flex: none;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--accent);
+    font-size: 10.5px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .scope-clear:hover { text-decoration: underline; }
 
   .col-graph { padding-left: 8px; }
   .col-author, .col-date, .col-hash { text-align: right; }

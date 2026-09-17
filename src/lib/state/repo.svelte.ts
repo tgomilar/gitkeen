@@ -29,6 +29,12 @@ class RepoStore {
   /** The shelf, which is Git's stash list. Newest first. */
   stashes = $state<Stash[]>([]);
 
+  /**
+   * The branch, remote branch or tag the graph is narrowed to, or null for
+   * every branch. Picking a branch in the sidebar sets it.
+   */
+  scope = $state<{ ref: string; kind: 'local' | 'remote' | 'tag' } | null>(null);
+
   /** Selected commit hashes, kept in graph order. */
   selection = $state<string[]>([]);
   /** Keyboard cursor. Always a selected commit when the selection is non-empty. */
@@ -90,6 +96,7 @@ class RepoStore {
       this.details = null;
       this.detailsFor = null;
       this.filter = '';
+      this.scope = null;
       rememberRepo(repo.info.root, repo.info.name);
       await this.refresh();
       // Start on HEAD so the view is never empty.
@@ -117,6 +124,54 @@ class RepoStore {
     this.cursor = null;
     this.details = null;
     this.detailsFor = null;
+    this.scope = null;
+  }
+
+  /** What to ask the log for, given the branch the graph is narrowed to. */
+  private logOptions() {
+    return this.scope
+      ? { limit: LOG_LIMIT, refs: [this.scope.ref] }
+      : { limit: LOG_LIMIT, all: true };
+  }
+
+  /**
+   * Narrow the graph to one ref, or pass null for every branch. Nothing in
+   * Git changed, so only the log is re-read.
+   */
+  async setScope(scope: { ref: string; kind: 'local' | 'remote' | 'tag' } | null) {
+    const same = this.scope?.ref === scope?.ref && this.scope?.kind === scope?.kind;
+    if (same) return;
+    this.scope = scope;
+    await this.reloadLog();
+    // The commit that was selected may not be on this branch. Fall back to
+    // its tip, so the details panel is never left empty.
+    if (this.selection.length === 0 && this.layout.rows.length > 0) {
+      this.select(this.layout.rows[0].commit.hash, 'replace');
+    }
+  }
+
+  private async reloadLog() {
+    const repo = this.repo;
+    if (!repo) return;
+    this.refreshing = true;
+    try {
+      const log = await repo.log(this.logOptions());
+      this.commits = log.commits;
+      this.truncated = log.truncated;
+      this.pruneSelection();
+    } catch (err) {
+      toasts.error('Could not read the history', describe(err));
+    } finally {
+      this.refreshing = false;
+    }
+  }
+
+  /** Drop selected commits that the graph no longer holds. */
+  private pruneSelection() {
+    const live = new Set(this.commits.map((c) => c.hash));
+    const kept = this.selection.filter((h) => live.has(h));
+    if (kept.length !== this.selection.length) this.selection = kept;
+    if (this.cursor && !live.has(this.cursor)) this.cursor = kept[0] ?? null;
   }
 
   async refresh() {
@@ -125,7 +180,7 @@ class RepoStore {
     this.refreshing = true;
     try {
       const [log, branches, status, head, remotes, stashes] = await Promise.all([
-        repo.log({ limit: LOG_LIMIT, all: true }),
+        repo.log(this.logOptions()),
         repo.branches(),
         repo.status(),
         repo.head(),
@@ -140,11 +195,17 @@ class RepoStore {
       this.remotes = remotes.remotes;
       this.stashes = stashes.stashes;
 
+      // A branch the graph was narrowed to can be deleted or renamed under
+      // us, and then the scope is meaningless: widen back to every branch.
+      if (this.scope && !this.refExists(this.scope)) {
+        this.scope = null;
+        const all = await repo.log(this.logOptions());
+        this.commits = all.commits;
+        this.truncated = all.truncated;
+      }
+
       // Drop selected commits that no longer exist (e.g. after a rewrite).
-      const live = new Set(log.commits.map((c) => c.hash));
-      const kept = this.selection.filter((h) => live.has(h));
-      if (kept.length !== this.selection.length) this.selection = kept;
-      if (this.cursor && !live.has(this.cursor)) this.cursor = kept[0] ?? null;
+      this.pruneSelection();
     } catch (err) {
       toasts.error('Could not read the repository', describe(err));
     } finally {
@@ -417,6 +478,13 @@ class RepoStore {
     } finally {
       this.busy = null;
     }
+  }
+
+  private refExists(scope: { ref: string; kind: 'local' | 'remote' | 'tag' }) {
+    const list = scope.kind === 'local' ? this.branches.local
+      : scope.kind === 'remote' ? this.branches.remote
+      : this.branches.tags;
+    return list.some((b) => b.name === scope.ref);
   }
 
   /** Every branch head that points at a given commit. */
