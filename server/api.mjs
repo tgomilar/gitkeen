@@ -251,6 +251,41 @@ async function isUnbornHead(path) {
   return code !== 0;
 }
 
+/**
+ * Remote branches that already contain `commit`, so rewriting it would need a
+ * force push.
+ *
+ * The remote-tracking refs under refs/remotes only move when something
+ * fetches, so asking them straight away can report "not published" about a
+ * commit that was pushed from another window, another tool, or the terminal.
+ * A quiet fetch first costs a moment and is what makes the answer true; when
+ * it fails (offline, no permission) the stale refs are still worth reading, so
+ * the check carries on rather than claiming the commit is unpublished.
+ */
+async function publishedOn(path, commit) {
+  if (!commit) return [];
+
+  await runGit(path, ['fetch', '--all', '--quiet'], { allowFailure: true });
+
+  // Both forms are read because refs/remotes/origin/HEAD shortens to plain
+  // "origin", which no test on the short name can tell apart from a branch.
+  // It is a symbolic pointer at another ref in this list, so listing it would
+  // name the same remote twice.
+  const published = [];
+  const { stdout: remoteRefs } = await runGit(
+    path,
+    ['for-each-ref', '--format=%(refname:short)%09%(refname)', 'refs/remotes'],
+    { allowFailure: true }
+  );
+  for (const line of remoteRefs.split('\n').map((r) => r.trim()).filter(Boolean)) {
+    const [short, full] = line.split('\t');
+    if (!short || !full || full.endsWith('/HEAD')) continue;
+    const { code } = await runGit(path, ['merge-base', '--is-ancestor', commit, short], { allowFailure: true });
+    if (code === 0) published.push(short);
+  }
+  return published;
+}
+
 /* ---------------------------------------------------------------- Statistics
 
    The Stats report is read-only: it runs `git log` and counts. Nothing here
@@ -807,13 +842,11 @@ export const methods = {
     }
 
     // Warn, but do not block, when the commits are already published.
-    const published = [];
-    const { stdout: remoteRefs } = await runGit(path, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes'], { allowFailure: true });
-    for (const ref of remoteRefs.split('\n').map((r) => r.trim()).filter(Boolean)) {
-      if (ref.endsWith('/HEAD')) continue;
-      const { code } = await runGit(path, ['merge-base', '--is-ancestor', newest, ref], { allowFailure: true });
-      if (code === 0) published.push(ref);
-    }
+    //
+    // The question is asked of the OLDEST selected commit, not the newest: a
+    // squash rewrites history from there upwards, so any remote holding the
+    // oldest one is affected even when the tip of the selection is local-only.
+    const published = await publishedOn(path, oldest);
 
     return {
       ok: problems.length === 0,
@@ -1239,15 +1272,7 @@ export const methods = {
 
     // Commits that also sit on a remote are recoverable from there, which
     // changes how alarming the dialog needs to be.
-    const published = [];
-    if (Number(dropped.trim()) > 0) {
-      const { stdout: remoteRefs } = await runGit(path, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes'], { allowFailure: true });
-      for (const ref of remoteRefs.split('\n').map((r) => r.trim()).filter(Boolean)) {
-        if (ref.endsWith('/HEAD')) continue;
-        const { code: contains } = await runGit(path, ['merge-base', '--is-ancestor', head.trim(), ref], { allowFailure: true });
-        if (contains === 0) published.push(ref);
-      }
-    }
+    const published = Number(dropped.trim()) > 0 ? await publishedOn(path, head.trim()) : [];
 
     return {
       ok: !operation,
@@ -1398,12 +1423,19 @@ export const methods = {
 
     // Only the upstream of the current branch matters here. Scanning every
     // remote ref would cost one process per branch for an answer nobody reads.
+    //
+    // The upstream ref is fetched first for the same reason as in
+    // publishedOn: a commit pushed from elsewhere leaves the local
+    // remote-tracking ref behind, and a stale ref answers "not pushed" about
+    // a commit that is.
     let pushed = null;
     const { stdout: up, code: upCode } = await runGit(
       path, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { allowFailure: true }
     );
     if (upCode === 0 && up.trim()) {
       const upstream = up.trim();
+      const remote = upstream.split('/')[0];
+      await runGit(path, ['fetch', '--quiet', remote], { allowFailure: true });
       const { code: contains } = await runGit(path, ['merge-base', '--is-ancestor', hash, upstream], { allowFailure: true });
       if (contains === 0) pushed = upstream;
     }
