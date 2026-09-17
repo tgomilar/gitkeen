@@ -6,6 +6,7 @@
  * with the same names and argument shapes, and the UI is unaffected.
  */
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
+import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { access, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -585,8 +586,17 @@ export const methods = {
     return {
       root,
       name: basename(root),
-      gitVersion: await gitVersion()
+      gitVersion: await gitVersion(),
+      commitRules: await readCommitRules(root)
     };
+  },
+
+  /**
+   * Re-read the commit rules. The config is part of the working tree, so it
+   * can arrive with a branch switch or a pull after the repository was opened.
+   */
+  async 'repo.commitRules'({ path }) {
+    return readCommitRules(path);
   },
 
   async 'repo.status'({ path }) {
