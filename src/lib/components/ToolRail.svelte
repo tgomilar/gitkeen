@@ -8,7 +8,7 @@
   import Icon from './Icon.svelte';
   import type { IconName } from './Icon.svelte';
 
-  export type DockPanel = 'branches' | 'commit';
+  export type DockPanel = 'branches' | 'commit' | 'stats';
 
   interface Props {
     active: DockPanel;
@@ -25,7 +25,8 @@
 
   const items: { id: DockPanel; label: string; icon: IconName; hint: string }[] = [
     { id: 'branches', label: 'Branches', icon: 'branch', hint: 'Branches, remotes and tags' },
-    { id: 'commit', label: 'Commit', icon: 'commit', hint: 'Changed and unversioned files' }
+    { id: 'commit', label: 'Commit', icon: 'commit', hint: 'Changed and unversioned files' },
+    { id: 'stats', label: 'Stats', icon: 'stats', hint: 'Who committed what, and when' }
   ];
 </script>
 

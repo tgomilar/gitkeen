@@ -4,6 +4,8 @@
   import ToolRail from './lib/components/ToolRail.svelte';
   import type { DockPanel } from './lib/components/ToolRail.svelte';
   import CommitPanel from './lib/components/CommitPanel.svelte';
+  import StatsPanel from './lib/components/StatsPanel.svelte';
+  import StatsReport from './lib/components/StatsReport.svelte';
   import GraphView from './lib/components/GraphView.svelte';
   import CommitDetails from './lib/components/CommitDetails.svelte';
   import StatusBar from './lib/components/StatusBar.svelte';
@@ -16,6 +18,7 @@
   import { repoStore } from './lib/state/repo.svelte';
   import { commitStore } from './lib/state/commit.svelte';
   import { diffStore } from './lib/state/diff.svelte';
+  import { statsStore } from './lib/state/stats.svelte';
   import { commitMenuItems, createBranchFrom } from './lib/actions';
   import type { MenuItem } from './lib/menu';
 
@@ -62,6 +65,16 @@
     if (root === dockedRoot) return;
     dockedRoot = root;
     commitStore.reset();
+    // A report describes one repository, so it goes when that one does.
+    statsStore.syncRepo(root);
+  });
+
+  // Reading statistics costs a full pass over the log, so unlike the other
+  // panels it is read on demand: when Stats is opened, and again whenever the
+  // filters change. `ensure` reads the filters, so this effect re-runs when
+  // they do and the report follows the form without a button to press.
+  $effect(() => {
+    if (dock === 'stats' && repoStore.repo) statsStore.ensure();
   });
 
   function toggleTheme() {
@@ -130,7 +143,10 @@
     }
     if (mod && event.key.toLowerCase() === 'r') {
       event.preventDefault(); // a page reload would throw the repository away
-      repoStore.refresh();
+      // Refresh what is actually on screen. The report is read separately
+      // from the rest of the repository, so it needs asking for by name.
+      if (dock === 'stats') statsStore.load();
+      else repoStore.refresh();
       return;
     }
 
@@ -215,6 +231,8 @@
       <div class="sidebar" style="width: {sidebarWidth}px">
         {#if dock === 'commit'}
           <CommitPanel bind:this={commitPanel} />
+        {:else if dock === 'stats'}
+          <StatsPanel />
         {:else}
           <BranchSidebar />
         {/if}
@@ -233,21 +251,27 @@
       ></div>
 
       <main class="main">
-        <div class="graph"><GraphView bind:this={graphView} /></div>
+        {#if dock === 'stats'}
+          <!-- A report is read at width, so it takes the whole main area
+               rather than sharing it with the graph. -->
+          <StatsReport />
+        {:else}
+          <div class="graph"><GraphView bind:this={graphView} /></div>
 
-        <div
-          class="divider horizontal"
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="Resize commit details"
-          use:resizer={{
-            axis: 'y',
-            apply: (d) => (detailsHeight = Math.min(620, Math.max(120, detailsHeight - d))),
-            commit: () => localStorage.setItem(DETAILS_KEY, String(detailsHeight))
-          }}
-        ></div>
+          <div
+            class="divider horizontal"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize commit details"
+            use:resizer={{
+              axis: 'y',
+              apply: (d) => (detailsHeight = Math.min(620, Math.max(120, detailsHeight - d))),
+              commit: () => localStorage.setItem(DETAILS_KEY, String(detailsHeight))
+            }}
+          ></div>
 
-        <div class="details" style="height: {detailsHeight}px"><CommitDetails /></div>
+          <div class="details" style="height: {detailsHeight}px"><CommitDetails /></div>
+        {/if}
       </main>
     </div>
 

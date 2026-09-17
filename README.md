@@ -33,6 +33,7 @@ work, and change the history you already have.
 | Push | Publish the current branch, and create it on the remote if it is new. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
+| Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Themes | Switch between a dark and a light theme. |
 
@@ -252,6 +253,66 @@ Shelved changes do not appear in the graph. Git stores each one as a commit,
 but they are not part of your history, so showing them would only be
 confusing.
 
+## The Stats report
+
+Press **Stats** in the rail on the left. Gitalia reads the history and writes a
+report on it: how much work was done, who did it, and when. It is meant for the
+questions a developer or a project lead actually asks. Who is working on this?
+Is the pace steady or did it stop in March? Which files does this project keep
+reopening? Is all the knowledge in one person's head?
+
+The report never changes anything. It reads the log and counts.
+
+### What the report holds
+
+| Part | What it answers |
+|---|---|
+| Headline numbers | Commits, contributors, lines added and removed, files touched, and when the last commit landed. |
+| Commits over time | Whether the pace is steady, growing or stopped. One bar per day, or per month once the history is longer than 120 days. |
+| Contributors | Who committed, how much each person did, and how long ago each was last seen. |
+| When work happens | The hours of the day and the days of the week the work lands on. Click a contributor to see only theirs. |
+| Most changed files | The files the project keeps returning to, and how many people have touched each one. |
+| Where the lines go | Which file types the work goes into. |
+| Latest commits | The most recent work in the period. |
+
+### Choosing what it counts
+
+The panel on the left holds the question, and the report answers it. Change
+anything there and the report reads itself again.
+
+| Control | What it does |
+|---|---|
+| Period | All time, or the last 7, 30 or 90 days, or the last 12 months. |
+| Only the selected branch | Counts only the history that branch reaches. Pick the branch in the Branches panel first. |
+| Merge commits | Off by default. A merge is counted as a commit but contributes no lines, because the changes it brings in are already counted on the commits it merges. |
+| Generated files | Off by default. Lockfiles, bundles and vendored trees are written by tools, not by people. |
+
+That last one matters more than it sounds. If `package-lock.json` is counted,
+whoever last ran an install becomes the largest contributor in the report. That
+is the kind of wrong number a report must not produce, so Gitalia leaves those
+files out until you ask for them.
+
+### Three things worth knowing
+
+1. **Dates are commit dates.** The period filters on the commit date, so the
+   report counts by the same clock. A rebased commit keeps the date it was
+   written as its author date but gets a new commit date, so the two disagree.
+   Counting by one and filtering by the other would put commits in a report
+   that fall outside the period it claims to cover.
+
+2. **People are grouped by email address.** One person with two addresses
+   appears twice, because Git has no way to know they are the same person. When
+   one address carries several spellings of a name, the report says "also" and
+   lists them, so at least that much is visible.
+
+3. **A report is read on demand.** Every other panel refreshes with the
+   repository. This one costs a full pass over the log, which takes a few
+   seconds on a large history, so it is read when you open it and again when
+   you change the question. Press Command with R to read it again.
+
+**Export CSV** saves the contributor table as a file, with every contributor in
+it rather than the 25 the screen shows.
+
 ## What is not built yet
 
 Pull, interactive rebase and a conflict editor all come later. The plan
@@ -359,6 +420,9 @@ in use.
 | `src/lib/components/CommitPanel.svelte` | The commit panel. |
 | `src/lib/components/DiffViewer.svelte` | The diff viewer. |
 | `src/lib/components/ShelfSection.svelte` | The shelf, at the bottom of the commit panel. |
+| `src/lib/components/StatsPanel.svelte` | The Stats panel: the question the report answers. |
+| `src/lib/components/StatsReport.svelte` | The report itself. |
+| `src/lib/state/stats.svelte.ts` | The filters, and the report that came back. |
 | `src/lib/state/commit.svelte.ts` | Which files are ticked, and the commit itself. |
 
 ### The graph
@@ -405,3 +469,7 @@ aborts it, which leaves the branch where it started.
    yet.
 5. Gitalia does not watch the folder for changes. Press Refresh, or Command
    with R, after you edit files in your editor.
+6. The Stats report reads the newest 20000 commits. If a repository holds more,
+   the report says so and counts only those.
+7. The Stats report groups people by email address, so one person with two
+   addresses is counted as two contributors.

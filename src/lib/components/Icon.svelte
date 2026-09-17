@@ -8,7 +8,7 @@
   export type IconName =
     | 'branch' | 'local' | 'remote' | 'tag' | 'folder' | 'head'
     // Tool rail and commit panel toolbar.
-    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'shelve'
+    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'shelve' | 'stats'
     // File kinds, so a changed file is recognisable before its name is read.
     | 'file' | 'doc' | 'markup' | 'code' | 'image';
 
@@ -60,6 +60,12 @@
     <circle cx="8" cy="8" r="2.6" />
     <path d="M1.8 8h3.6" />
     <path d="M10.6 8h3.6" />
+  {:else if name === 'stats'}
+    <!-- Three columns of different heights: a report on what the history did. -->
+    <path d="M2.2 13.8h11.6" />
+    <path d="M4.6 13.6V8.4" />
+    <path d="M8 13.6V3.2" />
+    <path d="M11.4 13.6V6.1" />
   {:else if name === 'refresh'}
     <path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8" />
     <path d="M13.6 2.4v3.3h-3.3" />

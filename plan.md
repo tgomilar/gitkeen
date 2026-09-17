@@ -275,6 +275,67 @@ Support:
 -   Drop stash
 -   View stash diff
 
+## Statistics
+
+A report on the repository's own activity, for a developer or a project lead
+rather than for an analyst. It answers who is working here, how much, on what,
+and when. It is read-only: it runs `git log` and counts.
+
+Report contents:
+
+-   Headline totals --- commits, contributors, lines added and removed, files
+    touched, active days, and the age of the last commit
+-   Commits over time, bucketed by day, or by month once the history passes
+    120 days
+-   Per-contributor totals --- commits, share, lines, files, active days, and
+    when each person was last seen
+-   Activity by hour of the day and by day of the week, for the whole
+    repository or for one contributor
+-   Most changed files, with how many people have touched each
+-   Lines by file type
+-   The most recent commits in the period
+
+Filters:
+
+-   Period --- all time, last 7 / 30 / 90 days, last 12 months
+-   One branch, or every branch
+-   Merge commits in or out (out by default)
+-   Generated files in or out (out by default)
+
+Export: the contributor table as CSV.
+
+### Decisions this feature rests on
+
+**One pass, one question.** Everything in a report comes from a single
+`git log --numstat` run. Aggregating several runs would let the headline
+numbers and the per-contributor numbers drift apart whenever a commit landed
+between them, and a report that contradicts itself is worse than no report.
+
+**Commit dates throughout.** `--since` and `--until` filter on the commit
+date, so the report counts by the commit date too. Author date and commit date
+diverge as soon as a commit is rebased; filtering by one and counting by the
+other would put commits in a report that fall outside its stated period.
+
+**Generated files are excluded by default.** Lockfiles, bundles and vendored
+trees are written by tools. Counted, they make whoever last ran an install the
+largest contributor in the report.
+
+**Merge commits are excluded by default.** An included merge is counted as a
+commit and contributes no lines. `--numstat` prints no file rows for a merge
+unless given `-m`, which counts the same lines once per parent, or
+`--first-parent`, which stops the walk following side branches and so drops
+both commits and contributors. Losing people when a filter is switched on is
+the worse failure, so the merge is counted as what it is: a commit carrying no
+changes of its own.
+
+**Identity is the email address.** Git offers nothing better. One person with
+two addresses is two rows, and the report does not pretend otherwise. Where one
+address carries several spellings of a name, they are listed, so the ambiguity
+is at least visible.
+
+**A commit cap, admitted openly.** A report reads at most 20000 commits and
+says when the cap bit, rather than quietly under-reporting.
+
 ------------------------------------------------------------------------
 
 # 7. Phase 3 --- Power Features
@@ -1062,6 +1123,7 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] Command palette
 -   [ ] Keyboard shortcuts
 -   [ ] Large repository optimization
+-   [x] Statistics report
 
 ### P2 --- Later
 

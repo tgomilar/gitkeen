@@ -303,3 +303,120 @@ export interface SquashResult {
   previousHead: string;
   replayed: number;
 }
+
+/* Statistics. The Stats report reads the log and counts; it never writes.
+
+   Every time in a report is a commit date, because that is what `--since` and
+   `--until` filter on. Author date and commit date differ once a commit has
+   been rebased, and mixing the two would put commits in a report that fall
+   outside the period it says it covers. */
+
+export interface StatsRange {
+  /** Anything `git log --since` accepts, e.g. "30 days ago". Null for all. */
+  since: string | null;
+  until: string | null;
+  /** Refs the report is narrowed to, or null for every branch. */
+  refs: string[] | null;
+  includeMerges: boolean;
+  /** Glob pathspecs kept out of the line counts, e.g. generated files. */
+  excludePaths: string[];
+}
+
+export interface StatsTotals {
+  commits: number;
+  authors: number;
+  added: number;
+  removed: number;
+  filesTouched: number;
+  merges: number;
+  firstCommit: number | null;
+  lastCommit: number | null;
+  /** Distinct days that carry at least one commit. */
+  activeDays: number;
+}
+
+export interface AuthorStats {
+  /** The identity commits are grouped under: the author email, lowercased. */
+  key: string;
+  name: string;
+  email: string;
+  /** Other spellings of the name seen for this address. */
+  aliases: string[];
+  commits: number;
+  merges: number;
+  added: number;
+  removed: number;
+  files: number;
+  first: number;
+  last: number;
+  activeDays: number;
+  /** Commits per hour of the day, 0–23. */
+  hours: number[];
+  /** Commits per day of the week, Sunday first. */
+  weekdays: number[];
+}
+
+export interface DayStats {
+  /** Local calendar day, as YYYY-MM-DD. */
+  date: string;
+  commits: number;
+  added: number;
+  removed: number;
+  authors: number;
+}
+
+export interface MonthStats {
+  /** Local calendar month, as YYYY-MM. */
+  month: string;
+  commits: number;
+  added: number;
+  removed: number;
+  authors: number;
+}
+
+export interface FileStats {
+  path: string;
+  commits: number;
+  added: number;
+  removed: number;
+  authors: number;
+  last: number;
+}
+
+export interface ExtensionStats {
+  ext: string;
+  files: number;
+  added: number;
+  removed: number;
+}
+
+export interface RecentCommitStats {
+  hash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  date: number;
+  subject: string;
+  added: number;
+  removed: number;
+  files: number;
+}
+
+export interface StatsReport {
+  generatedAt: number;
+  /** The commit cap the report was read with. */
+  limit: number;
+  /** True when the cap bit, so the report describes only part of the history. */
+  truncated: boolean;
+  totals: StatsTotals;
+  authors: AuthorStats[];
+  days: DayStats[];
+  months: MonthStats[];
+  /** Commits per hour of the day, 0–23. */
+  hours: number[];
+  /** Commits per day of the week, Sunday first. */
+  weekdays: number[];
+  files: FileStats[];
+  extensions: ExtensionStats[];
+  recent: RecentCommitStats[];
+}

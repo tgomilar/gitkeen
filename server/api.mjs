@@ -244,6 +244,305 @@ async function verifyStash(path, ref, sha) {
   }
 }
 
+
+/** True when the repository has no commits yet, so there is nothing to log. */
+async function isUnbornHead(path) {
+  const { code } = await runGit(path, ['rev-parse', '--verify', 'HEAD'], { allowFailure: true });
+  return code !== 0;
+}
+
+/* ---------------------------------------------------------------- Statistics
+
+   The Stats report is read-only: it runs `git log` and counts. Nothing here
+   writes to the repository, so a report can never cost the user their work.
+*/
+
+const STATS_FORMAT = ['%H', '%P', '%an', '%ae', '%at', '%cn', '%ce', '%ct', '%s'].join(US) + RS;
+
+/** An hour of the day and a day of the week, in the repository reader's zone. */
+function clockOf(ms) {
+  const d = new Date(ms);
+  return { hour: d.getHours(), weekday: d.getDay() };
+}
+
+/** The `YYYY-MM-DD` key a timestamp belongs to, in local time. */
+function dayKey(ms) {
+  const d = new Date(ms);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** The `YYYY-MM` key a timestamp belongs to, in local time. */
+function monthKey(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Split `git log --numstat -z` into commits and their file rows.
+ *
+ * The `-z` form is awkward but it is the only safe one: without it Git quotes
+ * and escapes any path holding a space or a non-ASCII byte, and renames come
+ * back as the unusable string "old.txt => new.txt". With it a rename leaves
+ * the path field empty and spends the next two records on the old name and
+ * the new one, the same shape `commit.details` already handles.
+ *
+ * Commit headers end with RS while numstat rows are NUL-separated, so one
+ * record can hold the tail of a commit's last file row and the header of the
+ * next commit at once. Flattening to a single record list first keeps that
+ * from needing a special case.
+ */
+function parseStatsLog(stdout) {
+  // Flatten to one list: every header its own entry, every file row its own.
+  const records = [];
+  for (const chunk of stdout.split('\0')) {
+    if (!chunk) continue;
+    const pieces = chunk.split(RS);
+    for (let i = 0; i < pieces.length; i++) {
+      const text = pieces[i].replace(/^\n+/, '');
+      // Everything before an RS is a commit header; the last piece is a row.
+      if (text) records.push({ header: i < pieces.length - 1, text });
+    }
+  }
+
+  const commits = [];
+  let current = null;
+
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+
+    if (record.header) {
+      const f = record.text.split(US);
+      if (f.length < 9) continue;
+      current = {
+        hash: f[0],
+        parents: f[1] ? f[1].split(' ').filter(Boolean) : [],
+        author: f[2],
+        authorEmail: f[3],
+        authorDate: Number(f[4]) * 1000,
+        committer: f[5],
+        committerEmail: f[6],
+        commitDate: Number(f[7]) * 1000,
+        subject: f.slice(8).join(US),
+        files: []
+      };
+      commits.push(current);
+      continue;
+    }
+
+    if (!current) continue;
+    const [added, removed, ...tail] = record.text.split('\t');
+    const inline = tail.join('\t');
+    // An empty path means a rename: the next two records are the old and new
+    // names. Only the new name is counted, so the old one is read and dropped.
+    const renamed = inline === '';
+    const origPath = renamed ? records[++i]?.text ?? null : null;
+    const filePath = renamed ? records[++i]?.text ?? null : inline;
+    if (!filePath) continue;
+    current.files.push({
+      path: filePath,
+      origPath,
+      added: added === '-' ? null : Number(added),
+      removed: removed === '-' ? null : Number(removed),
+      binary: added === '-'
+    });
+  }
+
+  return commits;
+}
+
+/** The identity a commit is counted under: email, lowercased. */
+function identityOf(commit) {
+  const email = (commit.authorEmail || '').trim().toLowerCase();
+  return email || `name:${(commit.author || 'unknown').trim().toLowerCase()}`;
+}
+
+function emptyReport(limit) {
+  return {
+    generatedAt: Date.now(),
+    limit,
+    truncated: false,
+    totals: {
+      commits: 0, authors: 0, added: 0, removed: 0, filesTouched: 0,
+      merges: 0, firstCommit: null, lastCommit: null, activeDays: 0
+    },
+    authors: [],
+    days: [],
+    months: [],
+    hours: Array.from({ length: 24 }, () => 0),
+    weekdays: Array.from({ length: 7 }, () => 0),
+    files: [],
+    extensions: [],
+    recent: []
+  };
+}
+
+/** Turn the parsed log into every number the report shows. */
+function buildReport(commits, limit) {
+  if (commits.length === 0) return emptyReport(limit);
+
+  const report = emptyReport(limit);
+  report.truncated = commits.length >= limit;
+
+  const authors = new Map();
+  const days = new Map();
+  const months = new Map();
+  const files = new Map();
+  const extensions = new Map();
+  const touched = new Set();
+
+  let added = 0, removed = 0, merges = 0;
+  let first = Infinity, last = -Infinity;
+
+  for (const commit of commits) {
+    // Commit date, not author date, and deliberately so: `--since` and
+    // `--until` filter on the commit date, so counting by anything else would
+    // put commits in the report that fall outside the period it claims to
+    // cover. A rebase rewrites the commit date and keeps the author date, so
+    // the two genuinely disagree, and only one of them can match the filter.
+    const when = commit.commitDate;
+    const isMerge = commit.parents.length > 1;
+    if (isMerge) merges++;
+    if (when < first) first = when;
+    if (when > last) last = when;
+
+    const { hour, weekday } = clockOf(when);
+    report.hours[hour]++;
+    report.weekdays[weekday]++;
+
+    let commitAdded = 0, commitRemoved = 0;
+    for (const file of commit.files) {
+      if (file.binary) continue;
+      commitAdded += file.added ?? 0;
+      commitRemoved += file.removed ?? 0;
+
+      touched.add(file.path);
+      const stat = files.get(file.path) ?? { path: file.path, commits: 0, added: 0, removed: 0, authors: new Set(), last: 0 };
+      stat.commits++;
+      stat.added += file.added ?? 0;
+      stat.removed += file.removed ?? 0;
+      stat.authors.add(identityOf(commit));
+      if (when > stat.last) stat.last = when;
+      files.set(file.path, stat);
+
+      const dot = file.path.lastIndexOf('.');
+      const slash = file.path.lastIndexOf('/');
+      const ext = dot > slash + 1 ? file.path.slice(dot + 1).toLowerCase() : '(none)';
+      const bucket = extensions.get(ext) ?? { ext, files: new Set(), added: 0, removed: 0 };
+      bucket.files.add(file.path);
+      bucket.added += file.added ?? 0;
+      bucket.removed += file.removed ?? 0;
+      extensions.set(ext, bucket);
+    }
+    added += commitAdded;
+    removed += commitRemoved;
+
+    const key = identityOf(commit);
+    const author = authors.get(key) ?? {
+      key, name: commit.author, email: commit.authorEmail,
+      names: new Set(), commits: 0, merges: 0, added: 0, removed: 0,
+      files: new Set(), first: when, last: when, days: new Set(),
+      hours: Array.from({ length: 24 }, () => 0),
+      weekdays: Array.from({ length: 7 }, () => 0)
+    };
+    author.names.add(commit.author);
+    author.commits++;
+    if (isMerge) author.merges++;
+    author.added += commitAdded;
+    author.removed += commitRemoved;
+    // Binary files are left out of `filesTouched`, so they are left out here
+    // too: otherwise one contributor's file count can exceed the repository
+    // total it is meant to be a share of.
+    for (const file of commit.files) if (!file.binary) author.files.add(file.path);
+    if (when < author.first) author.first = when;
+    if (when > author.last) { author.last = when; author.name = commit.author; }
+    author.days.add(dayKey(when));
+    author.hours[hour]++;
+    author.weekdays[weekday]++;
+    authors.set(key, author);
+
+    const dk = dayKey(when);
+    const day = days.get(dk) ?? { date: dk, commits: 0, added: 0, removed: 0, authors: new Set() };
+    day.commits++;
+    day.added += commitAdded;
+    day.removed += commitRemoved;
+    day.authors.add(key);
+    days.set(dk, day);
+
+    const mk = monthKey(when);
+    const month = months.get(mk) ?? { month: mk, commits: 0, added: 0, removed: 0, authors: new Set() };
+    month.commits++;
+    month.added += commitAdded;
+    month.removed += commitRemoved;
+    month.authors.add(key);
+    months.set(mk, month);
+  }
+
+  report.totals = {
+    commits: commits.length,
+    authors: authors.size,
+    added,
+    removed,
+    filesTouched: touched.size,
+    merges,
+    firstCommit: first === Infinity ? null : first,
+    lastCommit: last === -Infinity ? null : last,
+    activeDays: days.size
+  };
+
+  report.authors = [...authors.values()]
+    .map((a) => ({
+      key: a.key,
+      name: a.name,
+      email: a.email,
+      /** Every spelling of the name seen for this address, so aliases show. */
+      aliases: [...a.names].filter((n) => n !== a.name),
+      commits: a.commits,
+      merges: a.merges,
+      added: a.added,
+      removed: a.removed,
+      files: a.files.size,
+      first: a.first,
+      last: a.last,
+      activeDays: a.days.size,
+      hours: a.hours,
+      weekdays: a.weekdays
+    }))
+    .sort((x, y) => y.commits - x.commits);
+
+  report.days = [...days.values()]
+    .map((d) => ({ date: d.date, commits: d.commits, added: d.added, removed: d.removed, authors: d.authors.size }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  report.months = [...months.values()]
+    .map((m) => ({ month: m.month, commits: m.commits, added: m.added, removed: m.removed, authors: m.authors.size }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  report.files = [...files.values()]
+    .map((f) => ({ path: f.path, commits: f.commits, added: f.added, removed: f.removed, authors: f.authors.size, last: f.last }))
+    .sort((a, b) => b.commits - a.commits)
+    .slice(0, 50);
+
+  report.extensions = [...extensions.values()]
+    .map((e) => ({ ext: e.ext, files: e.files.size, added: e.added, removed: e.removed }))
+    .sort((a, b) => b.added + b.removed - (a.added + a.removed))
+    .slice(0, 15);
+
+  report.recent = commits.slice(0, 12).map((c) => ({
+    hash: c.hash,
+    shortHash: c.hash.slice(0, 7),
+    author: c.author,
+    authorEmail: c.authorEmail,
+    date: c.commitDate,
+    subject: c.subject,
+    added: c.files.reduce((n, f) => n + (f.added ?? 0), 0),
+    removed: c.files.reduce((n, f) => n + (f.removed ?? 0), 0),
+    files: c.files.length
+  }));
+
+  return report;
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -588,6 +887,77 @@ export const methods = {
 
     const { stdout: newHead } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: newHead.trim(), previousHead: head, replayed: inspection.replayed };
+  },
+
+  /**
+   * Everything the Stats report shows, from one pass over the log.
+   *
+   * A report is only as trustworthy as the question it answers, so the whole
+   * of it comes from a single `git log` run against one range with one set of
+   * filters. Aggregating several separate runs would let the headline numbers
+   * and the per-author numbers drift apart whenever a commit landed between
+   * them, and a report that contradicts itself is worse than no report.
+   *
+   * `--numstat` costs a diff per commit, which is the expensive part. `limit`
+   * caps it, and the result says when it bit, so the UI can admit the report
+   * is partial rather than quietly under-reporting.
+   */
+  async 'stats.report'({
+    path,
+    since = null,
+    until = null,
+    refs = null,
+    limit = 20000,
+    includeMerges = false,
+    excludePaths = []
+  }) {
+    const args = [
+      '-c', 'core.quotepath=false',
+      'log', `--pretty=format:${STATS_FORMAT}`, '--numstat', '-z',
+      '--date-order', `--max-count=${limit}`
+    ];
+    // A merge contributes no lines, and that is deliberate.
+    //
+    // `--numstat` prints no file rows for a merge unless it is given `-m`,
+    // which emits one diff per parent and so counts the same lines twice, or
+    // `--first-parent`, which stops the walk following side branches and drops
+    // both the commits and the contributors that live on them. A report that
+    // loses people when a filter is switched on is worse than one that counts
+    // a merge as carrying no changes of its own, which is what a merge is. So
+    // an included merge is counted as a commit and nothing more, and the
+    // report says so.
+    if (!includeMerges) args.push('--no-merges');
+    if (since) args.push(`--since=${since}`);
+    if (until) args.push(`--until=${until}`);
+
+    const scoped = Array.isArray(refs) ? refs.filter((r) => typeof r === 'string' && r.trim()) : [];
+    if (scoped.length > 0) args.push(...scoped);
+    else args.push('--exclude=refs/stash', '--all', 'HEAD');
+
+    // Pathspec exclusions keep generated files (lockfiles, bundles, vendored
+    // trees) from drowning out hand-written work in the line counts.
+    const excludes = Array.isArray(excludePaths)
+      ? excludePaths.filter((p) => typeof p === 'string' && p.trim())
+      : [];
+    args.push('--');
+    for (const p of excludes) args.push(`:(exclude,glob)${p.trim()}`);
+
+    const { stdout, stderr, code } = await runGit(path, args, { allowFailure: true });
+    if (code !== 0) {
+      // A repository with no commits yet has no HEAD to log, and an empty
+      // report is the honest answer. Anything else -- a ref that was deleted
+      // while the panel still offered it, a bad pathspec -- is a real failure,
+      // and reporting it as "no commits in this period" would hand the user a
+      // wrong answer wearing the clothes of a right one.
+      const unborn = await isUnbornHead(path);
+      if (unborn) return emptyReport(limit);
+      throw new GitError(
+        (stderr || '').trim() || 'The history could not be read.',
+        { command: `git ${args.join(' ')}`, stderr: (stderr || '').trim(), code }
+      );
+    }
+
+    return buildReport(parseStatsLog(stdout), limit);
   },
 
   /**

@@ -10,7 +10,7 @@ import type {
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
   PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult,
-  StashFile, StashResult
+  StashFile, StashResult, StatsRange, StatsReport
 } from './types';
 
 export class GitRepository {
@@ -87,6 +87,16 @@ export class GitRepository {
     context?: number;
   }): Promise<FileDiff> {
     return transport.call('diff.file', { path: this.path, ...options });
+  }
+
+  /**
+   * The statistics report: one read-only pass over the log.
+   *
+   * Everything the report shows comes from this one call, so no two numbers
+   * in it can have been read at different moments.
+   */
+  stats(range: Partial<StatsRange> & { limit?: number } = {}): Promise<StatsReport> {
+    return transport.call('stats.report', { path: this.path, ...range });
   }
 
   /* The shelf, which is Git's stash. */
