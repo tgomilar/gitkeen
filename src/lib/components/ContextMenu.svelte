@@ -1,6 +1,7 @@
 <script lang="ts">
   /** A fast, keyboard-navigable context menu. No animation by design. */
   import type { MenuItem } from '../menu';
+  import Icon from './Icon.svelte';
 
   interface Props {
     x: number;
@@ -91,6 +92,9 @@
         onmouseenter={() => (active = i)}
         onclick={() => choose(item)}
       >
+        <span class="glyph">
+          {#if item.icon}<Icon name={item.icon} />{/if}
+        </span>
         <span class="label">{item.label}</span>
         {#if item.hint}<span class="hint">{item.hint}</span>{/if}
       </button>
@@ -120,8 +124,8 @@
 
   .item {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 4px 8px;
     background: none;
@@ -135,6 +139,20 @@
   .item.danger { color: var(--danger); }
   .item.danger.active { background: var(--danger); color: #fff; }
   .item:disabled { color: var(--text-faint); cursor: default; }
+
+  /*
+    Reserved whether or not the item has an icon, so every label in a menu
+    starts at the same place and the column does not jump.
+  */
+  .glyph {
+    flex: none;
+    display: flex;
+    width: 13px;
+    color: var(--text-faint);
+  }
+
+  .item.active .glyph, .item.danger .glyph { color: inherit; }
+  .item:disabled .glyph { color: var(--text-faint); }
 
   .label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 

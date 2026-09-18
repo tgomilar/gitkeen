@@ -298,6 +298,29 @@
       {/if}
     </div>
 
+    <!--
+      When a suggestion thought the change held unrelated work. It is advice:
+      nothing is re-ticked and nothing is committed, because which commits to
+      make is the user's call and a wrong guess would be expensive to undo.
+    -->
+    {#if commitStore.splitGroups.length > 0}
+      <div class="split">
+        <p class="split-head">
+          This looks like {commitStore.splitGroups.length} separate changes.
+          <button class="dismiss" onclick={() => commitStore.dismissSplit()}>Dismiss</button>
+        </p>
+        <ol>
+          {#each commitStore.splitGroups as group, i (i)}
+            <li>
+              <span class="reason">{group.reason}</span>
+              <span class="count">{pluralize(group.files.length, 'file')}</span>
+              <span class="files">{group.files.join(', ')}</span>
+            </li>
+          {/each}
+        </ol>
+      </div>
+    {/if}
+
     <div class="buttons">
       <button
         class="primary"
@@ -571,6 +594,61 @@
     font-family: var(--font-mono);
   }
   .problem + .origin { padding-left: 15px; }
+
+  .split {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+  }
+
+  .split-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 6px;
+    color: var(--text-dim);
+  }
+
+  .dismiss {
+    margin-left: auto;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--text-faint);
+    text-decoration: underline;
+  }
+  .dismiss:hover { color: var(--text); }
+
+  .split ol {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .split li { color: var(--text); }
+
+  .reason { font-weight: 500; }
+
+  .count {
+    margin-left: 6px;
+    color: var(--text-faint);
+  }
+
+  /* The paths are the detail: available, but never the thing read first. */
+  .files {
+    display: block;
+    overflow: hidden;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .buttons {
     display: flex;

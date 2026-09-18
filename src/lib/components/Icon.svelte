@@ -10,7 +10,11 @@
     // Tool rail and commit panel toolbar.
     | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'shelve' | 'stats'
     // File kinds, so a changed file is recognisable before its name is read.
-    | 'file' | 'doc' | 'markup' | 'code' | 'image';
+    | 'file' | 'doc' | 'markup' | 'code' | 'image'
+    // Context menu actions.
+    | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
+    | 'squash' | 'diff' | 'plus' | 'check' | 'unshelve' | 'exclude' | 'include'
+    | 'fetch' | 'close' | 'branch-plus' | 'settings';
 
   interface Props {
     name: IconName;
@@ -93,6 +97,91 @@
     <path d="M3.4 3.2v8.2a1 1 0 0 0 1 1h2.2" />
     <path d="M6.6 7.4h6.8" />
     <path d="M6.6 12.4h6.8" />
+  {:else if name === 'settings'}
+    <!-- A cogwheel: the usual mark for settings, so it needs no label. -->
+    <circle cx="8" cy="8" r="2.1" />
+    <path d="M8 1.4l.9 1.6 1.8-.4.3 1.8 1.8.4-.6 1.7 1.4 1.1-1.4 1.1.6 1.7-1.8.4-.3 1.8-1.8-.4L8 14.6l-.9-1.6-1.8.4-.3-1.8-1.8-.4.6-1.7L2.4 8.4l1.4-1.1-.6-1.7 1.8-.4.3-1.8 1.8.4z" />
+  {:else if name === 'branch-plus'}
+    <!-- The branch glyph with a plus where the new branch would start. -->
+    <circle cx="4.2" cy="3.4" r="1.6" />
+    <circle cx="4.2" cy="12.6" r="1.6" />
+    <path d="M4.2 5v6" />
+    <path d="M11.4 11.2V9.6a3 3 0 0 0-3-3h-2.6" />
+    <path d="M11.4 1.8v4.6" />
+    <path d="M9.1 4.1h4.6" />
+  {:else if name === 'fetch'}
+    <!-- The cloud again, with what it holds coming down to this machine. -->
+    <path d="M4.9 10.4a2.7 2.7 0 0 1 .2-5.4 3.6 3.6 0 0 1 6.8 1 2.3 2.3 0 0 1-.4 4.4" />
+    <path d="M8 7.6v6.1" />
+    <path d="M5.9 11.6 8 13.7l2.1-2.1" />
+  {:else if name === 'close'}
+    <path d="M4 4l8 8" />
+    <path d="M12 4l-8 8" />
+  {:else if name === 'switch'}
+    <!-- Two arrows passing each other: leaving one ref for another. -->
+    <path d="M2.4 5.4h9.1" />
+    <path d="M9.3 3.2l2.2 2.2-2.2 2.2" />
+    <path d="M13.6 10.6H4.5" />
+    <path d="M6.7 8.4 4.5 10.6l2.2 2.2" />
+  {:else if name === 'copy'}
+    <!-- Two sheets, the front one offset: the second is the copy. -->
+    <rect x="5.6" y="5.6" width="8" height="8" rx="1" />
+    <path d="M10.4 2.4H3.4a1 1 0 0 0-1 1v7" />
+  {:else if name === 'delete'}
+    <!-- A bin with its lid and one stave. -->
+    <path d="M2.6 4.4h10.8" />
+    <path d="M6.4 4.4V3a.6.6 0 0 1 .6-.6h2a.6.6 0 0 1 .6.6v1.4" />
+    <path d="M3.9 4.4l.6 8.4a1 1 0 0 0 1 .9h5a1 1 0 0 0 1-.9l.6-8.4" />
+    <path d="M8 6.8v4.4" />
+  {:else if name === 'rename'}
+    <!-- A pencil: the name is edited in place. -->
+    <path d="M11.1 2.6a1.5 1.5 0 0 1 2.1 2.1l-7.5 7.5-2.8.7.7-2.8z" />
+    <path d="M10.1 3.6l2.1 2.1" />
+  {:else if name === 'revert'}
+    <!-- An arrow curving back on itself: the change is undone by a new one. -->
+    <path d="M2.8 6.6h7.3a3.4 3.4 0 0 1 0 6.8H6.4" />
+    <path d="M5.2 3.8 2.6 6.6l2.6 2.8" />
+  {:else if name === 'reset'}
+    <!-- A branch tip dragged back to an earlier node on the line. -->
+    <circle cx="12.2" cy="8" r="1.8" />
+    <path d="M10.4 8H5.6" />
+    <path d="M7.4 5.6 5 8l2.4 2.4" />
+    <path d="M2.6 4.2v7.6" />
+  {:else if name === 'cherry-pick'}
+    <!-- One commit lifted off its line and carried across. -->
+    <circle cx="4.2" cy="11.8" r="1.7" />
+    <path d="M1.9 11.8h.6" />
+    <path d="M5.9 11.8h.6" />
+    <path d="M4.2 10.1V7.4a2 2 0 0 1 2-2h4.4" />
+    <path d="M8.8 3.4l2.1 2-2.1 2" />
+  {:else if name === 'squash'}
+    <!-- Several commits pressed down into one. -->
+    <circle cx="8" cy="11.9" r="1.8" />
+    <path d="M4.6 6.4 8 9.2l3.4-2.8" />
+    <path d="M4.6 2.9 8 5.7l3.4-2.8" />
+  {:else if name === 'diff'}
+    <!-- A line added and a line removed, which is what a diff shows. -->
+    <path d="M4.2 2.9v5.2" />
+    <path d="M1.6 5.5h5.2" />
+    <path d="M9.2 10.5h5.2" />
+  {:else if name === 'plus'}
+    <path d="M8 3.2v9.6" />
+    <path d="M3.2 8h9.6" />
+  {:else if name === 'check'}
+    <path d="M3.2 8.4 6.4 11.6l6.4-7.2" />
+  {:else if name === 'unshelve'}
+    <!-- The shelve tray, with the work coming back up out of it. -->
+    <path d="M8 7.7V2.1" />
+    <path d="M5.6 4.5 8 2.1l2.4 2.4" />
+    <path d="M2.2 9.4h3.1a2.7 2.7 0 0 0 5.4 0h3.1" />
+    <path d="M2.2 9.4v3.7a1 1 0 0 0 1 1h9.6a1 1 0 0 0 1-1V9.4" />
+  {:else if name === 'exclude'}
+    <!-- An empty box: the file is taken out of the commit. -->
+    <rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.2" />
+  {:else if name === 'include'}
+    <!-- The same box, ticked: the file goes in. -->
+    <rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.2" />
+    <path d="M5.4 8.1 7.2 9.9l3.5-3.9" />
   {:else if name === 'file' || name === 'doc' || name === 'markup' || name === 'code' || name === 'image'}
     <path d="M3.4 2.4h5.3l3.9 3.9v7.3a.6.6 0 0 1-.6.6H3.4a.6.6 0 0 1-.6-.6V3a.6.6 0 0 1 .6-.6z" />
     <path d="M8.6 2.4v4h4" />

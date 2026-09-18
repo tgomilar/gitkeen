@@ -1,6 +1,8 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import Icon from './Icon.svelte';
+  import { settingsStore } from '../state/settings.svelte';
   import { branchMenuItems, createBranchFrom, switchToBranch } from '../actions';
   import type { MenuItem } from '../menu';
 
@@ -31,7 +33,7 @@
     const others = repoStore.branches.local
       .filter((b) => b.name !== repoStore.currentBranch)
       .slice(0, 12)
-      .map<MenuItem>((b) => ({ label: `Switch to ${b.name}`, action: () => switchToBranch(b.name) }));
+      .map<MenuItem>((b) => ({ label: `Switch to ${b.name}`, icon: 'switch', action: () => switchToBranch(b.name) }));
 
     const items: MenuItem[] = current
       ? [...branchMenuItems(current, 'local'), { separator: true }, ...others]
@@ -40,6 +42,7 @@
           { separator: true },
           {
             label: 'Create branch here…',
+            icon: 'branch',
             action: () => createBranchFrom(head?.oid ?? undefined, `the current HEAD (${head?.oid?.slice(0, 7)})`)
           },
           { separator: true },
@@ -55,15 +58,16 @@
       x: rect.left,
       y: rect.bottom + 2,
       items: [
-        { label: 'Refresh', hint: '⌘R', action: () => repoStore.refresh() },
-        { label: 'Fetch all remotes', hint: '⌘⇧F', action: () => repoStore.fetch() },
+        { label: 'Refresh', icon: 'refresh', hint: '⌘R', action: () => repoStore.refresh() },
+        { label: 'Fetch all remotes', icon: 'fetch', hint: '⌘⇧F', action: () => repoStore.fetch() },
         { separator: true },
         {
           label: 'Copy repository path',
+          icon: 'copy',
           action: () => navigator.clipboard.writeText(repoStore.info?.root ?? '')
         },
         { separator: true },
-        { label: 'Close repository', action: onclose }
+        { label: 'Close repository', icon: 'close', action: onclose }
       ]
     };
   }
@@ -76,7 +80,7 @@
   </button>
 
   <button class="branch" class:detached={head?.detached} onclick={openBranchMenu}>
-    <span class="glyph" aria-hidden="true">⑂</span>
+    <span class="glyph"><Icon name={head?.detached ? 'commit' : 'branch'} /></span>
     <span class="branch-name">
       {head?.detached ? `detached at ${head.oid?.slice(0, 7)}` : (head?.branch ?? '—')}
     </span>
@@ -90,12 +94,18 @@
   </button>
 
   <div class="ops">
-    <button class="op" onclick={() => repoStore.fetch()} disabled={!!repoStore.busy}>Fetch</button>
-    <button class="op" onclick={() => repoStore.refresh()} disabled={!!repoStore.busy}>Refresh</button>
+    <button class="op" onclick={() => repoStore.fetch()} disabled={!!repoStore.busy}>
+      <Icon name="fetch" />Fetch
+    </button>
+    <button class="op" onclick={() => repoStore.refresh()} disabled={!!repoStore.busy}>
+      <Icon name="refresh" />Refresh
+    </button>
     <button
       class="op"
       onclick={() => createBranchFrom(repoStore.cursor ?? undefined, repoStore.cursor ? `the selected commit` : 'HEAD')}
-    >New branch</button>
+    >
+      <Icon name="branch-plus" />New branch
+    </button>
   </div>
 
   <div class="search">
@@ -113,6 +123,15 @@
       <kbd>⌘K</kbd>
     {/if}
   </div>
+
+  <button
+    class="theme"
+    onclick={() => settingsStore.show()}
+    title="AI settings"
+    aria-label="AI settings"
+  >
+    <Icon name="settings" size={14} />
+  </button>
 
   <button class="theme" onclick={ontheme} title="Switch theme" aria-label="Switch theme">
     {theme === 'dark' ? '◑' : '◐'}
@@ -156,7 +175,7 @@
 
   .branch.detached .branch-name { color: var(--warning); font-family: var(--font-mono); font-size: 11.5px; }
 
-  .glyph { color: var(--text-faint); }
+  .glyph { display: flex; color: var(--text-faint); }
   .caret { color: var(--text-faint); font-size: 9px; }
 
   .track { display: flex; gap: 3px; font-family: var(--font-mono); font-size: 10.5px; }
@@ -170,6 +189,9 @@
   }
 
   .op {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 4px 9px;
     background: none;
     border: 1px solid transparent;
@@ -219,6 +241,9 @@
   }
 
   .theme {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 3px 7px;
     background: none;
     border: 1px solid transparent;
