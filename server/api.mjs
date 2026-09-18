@@ -1606,7 +1606,13 @@ export const methods = {
     if (tracked.length > 0) {
       const { stdout } = await runGit(path, [...common, 'HEAD', '--', ...tracked], { allowFailure: true });
       if (stdout.trim()) parts.push(stdout);
-      const { stdout: stat } = await runGit(path, [...common, '--stat', 'HEAD', '--', ...tracked], { allowFailure: true });
+      // `--stat` must not inherit `--unified`, or Git prints the whole patch
+      // again underneath the summary and the note dwarfs the diff it explains.
+      const { stdout: stat } = await runGit(
+        path,
+        ['-c', 'core.quotepath=false', 'diff', '--stat', '--find-renames', 'HEAD', '--', ...tracked],
+        { allowFailure: true }
+      );
       if (stat.trim()) stats.push(stat);
     }
 
@@ -1626,7 +1632,11 @@ export const methods = {
     if (parts.length === 0 && amend) {
       const { stdout } = await runGit(path, [...common, 'HEAD~1', 'HEAD'], { allowFailure: true });
       if (stdout.trim()) parts.push(stdout);
-      const { stdout: stat } = await runGit(path, [...common, '--stat', 'HEAD~1', 'HEAD'], { allowFailure: true });
+      const { stdout: stat } = await runGit(
+        path,
+        ['-c', 'core.quotepath=false', 'diff', '--stat', '--find-renames', 'HEAD~1', 'HEAD'],
+        { allowFailure: true }
+      );
       if (stat.trim()) stats.push(stat);
     }
 
@@ -1641,6 +1651,9 @@ export const methods = {
       stat: stats.join('\n'),
       rules,
       provider,
+      // The paths actually going in, so a suggested split can be checked
+      // against them rather than taken on trust.
+      paths: known.map((f) => f.path),
       validate: (subject) => validateMessage(subject, rules)
     });
   },

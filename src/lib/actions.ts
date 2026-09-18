@@ -310,21 +310,25 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       SEPARATOR,
       {
         label: 'Squash Commits…',
+        icon: 'squash',
         hint: squashable.ok ? undefined : squashable.reason,
         disabled: !squashable.ok,
         action: () => squashCommits(selected)
       },
       {
         label: `Cherry-Pick ${selection.length} Commits…`,
+        icon: 'cherry-pick',
         action: () => cherryPickCommits(selected)
       },
       {
         label: `Revert ${selection.length} Commits…`,
+        icon: 'revert',
         action: () => revertCommits(selected)
       },
       SEPARATOR,
       {
         label: 'Copy hashes',
+        icon: 'copy',
         action: () => copy(selection.join('\n'), `${selection.length} hashes`)
       }
     ];
@@ -335,13 +339,14 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
   const items: MenuItem[] = [];
 
   for (const ref of localRefs) {
-    items.push({ label: `Switch to ${ref.name}`, action: () => switchToBranch(ref.name) });
+    items.push({ label: `Switch to ${ref.name}`, icon: 'switch', action: () => switchToBranch(ref.name) });
   }
   for (const ref of remoteRefs) {
     const local = ref.name.split('/').slice(1).join('/');
     if (repoStore.branches.local.some((b) => b.name === local)) continue;
     items.push({
       label: `Check out ${ref.name}`,
+      icon: 'switch',
       hint: `as ${local}`,
       action: () => {
         const branch = repoStore.branches.remote.find((b) => b.name === ref.name);
@@ -356,33 +361,37 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
   items.push(
     {
       label: 'Create branch from here…',
+      icon: 'branch',
       hint: '⌘⇧B',
       action: () => createBranchFrom(commit.hash, `${commit.shortHash} (${commit.subject})`)
     },
     {
       label: 'Check out commit',
+      icon: 'switch',
       hint: 'detached',
       action: () => checkoutCommit(commit)
     },
     SEPARATOR,
     {
       label: 'Cherry-Pick…',
+      icon: 'cherry-pick',
       hint: commit.parents.length > 1 ? 'a merge cannot be copied' : 'copy onto this branch',
       disabled: commit.parents.length > 1,
       action: () => cherryPickCommits([commit])
     },
-    { label: 'Revert…', action: () => revertCommits([commit]) },
+    { label: 'Revert…', icon: 'revert', action: () => revertCommits([commit]) },
     {
       label: 'Reset Current Branch to Here…',
+      icon: 'reset',
       hint: isHead ? 'already here' : undefined,
       disabled: isHead,
       danger: true,
       action: () => resetToCommit(commit)
     },
     SEPARATOR,
-    { label: 'Copy commit hash', action: () => copy(commit.hash, 'commit hash') },
-    { label: 'Copy short hash', action: () => copy(commit.shortHash, commit.shortHash) },
-    { label: 'Copy subject', action: () => copy(commit.subject, 'subject') }
+    { label: 'Copy commit hash', icon: 'copy', action: () => copy(commit.hash, 'commit hash') },
+    { label: 'Copy short hash', icon: 'copy', action: () => copy(commit.shortHash, commit.shortHash) },
+    { label: 'Copy subject', icon: 'copy', action: () => copy(commit.subject, 'subject') }
   );
 
   return items;
@@ -392,41 +401,43 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
 export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'): MenuItem[] {
   if (kind === 'tag') {
     return [
-      { label: 'Create branch from tag…', action: () => createBranchFrom(branch.name, `tag ${branch.name}`) },
+      { label: 'Create branch from tag…', icon: 'branch', action: () => createBranchFrom(branch.name, `tag ${branch.name}`) },
       SEPARATOR,
-      { label: 'Copy tag name', action: () => copy(branch.name, branch.name) },
-      { label: 'Copy target hash', action: () => copy(branch.oid, 'target hash') }
+      { label: 'Copy tag name', icon: 'copy', action: () => copy(branch.name, branch.name) },
+      { label: 'Copy target hash', icon: 'copy', action: () => copy(branch.oid, 'target hash') }
     ];
   }
 
   if (kind === 'remote') {
     return [
-      { label: 'Check out as local branch', action: () => checkoutRemoteBranch(branch) },
-      { label: 'Create branch from here…', action: () => createBranchFrom(branch.name, branch.name) },
+      { label: 'Check out as local branch', icon: 'switch', action: () => checkoutRemoteBranch(branch) },
+      { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
       SEPARATOR,
-      { label: 'Copy branch name', action: () => copy(branch.name, branch.name) }
+      { label: 'Copy branch name', icon: 'copy', action: () => copy(branch.name, branch.name) }
     ];
   }
 
   return [
     {
       label: branch.isHead ? 'Already checked out' : `Switch to ${branch.name}`,
+      icon: branch.isHead ? 'check' : 'switch',
       hint: branch.isHead ? undefined : '⏎',
       disabled: branch.isHead,
       action: () => switchToBranch(branch.name)
     },
-    { label: 'Create branch from here…', action: () => createBranchFrom(branch.name, branch.name) },
+    { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
     SEPARATOR,
-    { label: 'Rename…', action: () => renameBranch(branch) },
+    { label: 'Rename…', icon: 'rename', action: () => renameBranch(branch) },
     {
       label: 'Delete…',
+      icon: 'delete',
       danger: true,
       disabled: branch.isHead,
       hint: branch.isHead ? 'checked out' : undefined,
       action: () => deleteBranch(branch)
     },
     SEPARATOR,
-    { label: 'Copy branch name', action: () => copy(branch.name, branch.name) }
+    { label: 'Copy branch name', icon: 'copy', action: () => copy(branch.name, branch.name) }
   ];
 }
 
@@ -643,7 +654,7 @@ export function showCommitDiff(
 export function changeMenuItems(change: Change): MenuItem[] {
   const ticked = commitStore.isChecked(change.path);
   const items: MenuItem[] = [
-    { label: 'Show Diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
+    { label: 'Show Diff', icon: 'diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
     SEPARATOR
   ];
 
@@ -653,6 +664,7 @@ export function changeMenuItems(change: Change): MenuItem[] {
     items.push(
       {
         label: 'Mark as Resolved',
+        icon: 'check',
         hint: 'lets the operation continue',
         action: () => commitStore.markResolved([change.path])
       },
@@ -664,6 +676,7 @@ export function changeMenuItems(change: Change): MenuItem[] {
     ...items,
     {
       label: ticked ? 'Exclude from commit' : 'Include in commit',
+      icon: ticked ? 'exclude' : 'include',
       hint: commitStore.forced ? 'a merge is in progress' : undefined,
       disabled: commitStore.forced,
       action: () => commitStore.toggle(change)
@@ -671,15 +684,17 @@ export function changeMenuItems(change: Change): MenuItem[] {
     SEPARATOR,
     {
       label: 'Roll back…',
+      icon: 'rollback',
       danger: true,
       hint: change.kind === 'unversioned' ? 'not versioned' : undefined,
       disabled: change.kind === 'unversioned',
       action: () => rollbackChanges([change])
     },
     SEPARATOR,
-    { label: 'Copy path', action: () => copy(change.path, change.path) },
+    { label: 'Copy path', icon: 'copy', action: () => copy(change.path, change.path) },
     {
       label: 'Copy full path',
+      icon: 'copy',
       action: () => copy(`${repoStore.info?.root ?? ''}/${change.path}`, 'full path')
     }
   ];
@@ -1045,12 +1060,12 @@ export function showShelvedDiff(stash: Stash, file: StashFile) {
 /** Context menu for a shelved change. */
 export function stashMenuItems(stash: Stash): MenuItem[] {
   return [
-    { label: 'Unshelve', hint: 'apply and remove', action: () => unshelve(stash, true) },
-    { label: 'Apply and Keep', action: () => unshelve(stash, false) },
+    { label: 'Unshelve', icon: 'unshelve', hint: 'apply and remove', action: () => unshelve(stash, true) },
+    { label: 'Apply and Keep', icon: 'shelve', action: () => unshelve(stash, false) },
     SEPARATOR,
-    { label: 'Delete…', danger: true, action: () => deleteShelved(stash) },
+    { label: 'Delete…', icon: 'delete', danger: true, action: () => deleteShelved(stash) },
     SEPARATOR,
-    { label: 'Copy name', action: () => copy(stash.message || stash.ref, 'name') },
-    { label: 'Copy stash reference', action: () => copy(stash.ref, stash.ref) }
+    { label: 'Copy name', icon: 'copy', action: () => copy(stash.message || stash.ref, 'name') },
+    { label: 'Copy stash reference', icon: 'copy', action: () => copy(stash.ref, stash.ref) }
   ];
 }

@@ -110,6 +110,13 @@ export interface SuggestProviders {
   models: Record<string, string>;
 }
 
+/** One commit a change could be split into, when it holds unrelated work. */
+export interface SuggestedGroup {
+  /** What this group of files is, in a few words. */
+  reason: string;
+  files: string[];
+}
+
 /** A suggested subject line, already checked against the repository's rules. */
 export interface Suggestion {
   subject: string;
@@ -120,6 +127,11 @@ export interface Suggestion {
   problems: MessageProblem[];
   /** False when the suggestion still breaks a blocking rule after a retry. */
   ok: boolean;
+  /**
+   * How the change could be split, when it looks like more than one commit.
+   * Empty when it is one piece of work, which is the usual case.
+   */
+  groups: SuggestedGroup[];
 }
 
 export interface MessageProblem {

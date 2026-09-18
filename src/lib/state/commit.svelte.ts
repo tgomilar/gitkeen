@@ -17,7 +17,9 @@ import { choose, prompt } from './dialogs.svelte';
 import { toChange } from '../changes';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
-import type { HeadCommit, Stash, StashFile, SuggestProviders, KeyStatus } from '../git/types';
+import type {
+  HeadCommit, Stash, StashFile, SuggestProviders, KeyStatus, SuggestedGroup
+} from '../git/types';
 
 class CommitStore {
   message = $state('');
@@ -35,6 +37,13 @@ class CommitStore {
    * when none are set, which is what hides the Suggest button.
    */
   suggestProviders = $state<SuggestProviders | null>(null);
+
+  /**
+   * How the ticked change could be split, when the last suggestion thought it
+   * held more than one piece of work. Advice only: nothing is re-ticked and
+   * nothing is committed on its own.
+   */
+  splitGroups = $state<SuggestedGroup[]>([]);
 
   /** Collapsed group and folder keys. */
   collapsed = $state<Set<string>>(new Set());
@@ -135,6 +144,9 @@ class CommitStore {
     }
     this.excluded = excluded;
     this.included = included;
+    // The advice described the set that was ticked when it was asked for, so
+    // changing the ticks makes it wrong rather than merely out of date.
+    this.splitGroups = [];
   }
 
   toggle(change: Change) {
@@ -160,11 +172,17 @@ class CommitStore {
     this.collapsed = new Set();
   }
 
+  /** Drop the split advice, once it no longer describes what is ticked. */
+  dismissSplit() {
+    this.splitGroups = [];
+  }
+
   /** Forget everything typed and ticked. Called when the repository changes. */
   reset() {
     this.message = '';
     this.draft = '';
     this.amend = false;
+    this.splitGroups = [];
     this.excluded = new Set();
     this.included = new Set();
     this.selected = null;
@@ -337,6 +355,7 @@ class CommitStore {
 
     this.message = result.subject;
     if (this.amend) this.draft = result.subject;
+    this.splitGroups = result.groups ?? [];
 
     if (result.clipped) {
       toasts.info('Suggested from part of the diff', 'The change was too large to send in full.');
