@@ -34,7 +34,8 @@ export function describeRules(config: CommitRules | null | undefined): string | 
   }
   if (config.source !== 'commitlint') return null;
 
-  const parts = ['type(scope): subject'];
+  const noScope = config.rules?.['scope-empty']?.applicable === 'always';
+  const parts = [noScope ? 'type: subject' : 'type(scope): subject'];
   if (config.maxHeader) parts.push(`${config.maxHeader} characters max`);
   return parts.join(' · ');
 }
@@ -62,9 +63,10 @@ export function checkMessage(
   const match = header.match(HEADER);
   if (!match?.groups) {
     const example = config.types?.length ? `${config.types[0]}: short description` : 'feat: short description';
+    const shape = rules['scope-empty']?.applicable === 'always' ? 'type: subject' : 'type(scope): subject';
     problems.push({
       rule: 'header-format',
-      message: `The first line must read type(scope): subject — for example "${example}"`,
+      message: `The first line must read ${shape} — for example "${example}"`,
       level: 2
     });
   } else {
@@ -84,6 +86,10 @@ export function checkMessage(
     }
     if (rules['scope-empty']?.applicable === 'never' && !scope) {
       add('scope-empty', 'A scope is required, as in type(scope): subject');
+    }
+    // `always` reads as "the scope is always empty", so a scope is a fault.
+    if (rules['scope-empty']?.applicable === 'always' && scope !== undefined) {
+      add('scope-empty', `This repository does not use scopes, so drop "(${scope})"`);
     }
 
     if (rules['subject-empty']?.applicable === 'never' && !subject.trim()) {

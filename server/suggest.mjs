@@ -272,8 +272,14 @@ function systemPrompt(rules, { split = false } = {}) {
 
   const enforced = rules?.enforced ? rules.rules ?? {} : {};
 
+  const noScope = enforced['scope-empty']?.applicable === 'always';
+
   if (rules?.source === 'commitlint') {
-    lines.push('Follow Conventional Commits: type(scope): subject, where the scope is optional.');
+    lines.push(
+      noScope
+        ? 'Follow Conventional Commits, without a scope: type: subject.'
+        : 'Follow Conventional Commits: type(scope): subject, where the scope is optional.'
+    );
   }
 
   const types = rules?.types;
@@ -283,7 +289,11 @@ function systemPrompt(rules, { split = false } = {}) {
 
   const max = enforced['header-max-length']?.value ?? rules?.maxHeader;
   if (typeof max === 'number') {
-    lines.push(`The whole line, type and scope included, must be at most ${max} characters.`);
+    lines.push(
+      noScope
+        ? `The whole line, the type included, must be at most ${max} characters.`
+        : `The whole line, type and scope included, must be at most ${max} characters.`
+    );
   }
 
   if (enforced['subject-full-stop']?.applicable === 'never') {
@@ -297,6 +307,9 @@ function systemPrompt(rules, { split = false } = {}) {
   }
   if (enforced['scope-empty']?.applicable === 'never') {
     lines.push('A scope is required, as in type(scope): subject.');
+  }
+  if (noScope) {
+    lines.push('Never write a scope: "feat: add the thing", not "feat(api): add the thing".');
   }
 
   return lines.join('\n');

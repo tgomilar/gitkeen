@@ -18,8 +18,12 @@
 export default {
   extends: ['@commitlint/config-conventional'],
   rules: {
-    // The first line, type and scope included. The preset sets 100; 120 is a
-    // little more room for a scope without inviting a paragraph.
+    // No scopes. This repository is small enough that the type and the subject
+    // say everything a scope would, and a scope that is optional ends up used
+    // inconsistently, which reads worse than never using one.
+    'scope-empty': [2, 'always'],
+    // The first line. The preset sets 100; 120 leaves room for a subject that
+    // explains itself without inviting a paragraph.
     'header-max-length': [2, 'always', 120],
     // Body lines wrap at the width a terminal `git log` shows without folding.
     'body-max-line-length': [2, 'always', 100],

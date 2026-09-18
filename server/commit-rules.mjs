@@ -207,9 +207,10 @@ export function validateMessage(message, config) {
 
   const match = header.match(HEADER);
   if (!match) {
+    const form = rules['scope-empty']?.applicable === 'always' ? 'type: subject' : 'type(scope): subject';
     const shape = config.types?.length
-      ? `type(scope): subject — for example "${config.types[0]}: short description"`
-      : 'type(scope): subject';
+      ? `${form} — for example "${config.types[0]}: short description"`
+      : form;
     problems.push({
       rule: 'header-format',
       message: `The first line must read ${shape}`,
@@ -232,6 +233,13 @@ export function validateMessage(message, config) {
       if (allowed.length > 0 && !allowed.includes(scope)) {
         add('scope-enum', `"${scope}" is not an allowed scope. Use one of: ${allowed.join(', ')}`);
       }
+    }
+    if (rules['scope-empty']?.applicable === 'never' && !scope) {
+      add('scope-empty', 'A scope is required, as in type(scope): subject');
+    }
+    // `always` reads as "the scope is always empty", so a scope is a fault.
+    if (rules['scope-empty']?.applicable === 'always' && scope !== undefined) {
+      add('scope-empty', `This repository does not use scopes, so drop "(${scope})"`);
     }
     if (rules['subject-empty']?.applicable === 'never' && !subject.trim()) {
       add('subject-empty', 'The subject cannot be empty');
