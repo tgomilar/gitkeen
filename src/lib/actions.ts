@@ -575,9 +575,12 @@ export async function commitAndPush() {
   });
   if (!ok) return;
 
-  await commitStore.push(
+  const outcome = await commitStore.push(
     branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
   );
+  // Someone else pushed between the last fetch and now, so the branch looked
+  // up to date when the dialog was built. Offer the same choice here.
+  if (outcome === 'rejected') await pushRejected(branch.name);
 }
 
 /**
@@ -599,6 +602,14 @@ export async function pushBranch() {
     return;
   }
 
+  // Behind the remote, an ordinary push cannot succeed. Saying so and offering
+  // only a button that will fail sends the user off to find another command;
+  // the choice belongs here, where the problem was found.
+  if (branch.upstream && branch.behind > 0) {
+    await pushRejected(branch.name);
+    return;
+  }
+
   const ok = await confirm({
     title: `Push ${branch.name}?`,
     message: branch.upstream
@@ -612,23 +623,56 @@ export async function pushBranch() {
         value: branch.upstream
           ? pluralize(branch.ahead, 'commit')
           : 'every commit on this branch that the remote does not already have'
-      },
-      ...(branch.behind > 0
-        ? [{
-            label: 'Behind',
-            value: `${pluralize(branch.behind, 'commit')} on the remote you do not have. Git will refuse the push; pull first, or force push to replace them.`,
-            tone: 'warning' as const
-          }]
-        : [])
+      }
     ],
-    tone: branch.behind > 0 ? 'warning' : 'normal',
     confirmLabel: 'Push'
   });
   if (!ok) return;
 
-  await commitStore.push(
+  const outcome = await commitStore.push(
     branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
   );
+  // Someone else pushed between the last fetch and now, so the branch looked
+  // up to date when the dialog was built. Offer the same choice here.
+  if (outcome === 'rejected') await pushRejected(branch.name);
+}
+
+/**
+ * The remote has commits this branch does not, so a push would be refused.
+ *
+ * Both ways out are offered where the problem appears, rather than leaving the
+ * user to go and find the force push command: one keeps what is on the remote,
+ * the other replaces it. Force push goes on to its own confirmation, which
+ * names the commits it would destroy, so nothing is lost from this dialog
+ * alone.
+ */
+async function pushRejected(branchName: string) {
+  const choice = await choose({
+    title: `${branchName} is behind the remote`,
+    message:
+      'The remote has commits this branch does not, so Git will refuse an ordinary push.',
+    choices: [
+      {
+        value: 'fetch',
+        label: 'Fetch and look first',
+        detail: 'See what arrived before deciding. Nothing is sent or lost.'
+      },
+      {
+        value: 'force',
+        label: 'Force push, replacing the remote',
+        detail: 'Discards the commits on the remote that this branch does not have.',
+        tone: 'danger'
+      }
+    ],
+    tone: 'warning',
+    confirmLabel: 'Continue'
+  });
+
+  if (choice === 'fetch') {
+    await repoStore.fetch();
+    return;
+  }
+  if (choice === 'force') await forcePushBranch();
 }
 
 /**
@@ -677,7 +721,12 @@ export async function forcePushBranch() {
       confirmLabel: 'Force push'
     });
     if (!ok) return;
-    await commitStore.push({ force: true });
+    if ((await commitStore.push({ force: true })) === 'rejected') {
+      toasts.error(
+        'The remote moved',
+        'Commits arrived after this was checked, so nothing was sent. Look again before forcing.'
+      );
+    }
     return;
   }
 
@@ -717,7 +766,12 @@ export async function forcePushBranch() {
   });
   if (!ok) return;
 
-  await commitStore.push({ force: true });
+  if ((await commitStore.push({ force: true })) === 'rejected') {
+    toasts.error(
+      'The remote moved',
+      'Commits arrived after you were shown what would be lost, so nothing was sent. Look again before forcing.'
+    );
+  }
 }
 
 /** Throw away the working-tree changes to these files, after saying what goes. */

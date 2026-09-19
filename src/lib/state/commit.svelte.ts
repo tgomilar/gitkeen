@@ -402,18 +402,39 @@ class CommitStore {
     return result.commit;
   }
 
-  async push(options: { remote?: string; setUpstream?: boolean; force?: boolean } = {}) {
+  /**
+   * Push, reporting a rejection rather than only complaining about it.
+   *
+   * A push can be refused even when the branch looked up to date: someone else
+   * pushes between the last fetch and this call. The caller needs to tell that
+   * apart from a real failure, so it is returned rather than turned into a
+   * toast, and only a genuine failure is announced here.
+   */
+  async push(
+    options: { remote?: string; setUpstream?: boolean; force?: boolean } = {}
+  ): Promise<'pushed' | 'rejected' | 'failed'> {
     const repo = repoStore.repo;
-    if (!repo) return false;
-    const label = options.force ? 'Force pushing' : 'Pushing';
-    const result = await this.run(label, () => repo.push(options));
-    await repoStore.refresh();
-    if (!result) return false;
-    toasts.success(
-      result.forced ? `Force pushed ${result.branch}` : `Pushed ${result.branch}`,
-      result.output || null
-    );
-    return true;
+    if (!repo) return 'failed';
+
+    this.busy = options.force ? 'Force pushing' : 'Pushing';
+    try {
+      const result = await repo.push(options);
+      toasts.success(
+        result.forced ? `Force pushed ${result.branch}` : `Pushed ${result.branch}`,
+        result.output || null
+      );
+      return 'pushed';
+    } catch (err) {
+      // The backend phrases both rejections; either means the remote moved,
+      // which is a decision for the user rather than an error to report.
+      const message = describe(err);
+      if (/remote (has|moved)/i.test(message)) return 'rejected';
+      toasts.error('Push failed', message);
+      return 'failed';
+    } finally {
+      this.busy = null;
+      await repoStore.refresh();
+    }
   }
 
   /**
