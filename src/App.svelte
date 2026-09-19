@@ -21,7 +21,7 @@
   import { commitStore } from './lib/state/commit.svelte';
   import { diffStore } from './lib/state/diff.svelte';
   import { statsStore } from './lib/state/stats.svelte';
-  import { commitMenuItems, createBranchFrom } from './lib/actions';
+  import { commitMenuItems, createBranchFrom, pushBranch } from './lib/actions';
   import type { MenuItem } from './lib/menu';
 
   const THEME_KEY = 'gitalia.theme';
@@ -168,6 +168,13 @@
     if (mod && event.shiftKey && event.key.toLowerCase() === 'b') {
       event.preventDefault();
       createBranchFrom(repoStore.cursor ?? undefined, repoStore.cursor ? 'the selected commit' : 'HEAD');
+      return;
+    }
+    // Push has a confirmation of its own, so the shortcut cannot send anything
+    // on its own. Force push is deliberately left off the keyboard.
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
+      event.preventDefault();
+      pushBranch();
       return;
     }
 

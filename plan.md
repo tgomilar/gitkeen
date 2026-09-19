@@ -1091,37 +1091,37 @@ product value is the **interaction model around the Git DAG**.
 
 ### P0 --- Must have
 
--   [ ] Tauri project
--   [ ] Svelte + TypeScript
--   [ ] Git process runner
--   [ ] Open repository
--   [ ] Repository status
--   [ ] Git log parser
--   [ ] Branch parser
--   [ ] Git graph
--   [ ] Commit selection
--   [ ] Branch switching
--   [ ] Create branch
--   [ ] Commit
--   [ ] Stage / unstage
--   [ ] Diff
--   [ ] Push / pull / fetch
--   [ ] Cherry-pick
--   [ ] Revert
--   [ ] Reset
+-   [ ] Tauri project --- still a Vite dev server; the RPC seam is in place
+-   [x] Svelte + TypeScript
+-   [x] Git process runner
+-   [x] Open repository
+-   [x] Repository status
+-   [x] Git log parser
+-   [x] Branch parser
+-   [x] Git graph
+-   [x] Commit selection
+-   [x] Branch switching
+-   [x] Create branch
+-   [x] Commit
+-   [x] Stage / unstage --- by ticking files, IntelliJ style
+-   [x] Diff
+-   [~] Push / pull / fetch --- push, force push and fetch done; pull missing
+-   [x] Cherry-pick
+-   [x] Revert
+-   [x] Reset
 
 ### P1 --- Important
 
 -   [ ] Interactive rebase
--   [ ] Squash
+-   [x] Squash
 -   [ ] Reorder
--   [ ] Stash
+-   [x] Stash --- as the Shelf
 -   [ ] Merge
--   [ ] Conflict detection
--   [ ] Partial staging
--   [ ] Tags
+-   [x] Conflict detection --- detected and marked resolved; no editor yet
+-   [ ] Partial staging --- whole files only, no hunk staging
+-   [ ] Tags --- shown in the graph, but cannot be created or deleted
 -   [ ] Command palette
--   [ ] Keyboard shortcuts
+-   [x] Keyboard shortcuts
 -   [ ] Large repository optimization
 -   [x] Statistics report
 
@@ -1131,12 +1131,15 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration
--   [ ] AI assistance
+-   [x] AI assistance --- commit subjects, with a suggested split when the
+    change holds unrelated work. Anthropic, OpenAI, LM Studio or Ollama.
 -   [ ] Git LFS
 -   [ ] Submodules
 -   [ ] Blame
 -   [ ] Bisect
 -   [ ] Advanced analytics
+
+Key: `[x]` done, `[~]` partly done, `[ ]` not started.
 
 ------------------------------------------------------------------------
 

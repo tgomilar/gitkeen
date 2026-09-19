@@ -5,7 +5,7 @@
  * a confirmation cannot be forgotten at one call site and present at another
  * (plan section 18).
  */
-import { repoStore } from './state/repo.svelte';
+import { repoStore, describe } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
 import { confirm, prompt, choose } from './state/dialogs.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
@@ -13,7 +13,7 @@ import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
 import type { MenuItem } from './menu';
 import { SEPARATOR } from './menu';
-import type { Branch, Commit, ResetMode, Stash, StashFile } from './git/types';
+import type { Branch, Commit, ForcePushInspection, ResetMode, Stash, StashFile } from './git/types';
 import type { Change } from './changes';
 import { KIND_LABEL } from './changes';
 import { diffStore } from './state/diff.svelte';
@@ -578,6 +578,146 @@ export async function commitAndPush() {
   await commitStore.push(
     branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
   );
+}
+
+/**
+ * Push the current branch, stating where it goes before it goes.
+ *
+ * The plain push of `commitAndPush`, on its own, so the toolbar and the menu
+ * can offer it without committing anything first.
+ */
+export async function pushBranch() {
+  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
+  const remote = defaultRemote();
+
+  if (!branch) {
+    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
+    return;
+  }
+  if (!branch.upstream && !remote) {
+    toasts.error('No remote configured', `Add a remote before pushing ${branch.name}.`);
+    return;
+  }
+
+  const ok = await confirm({
+    title: `Push ${branch.name}?`,
+    message: branch.upstream
+      ? 'Your commits are sent to the remote branch this one tracks.'
+      : 'This branch has never been pushed. It will be created on the remote and set as the branch to track.',
+    facts: [
+      { label: 'Branch', value: branch.name },
+      { label: 'Target', value: branch.upstream ?? `${remote}/${branch.name} (new)` },
+      {
+        label: 'Sending',
+        value: branch.upstream
+          ? pluralize(branch.ahead, 'commit')
+          : 'every commit on this branch that the remote does not already have'
+      },
+      ...(branch.behind > 0
+        ? [{
+            label: 'Behind',
+            value: `${pluralize(branch.behind, 'commit')} on the remote you do not have. Git will refuse the push; pull first, or force push to replace them.`,
+            tone: 'warning' as const
+          }]
+        : [])
+    ],
+    tone: branch.behind > 0 ? 'warning' : 'normal',
+    confirmLabel: 'Push'
+  });
+  if (!ok) return;
+
+  await commitStore.push(
+    branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
+  );
+}
+
+/**
+ * Replace the remote branch with this one.
+ *
+ * This is the one push that can destroy work, so what would be lost is read
+ * from the repository and listed commit by commit rather than described in the
+ * abstract. The commits named are other people's as often as they are the
+ * user's, which is exactly why they are named.
+ */
+export async function forcePushBranch() {
+  const repo = repoStore.repo;
+  if (!repo) return;
+
+  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
+  if (!branch) {
+    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
+    return;
+  }
+
+  let inspection: ForcePushInspection;
+  try {
+    inspection = await repo.inspectForcePush();
+  } catch (err) {
+    toasts.error('Could not check the remote', describe(err));
+    return;
+  }
+
+  // Nothing on the remote to replace: an ordinary push is the honest action,
+  // and forcing would claim a danger that is not there.
+  if (!inspection.upstream) {
+    await pushBranch();
+    return;
+  }
+
+  if (inspection.dropped.length === 0) {
+    const ok = await confirm({
+      title: `Force push ${branch.name}?`,
+      message:
+        'The remote holds nothing this branch does not, so nothing would be lost. An ordinary push would do the same thing unless you have rewritten history.',
+      facts: [
+        { label: 'Branch', value: branch.name },
+        { label: 'Target', value: inspection.upstream },
+        { label: 'Sending', value: pluralize(inspection.gained, 'commit') }
+      ],
+      confirmLabel: 'Force push'
+    });
+    if (!ok) return;
+    await commitStore.push({ force: true });
+    return;
+  }
+
+  const shown = inspection.dropped.slice(0, 5);
+  const ok = await confirm({
+    title: `Force push ${branch.name}?`,
+    message:
+      `This replaces ${inspection.upstream} with your branch. ` +
+      `${pluralize(inspection.dropped.length, 'commit')} on the remote would be removed. ` +
+      'Anyone who has pulled them keeps them, and can push them back.',
+    facts: [
+      { label: 'Branch', value: branch.name },
+      { label: 'Target', value: inspection.upstream },
+      { label: 'Sending', value: pluralize(inspection.gained, 'commit') },
+      ...shown.map((c) => ({
+        label: 'Removing',
+        value: `${c.shortHash}  ${c.subject} — ${c.author}, ${relativeTime(c.date)}`,
+        tone: 'danger' as const
+      })),
+      ...(inspection.dropped.length > shown.length
+        ? [{
+            label: 'And',
+            value: `${inspection.dropped.length - shown.length} more`,
+            tone: 'danger' as const
+          }]
+        : []),
+      ...(inspection.staleRefs
+        ? [{
+            label: 'Warning',
+            value: 'The remote could not be reached, so this list may be out of date.',
+            tone: 'warning' as const
+          }]
+        : [])
+    ],
+    tone: 'danger',
+    confirmLabel: 'Force push'
+  });
+  if (!ok) return;
+
+  await commitStore.push({ force: true });
 }
 
 /** Throw away the working-tree changes to these files, after saying what goes. */
