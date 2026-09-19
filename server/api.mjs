@@ -1724,10 +1724,74 @@ export const methods = {
   },
 
   /**
-   * Push the current branch. Never forced: Git rejects a push that would lose
-   * commits, and that rejection is the safety check.
+   * What a force push would do, so the confirmation can state it as fact.
+   *
+   * Read-only. The remote-tracking refs only move when something fetches, so
+   * they are refreshed first: deciding what would be overwritten from stale
+   * refs is how a force push loses work nobody knew was there.
    */
-  async 'repo.push'({ path, remote = null, setUpstream = false }) {
+  async 'repo.inspectForcePush'({ path }) {
+    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+    if (code !== 0) {
+      throw new GitError(
+        'HEAD is detached, so there is no branch to push.',
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+    const branch = sym.trim();
+
+    const { stdout: up } = await runGit(
+      path,
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+      { allowFailure: true }
+    );
+    const upstream = up.trim() || null;
+    if (!upstream) {
+      // Nothing to overwrite: an ordinary push creates the branch.
+      return { branch, upstream: null, dropped: [], gained: 0, behind: 0, staleRefs: false };
+    }
+
+    const fetched = await runGit(path, ['fetch', '--quiet'], { allowFailure: true });
+
+    // Commits on the remote that this branch does not contain: exactly what a
+    // force push would throw away.
+    const { stdout: lost } = await runGit(
+      path,
+      ['log', '--format=' + ['%H', '%h', '%an', '%at', '%s'].join(US) + RS, `HEAD..${upstream}`],
+      { allowFailure: true }
+    );
+    const dropped = lost
+      .split(RS)
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((record) => {
+        const [hash, shortHash, author, when, subject] = record.split(US);
+        return { hash, shortHash, author, date: Number(when) * 1000, subject };
+      });
+
+    const { stdout: ahead } = await runGit(path, ['rev-list', '--count', `${upstream}..HEAD`], { allowFailure: true });
+
+    return {
+      branch,
+      upstream,
+      dropped,
+      gained: Number(ahead.trim() || 0),
+      behind: dropped.length,
+      // A failed fetch means the picture may be out of date, which the user
+      // should be told before they agree to overwrite anything.
+      staleRefs: fetched.code !== 0
+    };
+  },
+
+  /**
+   * Push the current branch.
+   *
+   * An ordinary push is never forced: Git rejects one that would lose commits,
+   * and that rejection is the safety check. `force` replaces that check with
+   * `--force-with-lease`, which still refuses if the remote moved since the
+   * last fetch, so a force push can only discard commits the user was shown.
+   */
+  async 'repo.push'({ path, remote = null, setUpstream = false, force = false }) {
     const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
     if (code !== 0) {
       throw new GitError(
@@ -1737,13 +1801,33 @@ export const methods = {
     }
     const branch = sym.trim();
     const args = ['push'];
+    if (force) {
+      // Never a bare --force. The lease makes Git check that the remote is
+      // still where the last fetch left it, so a push cannot silently discard
+      // a commit that arrived after the user was shown what would be lost.
+      args.push('--force-with-lease');
+    }
     if (setUpstream || remote) {
       if (!remote) throw new GitError('No remote to push to.', { command: '', stderr: '', code: 1 });
       if (setUpstream) args.push('--set-upstream');
       args.push(remote, branch);
     }
-    const { stderr } = await runGit(path, args);
-    return { ok: true, branch, output: stderr.trim() };
+
+    const { stderr, code: pushCode } = await runGit(path, args, { allowFailure: true });
+    if (pushCode !== 0) {
+      // A refused lease is not a generic failure: it means the remote moved,
+      // which is the one case a force push must not be retried blindly.
+      if (/stale info|does not match any|rejected.*fetch first|non-fast-forward/i.test(stderr)) {
+        throw new GitError(
+          force
+            ? 'The remote moved since the last fetch, so the push was refused. Fetch and look at what arrived before forcing again.'
+            : 'The remote has commits you do not have. Pull first, or force push if you meant to replace them.',
+          { command: `git ${args.join(' ')}`, stderr, code: pushCode }
+        );
+      }
+      throw new GitError(stderr.trim() || 'The push failed.', { command: `git ${args.join(' ')}`, stderr, code: pushCode });
+    }
+    return { ok: true, branch, forced: force, output: stderr.trim() };
   },
 
   /**

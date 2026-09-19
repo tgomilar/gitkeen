@@ -8,7 +8,7 @@ import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
-  PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
+  ForcePushInspection, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
   KeyStatus
@@ -168,7 +168,12 @@ export class GitRepository {
     return transport.call('changes.rollback', { path: this.path, paths });
   }
 
-  push(options: { remote?: string; setUpstream?: boolean } = {}): Promise<PushResult> {
+  /** What a force push would overwrite. Read-only. */
+  inspectForcePush(): Promise<ForcePushInspection> {
+    return transport.call('repo.inspectForcePush', { path: this.path });
+  }
+
+  push(options: { remote?: string; setUpstream?: boolean; force?: boolean } = {}): Promise<PushResult> {
     return transport.call('repo.push', { path: this.path, ...options });
   }
 

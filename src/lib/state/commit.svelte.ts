@@ -402,13 +402,17 @@ class CommitStore {
     return result.commit;
   }
 
-  async push(options: { remote?: string; setUpstream?: boolean } = {}) {
+  async push(options: { remote?: string; setUpstream?: boolean; force?: boolean } = {}) {
     const repo = repoStore.repo;
     if (!repo) return false;
-    const result = await this.run('Pushing', () => repo.push(options));
+    const label = options.force ? 'Force pushing' : 'Pushing';
+    const result = await this.run(label, () => repo.push(options));
     await repoStore.refresh();
     if (!result) return false;
-    toasts.success(`Pushed ${result.branch}`, result.output || null);
+    toasts.success(
+      result.forced ? `Force pushed ${result.branch}` : `Pushed ${result.branch}`,
+      result.output || null
+    );
     return true;
   }
 

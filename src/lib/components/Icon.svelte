@@ -14,7 +14,7 @@
     // Context menu actions.
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unshelve' | 'exclude' | 'include'
-    | 'fetch' | 'close' | 'branch-plus' | 'settings';
+    | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push';
 
   interface Props {
     name: IconName;
@@ -97,6 +97,14 @@
     <path d="M3.4 3.2v8.2a1 1 0 0 0 1 1h2.2" />
     <path d="M6.6 7.4h6.8" />
     <path d="M6.6 12.4h6.8" />
+  {:else if name === 'ai'}
+    <!--
+      A four-pointed spark, the common mark for a suggestion written for you.
+      A cogwheel here would read as settings in general, when everything behind
+      this button is about the model that writes commit messages.
+    -->
+    <path d="M6.4 2.2 7.5 5.1a1.4 1.4 0 0 0 .8.8l2.9 1.1-2.9 1.1a1.4 1.4 0 0 0-.8.8l-1.1 2.9-1.1-2.9a1.4 1.4 0 0 0-.8-.8L1.6 7l2.9-1.1a1.4 1.4 0 0 0 .8-.8z" />
+    <path d="M11.6 9.4l.5 1.4a1 1 0 0 0 .6.6l1.4.5-1.4.5a1 1 0 0 0-.6.6l-.5 1.4-.5-1.4a1 1 0 0 0-.6-.6L9.1 12l1.4-.5a1 1 0 0 0 .6-.6z" />
   {:else if name === 'settings'}
     <!-- A cogwheel: the usual mark for settings, so it needs no label. -->
     <circle cx="8" cy="8" r="2.1" />
@@ -109,6 +117,17 @@
     <path d="M11.4 11.2V9.6a3 3 0 0 0-3-3h-2.6" />
     <path d="M11.4 1.8v4.6" />
     <path d="M9.1 4.1h4.6" />
+  {:else if name === 'push'}
+    <!-- The fetch cloud with the arrow turned around: work going up. -->
+    <path d="M4.9 10.4a2.7 2.7 0 0 1 .2-5.4 3.6 3.6 0 0 1 6.8 1 2.3 2.3 0 0 1-.4 4.4" />
+    <path d="M8 13.7V7.6" />
+    <path d="M5.9 9.7 8 7.6l2.1 2.1" />
+  {:else if name === 'force-push'}
+    <!-- The same, struck through: the push that replaces what is there. -->
+    <path d="M4.9 10.4a2.7 2.7 0 0 1 .2-5.4 3.6 3.6 0 0 1 6.8 1 2.3 2.3 0 0 1-.4 4.4" />
+    <path d="M8 13.7V7.6" />
+    <path d="M5.9 9.7 8 7.6l2.1 2.1" />
+    <path d="M2.4 13.6 13.6 2.4" />
   {:else if name === 'fetch'}
     <!-- The cloud again, with what it holds coming down to this machine. -->
     <path d="M4.9 10.4a2.7 2.7 0 0 1 .2-5.4 3.6 3.6 0 0 1 6.8 1 2.3 2.3 0 0 1-.4 4.4" />

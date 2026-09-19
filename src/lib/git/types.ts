@@ -195,6 +195,30 @@ export interface PushResult {
   ok: boolean;
   branch: string;
   output: string;
+  /** True when the push replaced the remote branch rather than adding to it. */
+  forced?: boolean;
+}
+
+/** A commit a force push would remove from the remote. */
+export interface DroppedCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: number;
+  subject: string;
+}
+
+/** What a force push would do, read before the confirmation is shown. */
+export interface ForcePushInspection {
+  branch: string;
+  upstream: string | null;
+  /** Commits on the remote that this branch does not have. */
+  dropped: DroppedCommit[];
+  /** Commits this branch would add. */
+  gained: number;
+  behind: number;
+  /** True when the remote refs could not be refreshed, so this may be stale. */
+  staleRefs: boolean;
 }
 
 export type DiffLineKind = 'context' | 'add' | 'del';

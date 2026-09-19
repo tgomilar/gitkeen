@@ -3,7 +3,9 @@
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
-  import { branchMenuItems, createBranchFrom, switchToBranch } from '../actions';
+  import {
+    branchMenuItems, createBranchFrom, switchToBranch, pushBranch, forcePushBranch
+  } from '../actions';
   import type { MenuItem } from '../menu';
 
   interface Props {
@@ -61,6 +63,15 @@
         { label: 'Refresh', icon: 'refresh', hint: '⌘R', action: () => repoStore.refresh() },
         { label: 'Fetch all remotes', icon: 'fetch', hint: '⌘⇧F', action: () => repoStore.fetch() },
         { separator: true },
+        { label: 'Push', icon: 'push', hint: '⌘⇧P', action: () => pushBranch() },
+        {
+          label: 'Force push…',
+          icon: 'force-push',
+          danger: true,
+          hint: 'replaces the remote branch',
+          action: () => forcePushBranch()
+        },
+        { separator: true },
         {
           label: 'Copy repository path',
           icon: 'copy',
@@ -100,6 +111,9 @@
     <button class="op" onclick={() => repoStore.refresh()} disabled={!!repoStore.busy}>
       <Icon name="refresh" />Refresh
     </button>
+    <button class="op" onclick={() => pushBranch()} disabled={!!repoStore.busy}>
+      <Icon name="push" />Push
+    </button>
     <button
       class="op"
       onclick={() => createBranchFrom(repoStore.cursor ?? undefined, repoStore.cursor ? `the selected commit` : 'HEAD')}
@@ -130,7 +144,7 @@
     title="AI settings"
     aria-label="AI settings"
   >
-    <Icon name="settings" size={14} />
+    <Icon name="ai" size={14} />
   </button>
 
   <button class="theme" onclick={ontheme} title="Switch theme" aria-label="Switch theme">
