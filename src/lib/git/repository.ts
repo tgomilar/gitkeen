@@ -8,7 +8,7 @@ import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, DropResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, MoveResult,
-  OperationResult, RewriteInspection,
+  OperationResult, RebasePlanEntry, RebaseResult, RebaseSpan, RewriteInspection,
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
@@ -252,6 +252,16 @@ export class GitRepository {
   /** Move one commit one place towards HEAD (`up`) or away from it (`down`). */
   move(hash: string, direction: 'up' | 'down'): Promise<MoveResult> {
     return transport.call('commits.move', { path: this.path, hash, direction });
+  }
+
+  /** The commits an interactive rebase would cover, oldest first. */
+  rebaseSpan(from: string): Promise<RebaseSpan> {
+    return transport.call('commits.rebaseSpan', { path: this.path, from });
+  }
+
+  /** Run an interactive rebase from a plan the editor built. */
+  rebase(from: string, plan: RebasePlanEntry[]): Promise<RebaseResult> {
+    return transport.call('commits.rebase', { path: this.path, from, plan });
   }
 
   /** What a reset would cost, read before anything moves. */

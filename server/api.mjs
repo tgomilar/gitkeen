@@ -1593,6 +1593,132 @@ export const methods = {
   },
 
   /**
+   * The commits an interactive rebase would cover, ready for the editor.
+   *
+   * `from` is the oldest commit to include. Everything from there up to HEAD
+   * is listed oldest first, which is the order the todo list runs in and so
+   * the order the editor shows.
+   */
+  async 'commits.rebaseSpan'({ path, from }) {
+    const inspection = await methods['commits.inspectRewrite']({ path, hashes: [from], mode: 'move' });
+    if (!inspection.ok) return inspection;
+
+    const { base } = inspection;
+    const { stdout } = await runGit(
+      path,
+      ['log', '--reverse', '--format=' + ['%H', '%h', '%an', '%at', '%s', '%B'].join(US) + RS, `${base}..HEAD`],
+      { allowFailure: true }
+    );
+
+    const commits = stdout
+      .split(RS)
+      .map((r) => r.replace(/^\n/, ''))
+      .filter((r) => r.trim())
+      .map((record) => {
+        const [hash, shortHash, author, when, subject, message] = record.split(US);
+        return {
+          hash,
+          shortHash,
+          author,
+          date: Number(when) * 1000,
+          subject,
+          message: (message ?? '').trim()
+        };
+      });
+
+    return { ...inspection, commits };
+  },
+
+  /**
+   * Run an interactive rebase from a plan the user built.
+   *
+   * `plan` is the todo list, oldest first: `{ hash, command }` per commit,
+   * with `message` on anything reworded or squashed. Nothing is worked out
+   * here beyond turning that into a todo list and the messages to write;
+   * deciding what the plan should be is the editor's job.
+   */
+  async 'commits.rebase'({ path, from, plan }) {
+    if (!Array.isArray(plan) || plan.length === 0) {
+      throw new GitError('The rebase plan is empty.', { command: '', stderr: '', code: 1 });
+    }
+    if (plan.every((entry) => entry.command === 'drop')) {
+      throw new GitError(
+        'The plan drops every commit, which would leave the branch with nothing to apply.',
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+    // The oldest kept commit cannot fold into something above it: there is
+    // nothing above it to fold into.
+    const firstKept = plan.find((entry) => entry.command !== 'drop');
+    if (firstKept && (firstKept.command === 'squash' || firstKept.command === 'fixup')) {
+      throw new GitError(
+        'The oldest commit cannot be squashed into the one before it, because the plan does not include it.',
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+
+    const inspection = await methods['commits.inspectRewrite']({ path, hashes: [from], mode: 'move' });
+    if (!inspection.ok) {
+      throw new GitError(inspection.problems.join('\n'), { command: '', stderr: '', code: 1 });
+    }
+    const { base, head } = inspection;
+
+    const todo = plan.map((entry) => `${entry.command} ${entry.hash}`).join('\n');
+
+    // A reworded commit is matched by the message it has now, because that is
+    // all Git gives the editor to go on.
+    const rewords = [];
+    for (const entry of plan) {
+      if (entry.command !== 'reword' || !entry.message) continue;
+      const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', entry.hash], { allowFailure: true });
+      rewords.push({ from: existing.trim(), to: entry.message.trim() });
+    }
+
+    // A squash asks for a message too, and Git offers the combined one. The
+    // plan's message for the commit being folded into wins.
+    const squashTarget = plan.find((e) => e.command === 'pick' && e.message);
+    if (squashTarget) {
+      const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', squashTarget.hash], { allowFailure: true });
+      rewords.push({ from: existing.trim(), to: squashTarget.message.trim() });
+    }
+
+    const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+    const env = {
+      GIT_SEQUENCE_EDITOR: `${editor} sequence`,
+      GIT_EDITOR: `${editor} message`,
+      GITALIA_TODO: todo
+    };
+    if (rewords.length > 0) env.GITALIA_REWORDS = JSON.stringify(rewords);
+
+    try {
+      await runGit(path, ['rebase', '--interactive', base], { env });
+    } catch (err) {
+      await runGit(path, ['rebase', '--abort'], { allowFailure: true });
+      const text = `${err?.stderr ?? ''}\n${err?.message ?? ''}`;
+      if (/could not apply|CONFLICT|Merge conflict/i.test(text)) {
+        throw new GitError(
+          'The commits could not be replayed in that order: one of them depends on a change another makes. Nothing was altered, and the branch is as it was.',
+          { command: 'git rebase --interactive', stderr: err?.stderr ?? '', code: 1 }
+        );
+      }
+      throw err;
+    }
+
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const { stdout: count } = await runGit(path, ['rev-list', '--count', `${base}..HEAD`], { allowFailure: true });
+
+    return {
+      ok: true,
+      previousHead: head,
+      head: after.trim(),
+      commits: Number(count.trim() || 0),
+      dropped: plan.filter((e) => e.command === 'drop').length,
+      combined: plan.filter((e) => e.command === 'squash' || e.command === 'fixup').length,
+      reworded: plan.filter((e) => e.command === 'reword').length
+    };
+  },
+
+  /**
    * Everything the Stats report shows, from one pass over the log.
    *
    * A report is only as trustworthy as the question it answers, so the whole

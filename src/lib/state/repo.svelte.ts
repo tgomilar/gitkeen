@@ -9,7 +9,7 @@ import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, DropResult, GitStatus,
-  HeadInfo, MoveResult, RewriteInspection,
+  HeadInfo, MoveResult, RebasePlanEntry, RebaseSpan, RewriteInspection,
   MergeInspection, MergeResult, PullInspection, PullResult, RepositoryInfo, ResetInspection,
   ResetMode, SquashInspection, SquashResult, Stash, TagInspection
 } from '../git/types';
@@ -369,6 +369,45 @@ class RepoStore {
     } finally {
       this.busy = null;
     }
+  }
+
+  /**
+   * Run an interactive rebase. Returns true when the branch actually moved.
+   *
+   * The editor needs to know whether to close, and a refused plan leaves it
+   * open with the user's work in it rather than throwing it away.
+   */
+  async rebase(from: string, plan: RebasePlanEntry[]): Promise<boolean> {
+    const repo = this.repo;
+    if (!repo) return false;
+    this.busy = 'Rebasing';
+    try {
+      const result = await repo.rebase(from, plan);
+      await this.refresh();
+
+      const parts: string[] = [];
+      if (result.dropped > 0) parts.push(`${pluralize(result.dropped, 'commit')} dropped`);
+      if (result.combined > 0) parts.push(`${pluralize(result.combined, 'commit')} folded in`);
+      if (result.reworded > 0) parts.push(`${pluralize(result.reworded, 'message')} rewritten`);
+
+      toasts.success(
+        `Rebased ${this.currentBranch ?? 'HEAD'}`,
+        `${parts.length > 0 ? parts.join(', ') + '. ' : ''}The branch was at ${result.previousHead.slice(0, 7)} before.`
+      );
+      return true;
+    } catch (err) {
+      toasts.error('The rebase did not run', describe(err));
+      await this.refresh();
+      return false;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  rebaseSpan(from: string): Promise<RebaseSpan> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.rebaseSpan(from).catch((err) => ({ ok: false, problems: [describe(err)] }));
   }
 
   inspectRewrite(hashes: string[], mode: 'drop' | 'move'): Promise<RewriteInspection> {

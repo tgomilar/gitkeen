@@ -15,7 +15,7 @@
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
     | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull'
-    | 'merge' | 'move-up' | 'move-down' | 'drop';
+    | 'merge' | 'move-up' | 'move-down' | 'drop' | 'rebase';
 
   interface Props {
     name: IconName;
@@ -129,6 +129,14 @@
     <path d="M8 13.7V7.6" />
     <path d="M5.9 9.7 8 7.6l2.1 2.1" />
     <path d="M2.4 13.6 13.6 2.4" />
+  {:else if name === 'rebase'}
+    <!-- A run of commits being replayed onto a new base. -->
+    <circle cx="4" cy="12" r="1.5" />
+    <circle cx="4" cy="4" r="1.5" />
+    <circle cx="12" cy="4" r="1.5" />
+    <path d="M4 5.5v5" />
+    <path d="M6 12h3.5a2.5 2.5 0 0 0 2.5-2.5V5.5" />
+    <path d="M10.2 10.4 12 12.2l1.8-1.8" />
   {:else if name === 'move-up'}
     <!-- A commit moving one place towards the top of the history. -->
     <circle cx="8" cy="12.4" r="1.6" />

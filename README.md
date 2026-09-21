@@ -35,6 +35,7 @@ work, and change the history you already have.
 | Merge | Join another branch into this one, after showing what would conflict. |
 | Tags | Name a commit, with or without a description, and delete tags. |
 | Reorder | Move a commit one place earlier or later in the history. |
+| Rebase | Edit a run of commits in one go: reorder, reword, squash, fixup, drop. |
 | Drop | Remove commits from the branch entirely. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
@@ -253,6 +254,42 @@ abandon the merge and put the branch back as it was.
 When a push is refused because the branch is behind, the dialog that explains
 it now offers to pull as the first way out.
 
+## Rebasing a run of commits
+
+Right click a commit and choose **Rebase from Here**. Gitalia opens the todo
+list of `git rebase -i` as a list you edit, showing that commit and everything
+newer.
+
+Rows are listed **oldest first**, the order Git applies them in, which is the
+opposite of the graph above. The heading says so, because getting that
+backwards is how a rebase surprises you.
+
+Each row takes one command:
+
+| Command | What it does |
+|---|---|
+| Pick | Keep the commit as it is. |
+| Reword | Keep the changes, write a new message. An Edit message button appears. |
+| Squash | Fold into the commit above, keeping both messages. |
+| Fixup | Fold into the commit above, throwing this message away. |
+| Drop | Remove the commit and the change it made. |
+
+The arrows on each row move it earlier or later. A dropped row stays in place,
+greyed and struck through, so the list never jumps under the pointer while you
+are working in it. A folded row is indented under the one it joins.
+
+Nothing runs until you press **Start Rebase**. Until then the plan is only a
+plan, and Cancel costs nothing. **Reset** puts every row back as it arrived.
+
+Gitalia will not start a rebase that changes nothing, that drops every commit,
+or whose oldest kept commit folds upwards into something that is not there. It
+says which of these is wrong underneath the list rather than waiting until you
+press the button.
+
+If the commits cannot be replayed in the order you asked for, the rebase is
+abandoned and the branch is put back exactly as it was, the same as for a move
+or a drop.
+
 ## Moving and removing commits
 
 Both of these rewrite history. Gitalia drives real `git rebase --interactive`
@@ -429,8 +466,9 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-Interactive rebase and a conflict editor come later. The plan document lists
-the order.
+A conflict editor and hunk-level staging come later. The rebase editor does
+not offer `edit`, which stops the rebase part way through so a commit can be
+amended. The plan document lists the order.
 
 The diff viewer has no syntax colouring yet, and you cannot stage or roll back
 a single hunk from it. Those are the next steps for it.
@@ -537,6 +575,7 @@ in use.
 | `src/lib/components/DiffViewer.svelte` | The diff viewer. |
 | `src/lib/components/StashSection.svelte` | The stash list, at the bottom of the commit panel. |
 | `src/lib/components/SplitButton.svelte` | A button with a rarer second action behind a caret, used for Push. |
+| `src/lib/components/RebaseEditor.svelte` | The interactive rebase todo list. |
 | `src/lib/components/StatsPanel.svelte` | The Stats panel: the question the report answers. |
 | `src/lib/components/StatsReport.svelte` | The report itself. |
 | `src/lib/state/stats.svelte.ts` | The filters, and the report that came back. |

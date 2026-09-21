@@ -12,7 +12,9 @@
   import Welcome from './lib/components/Welcome.svelte';
   import Dialog from './lib/components/Dialog.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
+  import RebaseEditor from './lib/components/RebaseEditor.svelte';
   import { settingsStore } from './lib/state/settings.svelte';
+  import { rebaseStore } from './lib/state/rebase.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import DiffViewer from './lib/components/DiffViewer.svelte';
@@ -296,6 +298,7 @@
 
 <DiffViewer />
 <Dialog />
+{#if rebaseStore.open}<RebaseEditor />{/if}
 {#if settingsStore.open}<SettingsPanel />{/if}
 <Toasts />
 

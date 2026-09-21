@@ -1113,7 +1113,8 @@ product value is the **interaction model around the Git DAG**.
 
 ### P1 --- Important
 
--   [ ] Interactive rebase
+-   [~] Interactive rebase --- pick, reword, squash, fixup, drop and
+    reordering, in one editor; `edit` (stopping to amend) is not offered
 -   [x] Squash
 -   [x] Reorder --- move a commit one place at a time, up or down
 -   [x] Stash

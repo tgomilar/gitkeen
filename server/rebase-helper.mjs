@@ -92,13 +92,44 @@ if (role === 'sequence') {
 }
 
 if (role === 'message') {
-  const source = process.env.GITALIA_SQUASH_MESSAGE_FILE;
-  if (!source) {
-    console.error('rebase-helper: GITALIA_SQUASH_MESSAGE_FILE is not set');
-    process.exit(1);
+  // One message, written for every commit Git asks about. Squash uses this.
+  const single = process.env.GITALIA_SQUASH_MESSAGE_FILE;
+  if (single) {
+    writeFileSync(target, readFileSync(single, 'utf8'));
+    process.exit(0);
   }
-  writeFileSync(target, readFileSync(source, 'utf8'));
-  process.exit(0);
+
+  /*
+   * Several messages, one per reworded commit.
+   *
+   * Git runs this once per `reword`, always on COMMIT_EDITMSG, and tells us
+   * nothing about which commit it is for. What it does do is fill the file
+   * with that commit's current message first, so the message already there
+   * is the only thing identifying it.
+   *
+   * GITALIA_REWORDS holds a JSON array of { from, to }: the message to
+   * expect, and the one to write in its place. A message that matches
+   * nothing is left exactly as it was, because rewriting a commit the user
+   * did not ask to reword would be worse than doing nothing.
+   */
+  const rewords = process.env.GITALIA_REWORDS;
+  if (rewords) {
+    const plan = JSON.parse(rewords);
+    const current = readFileSync(target, 'utf8');
+    // Git's own comment lines are not part of the message.
+    const body = current
+      .split('\n')
+      .filter((line) => !line.startsWith('#'))
+      .join('\n')
+      .trim();
+
+    const match = plan.find((entry) => entry.from.trim() === body);
+    if (match) writeFileSync(target, match.to.endsWith('\n') ? match.to : `${match.to}\n`);
+    process.exit(0);
+  }
+
+  console.error('rebase-helper: no message source is set');
+  process.exit(1);
 }
 
 console.error(`rebase-helper: unknown role "${role}"`);

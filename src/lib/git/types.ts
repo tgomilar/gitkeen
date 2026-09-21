@@ -436,6 +436,44 @@ export interface MoveResult {
   direction: 'up' | 'down';
 }
 
+/** What an interactive rebase can do with one commit. */
+export type RebaseCommand = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
+
+/** One commit in the span an interactive rebase would cover. */
+export interface RebaseCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: number;
+  subject: string;
+  /** The full message, so a reword starts from what is already there. */
+  message: string;
+}
+
+/** The span an interactive rebase would cover, plus what it would cost. */
+export interface RebaseSpan extends RewriteInspection {
+  /** Oldest first, the order the todo list runs in. */
+  commits?: RebaseCommit[];
+}
+
+/** One line of the todo list, as the editor built it. */
+export interface RebasePlanEntry {
+  hash: string;
+  command: RebaseCommand;
+  message?: string;
+}
+
+export interface RebaseResult {
+  ok: boolean;
+  previousHead: string;
+  head: string;
+  /** How many commits the branch has over the base now. */
+  commits: number;
+  dropped: number;
+  combined: number;
+  reworded: number;
+}
+
 export type ResetMode = 'soft' | 'mixed' | 'hard';
 
 export interface ResetInspection {

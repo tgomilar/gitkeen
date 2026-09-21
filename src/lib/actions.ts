@@ -17,6 +17,7 @@ import type { Branch, Commit, ForcePushInspection, ResetMode, Stash, StashFile }
 import type { Change } from './changes';
 import { KIND_LABEL } from './changes';
 import { diffStore } from './state/diff.svelte';
+import { rebaseStore } from './state/rebase.svelte';
 
 /** Git's empty tree, the only thing a file with no history can be compared with. */
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -420,6 +421,15 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       hint: commit.parents.length > 1 ? 'a merge cannot be dropped' : undefined,
       disabled: commit.parents.length > 1,
       action: () => dropCommits([commit])
+    },
+    {
+      // The span runs from this commit up to HEAD, which is what
+      // `git rebase -i <this commit>~1` covers.
+      label: 'Rebase from Here…',
+      icon: 'rebase',
+      hint: 'edit this and everything newer',
+      disabled: commit.parents.length > 1,
+      action: () => rebaseStore.show(commit.hash)
     },
     SEPARATOR,
     {
