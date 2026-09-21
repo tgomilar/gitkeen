@@ -718,7 +718,12 @@ export const methods = {
       };
       if (refname.startsWith('refs/heads/')) local.push(entry);
       else if (refname.startsWith('refs/remotes/')) {
-        if (short.endsWith('/HEAD')) continue; // symbolic pointer, not a branch
+        // The full refname, not the short one: refs/remotes/origin/HEAD
+        // shortens to plain "origin", which no test on the short name can
+        // tell apart from a branch. It points at another ref already in this
+        // list, so listing it would show a phantom branch named after the
+        // remote itself.
+        if (refname.endsWith('/HEAD')) continue;
         remote.push(entry);
       } else tags.push(entry);
     }
