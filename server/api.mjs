@@ -581,6 +581,31 @@ function buildReport(commits, limit) {
   return report;
 }
 
+/**
+ * The branch a push acts on: the one named, or the checked-out one.
+ *
+ * A branch can be pushed without being checked out, so every push path takes
+ * an optional name. Without one, HEAD has to be on a branch, because a
+ * detached HEAD names nothing the remote could hold.
+ */
+async function pushTarget(path, branch) {
+  if (branch) {
+    const { code } = await runGit(path, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { allowFailure: true });
+    if (code !== 0) {
+      throw new GitError(`There is no local branch called ${branch}.`, { command: '', stderr: '', code: 1 });
+    }
+    return branch;
+  }
+  const { stdout, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+  if (code !== 0) {
+    throw new GitError(
+      'HEAD is detached, so there is no branch to push. Create a branch here first.',
+      { command: '', stderr: '', code: 1 }
+    );
+  }
+  return stdout.trim();
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -1729,20 +1754,16 @@ export const methods = {
    * Read-only. The remote-tracking refs only move when something fetches, so
    * they are refreshed first: deciding what would be overwritten from stale
    * refs is how a force push loses work nobody knew was there.
+   *
+   * `branch` names the branch to inspect. Without one it is the checked-out
+   * branch, which is what the toolbar and the commit panel ask about.
    */
-  async 'repo.inspectForcePush'({ path }) {
-    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
-    if (code !== 0) {
-      throw new GitError(
-        'HEAD is detached, so there is no branch to push.',
-        { command: '', stderr: '', code: 1 }
-      );
-    }
-    const branch = sym.trim();
+  async 'repo.inspectForcePush'({ path, branch: named = null }) {
+    const branch = await pushTarget(path, named);
 
     const { stdout: up } = await runGit(
       path,
-      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+      ['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`],
       { allowFailure: true }
     );
     const upstream = up.trim() || null;
@@ -1757,7 +1778,7 @@ export const methods = {
     // force push would throw away.
     const { stdout: lost } = await runGit(
       path,
-      ['log', '--format=' + ['%H', '%h', '%an', '%at', '%s'].join(US) + RS, `HEAD..${upstream}`],
+      ['log', '--format=' + ['%H', '%h', '%an', '%at', '%s'].join(US) + RS, `${branch}..${upstream}`],
       { allowFailure: true }
     );
     const dropped = lost
@@ -1769,7 +1790,7 @@ export const methods = {
         return { hash, shortHash, author, date: Number(when) * 1000, subject };
       });
 
-    const { stdout: ahead } = await runGit(path, ['rev-list', '--count', `${upstream}..HEAD`], { allowFailure: true });
+    const { stdout: ahead } = await runGit(path, ['rev-list', '--count', `${upstream}..${branch}`], { allowFailure: true });
 
     return {
       branch,
@@ -1784,33 +1805,41 @@ export const methods = {
   },
 
   /**
-   * Push the current branch.
+   * Push a branch, which need not be the one checked out.
    *
    * An ordinary push is never forced: Git rejects one that would lose commits,
    * and that rejection is the safety check. `force` replaces that check with
    * `--force-with-lease`, which still refuses if the remote moved since the
    * last fetch, so a force push can only discard commits the user was shown.
    */
-  async 'repo.push'({ path, remote = null, setUpstream = false, force = false }) {
-    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
-    if (code !== 0) {
-      throw new GitError(
-        'HEAD is detached, so there is no branch to push. Create a branch here first.',
-        { command: '', stderr: '', code: 1 }
-      );
-    }
-    const branch = sym.trim();
+  async 'repo.push'({ path, branch: named = null, remote = null, setUpstream = false, force = false }) {
+    const branch = await pushTarget(path, named);
     const args = ['push'];
     if (force) {
       // Never a bare --force. The lease makes Git check that the remote is
       // still where the last fetch left it, so a push cannot silently discard
       // a commit that arrived after the user was shown what would be lost.
-      args.push('--force-with-lease');
+      //
+      // The lease has to name the ref explicitly: with no argument Git checks
+      // the ref being pushed against its own remote-tracking ref, which is
+      // only the ref Git would guess when the branch is the one checked out.
+      args.push(`--force-with-lease=${branch}`);
     }
     if (setUpstream || remote) {
       if (!remote) throw new GitError('No remote to push to.', { command: '', stderr: '', code: 1 });
       if (setUpstream) args.push('--set-upstream');
       args.push(remote, branch);
+    } else if (named) {
+      // Pushing a branch that is not checked out: name it, because Git's
+      // default refspec would send HEAD instead.
+      const { stdout: on } = await runGit(
+        path,
+        ['for-each-ref', '--format=%(upstream:remotename)', `refs/heads/${branch}`],
+        { allowFailure: true }
+      );
+      const target = on.trim();
+      if (!target) throw new GitError(`${branch} does not track a remote branch.`, { command: '', stderr: '', code: 1 });
+      args.push(target, `${branch}:${branch}`);
     }
 
     const { stderr, code: pushCode } = await runGit(path, args, { allowFailure: true });

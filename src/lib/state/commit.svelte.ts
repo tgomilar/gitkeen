@@ -18,7 +18,7 @@ import { toChange } from '../changes';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
 import type {
-  HeadCommit, Stash, StashFile, SuggestProviders, KeyStatus, SuggestedGroup
+  HeadCommit, PushOptions, Stash, StashFile, SuggestProviders, KeyStatus, SuggestedGroup
 } from '../git/types';
 
 class CommitStore {
@@ -410,9 +410,7 @@ class CommitStore {
    * apart from a real failure, so it is returned rather than turned into a
    * toast, and only a genuine failure is announced here.
    */
-  async push(
-    options: { remote?: string; setUpstream?: boolean; force?: boolean } = {}
-  ): Promise<'pushed' | 'rejected' | 'failed'> {
+  async push(options: PushOptions = {}): Promise<'pushed' | 'rejected' | 'failed'> {
     const repo = repoStore.repo;
     if (!repo) return 'failed';
 

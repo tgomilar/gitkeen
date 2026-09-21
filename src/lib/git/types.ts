@@ -191,6 +191,19 @@ export interface RollbackResult {
   unstaged: number;
 }
 
+/**
+ * What to push, and how.
+ *
+ * `branch` names the branch to send. Left out, it is the checked-out branch,
+ * which is what the toolbar and the commit panel push.
+ */
+export interface PushOptions {
+  branch?: string;
+  remote?: string;
+  setUpstream?: boolean;
+  force?: boolean;
+}
+
 export interface PushResult {
   ok: boolean;
   branch: string;

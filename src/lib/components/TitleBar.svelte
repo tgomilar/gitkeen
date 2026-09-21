@@ -1,6 +1,7 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import SplitButton from './SplitButton.svelte';
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
   import {
@@ -111,9 +112,28 @@
     <button class="op" onclick={() => repoStore.refresh()} disabled={!!repoStore.busy}>
       <Icon name="refresh" />Refresh
     </button>
-    <button class="op" onclick={() => pushBranch()} disabled={!!repoStore.busy}>
-      <Icon name="push" />Push
-    </button>
+    <!--
+      Push, with force push behind the caret: the IntelliJ arrangement. The
+      rarer action that can destroy work is one step further in, and still
+      states what it would remove before it does anything.
+    -->
+    <SplitButton
+      label="Push"
+      icon="push"
+      disabled={!!repoStore.busy}
+      title={head?.detached ? 'HEAD is detached, so there is no branch to push' : 'Push this branch (⌘⇧P)'}
+      onclick={() => pushBranch()}
+      items={[
+        {
+          label: 'Force Push…',
+          icon: 'force-push',
+          danger: true,
+          hint: 'replaces the remote branch',
+          disabled: !!head?.detached,
+          action: () => forcePushBranch()
+        }
+      ]}
+    />
     <button
       class="op"
       onclick={() => createBranchFrom(repoStore.cursor ?? undefined, repoStore.cursor ? `the selected commit` : 'HEAD')}

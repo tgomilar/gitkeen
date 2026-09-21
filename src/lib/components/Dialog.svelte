@@ -148,6 +148,21 @@
 
     <div class="actions">
       <button class="btn" onclick={cancel}>{request.cancelLabel}</button>
+      <!--
+        The extra sits left of the primary and is never the default: it is the
+        other thing the user may have wanted, not the thing they asked for.
+      -->
+      {#if request.extra}
+        <button
+          class="btn"
+          class:danger-btn={request.extra.tone === 'danger'}
+          class:warn-btn={request.extra.tone === 'warning'}
+          title={request.extra.title}
+          onclick={() => dialogs.settle(request.extra!.value)}
+        >
+          {request.extra.label}
+        </button>
+      {/if}
       <button class="btn primary" onclick={submit}>{request.confirmLabel}</button>
     </div>
   </div>
@@ -356,4 +371,12 @@
   .btn.primary:hover { background: var(--accent-hover); }
 
   .dialog.danger .btn.primary { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+  /*
+    The extra action carries its own tone in the text, not in a filled
+    background: filling it would make two buttons compete to look like the
+    one to press.
+  */
+  .btn.danger-btn { color: var(--danger); }
+  .btn.warn-btn { color: var(--warning); }
 </style>

@@ -31,6 +31,21 @@ export interface DialogChoice {
   tone?: 'normal' | 'warning' | 'danger';
 }
 
+/**
+ * A second way out of a dialog, shown beside Cancel.
+ *
+ * Confirming and cancelling are the two answers to the question asked. An
+ * extra action is for the neighbouring question the user turns out to have:
+ * the push dialog offers Force Push here, so finding out mid-dialog that an
+ * ordinary push will not do does not mean cancelling and starting again.
+ */
+export interface DialogExtra {
+  value: string;
+  label: string;
+  tone?: 'normal' | 'warning' | 'danger';
+  title?: string;
+}
+
 export interface DialogRequest {
   id: number;
   title: string;
@@ -43,6 +58,7 @@ export interface DialogRequest {
   choices?: DialogChoice[];
   /** The option selected when the dialog opens. */
   chosen?: string;
+  extra?: DialogExtra;
   resolve: (value: string | boolean | null) => void;
 }
 
@@ -74,6 +90,36 @@ class DialogStore {
       cancelLabel: opts.cancelLabel ?? 'Cancel'
     });
     return result === true;
+  }
+
+  /**
+   * A confirmation with a second way out, which the caller has to handle.
+   *
+   * Resolves 'confirm' for the primary button, the extra's own value for the
+   * extra, and null for cancel, so the three answers stay distinguishable
+   * where `confirm`'s boolean could only carry two.
+   */
+  async confirmOr(opts: {
+    title: string;
+    message?: string;
+    facts?: DialogFact[];
+    tone?: 'normal' | 'warning' | 'danger';
+    confirmLabel?: string;
+    cancelLabel?: string;
+    /** Left out when the second way out does not apply to this case. */
+    extra?: DialogExtra;
+  }): Promise<string | null> {
+    const result = await this.open({
+      title: opts.title,
+      message: opts.message,
+      facts: opts.facts,
+      tone: opts.tone ?? 'normal',
+      confirmLabel: opts.confirmLabel ?? 'Continue',
+      cancelLabel: opts.cancelLabel ?? 'Cancel',
+      extra: opts.extra
+    });
+    if (result === true) return 'confirm';
+    return typeof result === 'string' ? result : null;
   }
 
   /**
@@ -133,3 +179,4 @@ export const dialogs = new DialogStore();
 export const confirm = dialogs.confirm.bind(dialogs);
 export const prompt = dialogs.prompt.bind(dialogs);
 export const choose = dialogs.choose.bind(dialogs);
+export const confirmOr = dialogs.confirmOr.bind(dialogs);

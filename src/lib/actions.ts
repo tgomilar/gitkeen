@@ -7,7 +7,7 @@
  */
 import { repoStore, describe } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
-import { confirm, prompt, choose } from './state/dialogs.svelte';
+import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -398,6 +398,12 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
 }
 
 /** Context menu for a branch in the sidebar. */
+/** How far ahead of its upstream a branch is, for a menu hint. */
+function aheadHint(branch: Branch): string | undefined {
+  if (branch.behind > 0) return `${branch.behind} behind`;
+  return branch.ahead > 0 ? `${branch.ahead} ahead` : 'up to date';
+}
+
 export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'): MenuItem[] {
   if (kind === 'tag') {
     return [
@@ -417,6 +423,31 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
     ];
   }
 
+  // A branch does not have to be checked out to be pushed, so these are
+  // offered on every local branch. What they cannot do is say what would be
+  // sent: only a branch with an upstream has a count, and a branch that has
+  // never been pushed has nothing a force could replace.
+  const publishable = !!branch.upstream || !!defaultRemote();
+  const push: MenuItem[] = [
+    {
+      label: branch.upstream ? 'Push…' : 'Push and set upstream…',
+      icon: 'push',
+      hint: branch.isHead ? '⌘⇧P' : (branch.upstream ? aheadHint(branch) : undefined),
+      disabled: !publishable,
+      action: () => pushBranch(branch.name)
+    },
+    {
+      label: 'Force Push…',
+      icon: 'force-push',
+      danger: true,
+      // Without an upstream a force is the same as an ordinary push, so
+      // offering it would name a danger that is not there.
+      hint: branch.upstream ? 'replaces the remote branch' : 'never pushed',
+      disabled: !branch.upstream,
+      action: () => forcePushBranch(branch.name)
+    }
+  ];
+
   return [
     {
       label: branch.isHead ? 'Already checked out' : `Switch to ${branch.name}`,
@@ -426,6 +457,8 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       action: () => switchToBranch(branch.name)
     },
     { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
+    SEPARATOR,
+    ...push,
     SEPARATOR,
     { label: 'Rename…', icon: 'rename', action: () => renameBranch(branch) },
     {
@@ -530,87 +563,69 @@ export async function commitChanges(): Promise<boolean> {
   return (await commitStore.commit()) !== null;
 }
 
-/** Commit, then offer to publish the branch, stating where it would go. */
+/**
+ * Commit, then offer to publish the branch.
+ *
+ * The push is `pushBranch`, not a copy of it: the confirmation, the
+ * behind-the-remote case and the force push escape hatch all have to behave
+ * the same whether the push follows a commit or stands alone.
+ */
 export async function commitAndPush() {
   if (!(await commitChanges())) return;
-
-  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
-  const remote = defaultRemote();
-
-  if (!branch) {
-    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
-    return;
-  }
-  if (!branch.upstream && !remote) {
-    toasts.error('No remote configured', `Add a remote before pushing ${branch.name}.`);
-    return;
-  }
-
-  const ok = await confirm({
-    title: `Push ${branch.name}?`,
-    message: branch.upstream
-      ? 'Your commits are sent to the remote branch this one tracks.'
-      : 'This branch has never been pushed. It will be created on the remote and set as the branch to track.',
-    facts: [
-      { label: 'Branch', value: branch.name },
-      { label: 'Target', value: branch.upstream ?? `${remote}/${branch.name} (new)` },
-      {
-        label: 'Sending',
-        // Without an upstream there is nothing to count against, so Git's
-        // "ahead" is 0 and saying so would be misleading.
-        value: branch.upstream
-          ? pluralize(branch.ahead, 'commit')
-          : 'every commit on this branch that the remote does not already have'
-      },
-      ...(branch.behind > 0
-        ? [{
-            label: 'Behind',
-            value: `${pluralize(branch.behind, 'commit')} on the remote you do not have. Git will refuse the push; pull first.`,
-            tone: 'warning' as const
-          }]
-        : [])
-    ],
-    tone: branch.behind > 0 ? 'warning' : 'normal',
-    confirmLabel: 'Push'
-  });
-  if (!ok) return;
-
-  const outcome = await commitStore.push(
-    branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
-  );
-  // Someone else pushed between the last fetch and now, so the branch looked
-  // up to date when the dialog was built. Offer the same choice here.
-  if (outcome === 'rejected') await pushRejected(branch.name);
+  await pushBranch();
 }
 
 /**
- * Push the current branch, stating where it goes before it goes.
+ * The branch a push acts on: the one named, or the one checked out.
  *
- * The plain push of `commitAndPush`, on its own, so the toolbar and the menu
- * can offer it without committing anything first.
+ * A branch does not have to be checked out to be pushed, so the sidebar can
+ * hand one in. Returns null, having said why, when there is nothing to push.
  */
-export async function pushBranch() {
-  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
-  const remote = defaultRemote();
+function pushTarget(name?: string): Branch | null {
+  const branch = name
+    ? (repoStore.branches.local.find((b) => b.name === name) ?? null)
+    : (repoStore.branches.local.find((b) => b.isHead) ?? null);
 
   if (!branch) {
-    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
-    return;
+    toasts.error(
+      'Nothing to push',
+      name ? `There is no local branch called ${name}.` : 'HEAD is detached, so there is no branch to publish.'
+    );
+    return null;
   }
-  if (!branch.upstream && !remote) {
+  if (!branch.upstream && !defaultRemote()) {
     toasts.error('No remote configured', `Add a remote before pushing ${branch.name}.`);
-    return;
+    return null;
   }
+  return branch;
+}
+
+/**
+ * Push a branch, stating where it goes before it goes.
+ *
+ * The plain push of `commitAndPush`, on its own, so the toolbar, the menu and
+ * the branch list can offer it without committing anything first. `name`
+ * pushes a branch that is not checked out; left out, it is the current one.
+ *
+ * The dialog carries Force Push as a second way out. Someone who opens this
+ * and reads that the branch is behind, or that they amended a pushed commit,
+ * has found out here that an ordinary push is not what they want; making them
+ * cancel and go looking for the other command would only hide the choice.
+ */
+export async function pushBranch(name?: string) {
+  const branch = pushTarget(name);
+  if (!branch) return;
+  const remote = defaultRemote();
 
   // Behind the remote, an ordinary push cannot succeed. Saying so and offering
   // only a button that will fail sends the user off to find another command;
   // the choice belongs here, where the problem was found.
   if (branch.upstream && branch.behind > 0) {
-    await pushRejected(branch.name);
+    await pushRejected(branch);
     return;
   }
 
-  const ok = await confirm({
+  const answer = await confirmOr({
     title: `Push ${branch.name}?`,
     message: branch.upstream
       ? 'Your commits are sent to the remote branch this one tracks.'
@@ -625,16 +640,33 @@ export async function pushBranch() {
           : 'every commit on this branch that the remote does not already have'
       }
     ],
-    confirmLabel: 'Push'
+    confirmLabel: 'Push',
+    // Nothing on the remote yet means nothing a force could replace, so the
+    // option is left off rather than offered as an empty threat.
+    extra: branch.upstream
+      ? {
+          value: 'force',
+          label: 'Force Push…',
+          tone: 'danger',
+          title: `Replace ${branch.upstream} with ${branch.name}. You are shown what would be lost first.`
+        }
+      : undefined
   });
-  if (!ok) return;
+
+  if (answer === 'force') {
+    await forcePushBranch(branch.name);
+    return;
+  }
+  if (answer !== 'confirm') return;
 
   const outcome = await commitStore.push(
-    branch.upstream ? {} : { remote: remote ?? undefined, setUpstream: true }
+    branch.upstream
+      ? { branch: branch.name }
+      : { branch: branch.name, remote: remote ?? undefined, setUpstream: true }
   );
   // Someone else pushed between the last fetch and now, so the branch looked
   // up to date when the dialog was built. Offer the same choice here.
-  if (outcome === 'rejected') await pushRejected(branch.name);
+  if (outcome === 'rejected') await pushRejected(branch);
 }
 
 /**
@@ -646,9 +678,9 @@ export async function pushBranch() {
  * names the commits it would destroy, so nothing is lost from this dialog
  * alone.
  */
-async function pushRejected(branchName: string) {
+async function pushRejected(branch: Branch) {
   const choice = await choose({
-    title: `${branchName} is behind the remote`,
+    title: `${branch.name} is behind the remote`,
     message:
       'The remote has commits this branch does not, so Git will refuse an ordinary push.',
     choices: [
@@ -672,7 +704,7 @@ async function pushRejected(branchName: string) {
     await repoStore.fetch();
     return;
   }
-  if (choice === 'force') await forcePushBranch();
+  if (choice === 'force') await forcePushBranch(branch.name);
 }
 
 /**
@@ -682,20 +714,20 @@ async function pushRejected(branchName: string) {
  * from the repository and listed commit by commit rather than described in the
  * abstract. The commits named are other people's as often as they are the
  * user's, which is exactly why they are named.
+ *
+ * `name` forces a branch that is not checked out; left out, it is the current
+ * one.
  */
-export async function forcePushBranch() {
+export async function forcePushBranch(name?: string) {
   const repo = repoStore.repo;
   if (!repo) return;
 
-  const branch = repoStore.branches.local.find((b) => b.isHead) ?? null;
-  if (!branch) {
-    toasts.error('Nothing to push', 'HEAD is detached, so there is no branch to publish.');
-    return;
-  }
+  const branch = pushTarget(name);
+  if (!branch) return;
 
   let inspection: ForcePushInspection;
   try {
-    inspection = await repo.inspectForcePush();
+    inspection = await repo.inspectForcePush(branch.name);
   } catch (err) {
     toasts.error('Could not check the remote', describe(err));
     return;
@@ -704,7 +736,7 @@ export async function forcePushBranch() {
   // Nothing on the remote to replace: an ordinary push is the honest action,
   // and forcing would claim a danger that is not there.
   if (!inspection.upstream) {
-    await pushBranch();
+    await pushBranch(branch.name);
     return;
   }
 
@@ -721,7 +753,7 @@ export async function forcePushBranch() {
       confirmLabel: 'Force push'
     });
     if (!ok) return;
-    if ((await commitStore.push({ force: true })) === 'rejected') {
+    if ((await commitStore.push({ branch: branch.name, force: true })) === 'rejected') {
       toasts.error(
         'The remote moved',
         'Commits arrived after this was checked, so nothing was sent. Look again before forcing.'
@@ -766,7 +798,7 @@ export async function forcePushBranch() {
   });
   if (!ok) return;
 
-  if ((await commitStore.push({ force: true })) === 'rejected') {
+  if ((await commitStore.push({ branch: branch.name, force: true })) === 'rejected') {
     toasts.error(
       'The remote moved',
       'Commits arrived after you were shown what would be lost, so nothing was sent. Look again before forcing.'
