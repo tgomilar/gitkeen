@@ -8,7 +8,7 @@ import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
-  ForcePushInspection, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
+  ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
   KeyStatus
@@ -176,6 +176,16 @@ export class GitRepository {
   /** Bring the upstream branch in, as a merge. */
   pull(): Promise<PullResult> {
     return transport.call('repo.pull', { path: this.path });
+  }
+
+  /** What merging a branch into the current one would do. Read-only. */
+  inspectMerge(source: string): Promise<MergeInspection> {
+    return transport.call('repo.inspectMerge', { path: this.path, source });
+  }
+
+  /** Merge a branch into the one checked out. */
+  merge(source: string): Promise<MergeResult> {
+    return transport.call('repo.merge', { path: this.path, source });
   }
 
   /** What a force push would overwrite. Read-only. Defaults to the checked-out branch. */

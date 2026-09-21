@@ -414,10 +414,20 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
     ];
   }
 
+  const current = repoStore.currentBranch;
+
   if (kind === 'remote') {
     return [
       { label: 'Check out as local branch', icon: 'switch', action: () => checkoutRemoteBranch(branch) },
       { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
+      SEPARATOR,
+      {
+        label: current ? `Merge into ${current}` : 'Merge into the current branch',
+        icon: 'merge',
+        hint: current ? undefined : 'HEAD is detached',
+        disabled: !current,
+        action: () => mergeBranch(branch.name)
+      },
       SEPARATOR,
       { label: 'Copy branch name', icon: 'copy', action: () => copy(branch.name, branch.name) }
     ];
@@ -457,6 +467,18 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       action: () => switchToBranch(branch.name)
     },
     { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
+    SEPARATOR,
+    {
+      // Merging a branch into itself is the one case Git refuses outright,
+      // so it is disabled here rather than explained in a dialog.
+      label: branch.isHead
+        ? 'Merge into itself'
+        : `Merge into ${current ?? 'the current branch'}`,
+      icon: 'merge',
+      hint: branch.isHead ? 'checked out' : undefined,
+      disabled: branch.isHead || !current,
+      action: () => mergeBranch(branch.name)
+    },
     SEPARATOR,
     ...push,
     SEPARATOR,
@@ -573,6 +595,89 @@ export async function commitChanges(): Promise<boolean> {
 export async function commitAndPush() {
   if (!(await commitChanges())) return;
   await pushBranch();
+}
+
+/**
+ * Merge a branch into the one checked out.
+ *
+ * The probe asks Git what would conflict before anything is touched, so the
+ * dialog can warn about it rather than letting the user find out halfway
+ * through. A fast-forward is allowed and named: a user who expected a merge
+ * commit should be told why there is not one.
+ */
+export async function mergeBranch(source: string) {
+  const inspection = await repoStore.inspectMerge(source);
+  const target = inspection.target ?? repoStore.currentBranch ?? 'HEAD';
+
+  if (!inspection.ok) {
+    await confirm({
+      title: `${source} cannot be merged`,
+      message: inspection.problems.join('\n\n'),
+      tone: 'warning',
+      facts: [
+        { label: 'Merging', value: source },
+        { label: 'Into', value: target }
+      ],
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return;
+  }
+
+  // Nothing to do. Saying so beats opening a dialog that would merge nothing.
+  if (inspection.alreadyMerged || (inspection.commits?.length ?? 0) === 0) {
+    toasts.info(
+      `${source} is already merged into ${target}`,
+      'Every commit on it is already here, so there is nothing to bring in.'
+    );
+    return;
+  }
+
+  const commits = inspection.commits ?? [];
+  const shown = commits.slice(0, 5);
+  const conflicts = inspection.conflicts ?? [];
+
+  const ok = await confirm({
+    title: `Merge ${source} into ${target}?`,
+    message: inspection.fastForward
+      ? `${target} has no commits of its own, so it moves straight up to ${source}. No merge commit is made.`
+      : `The commits on ${source} are joined into ${target} with a merge commit. Nothing on either branch is rewritten.`,
+    facts: [
+      { label: 'Merging', value: source },
+      { label: 'Into', value: target },
+      { label: 'Bringing in', value: pluralize(commits.length, 'commit') },
+      ...(inspection.changedFiles
+        ? [{ label: 'Touching', value: pluralize(inspection.changedFiles, 'file') }]
+        : []),
+      ...shown.map((c) => ({
+        label: 'Incoming',
+        value: `${c.shortHash}  ${c.subject} — ${c.author}, ${relativeTime(c.date)}`
+      })),
+      ...(commits.length > shown.length
+        ? [{ label: 'And', value: `${commits.length - shown.length} more` }]
+        : []),
+      // Git was asked in advance, so this is what would actually clash, not a
+      // general warning that a merge might.
+      ...(conflicts.length > 0
+        ? [
+            {
+              label: 'Will conflict',
+              value: `${pluralize(conflicts.length, 'file')}: ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? `, and ${conflicts.length - 3} more` : ''}`,
+              tone: 'warning' as const
+            },
+            { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+          ]
+        : []),
+      ...(inspection.fastForward
+        ? []
+        : [{ label: 'Result', value: 'a merge commit joining the two branches' }])
+    ],
+    tone: conflicts.length > 0 ? 'warning' : 'normal',
+    confirmLabel: inspection.fastForward ? 'Fast-forward' : 'Merge'
+  });
+  if (!ok) return;
+
+  await repoStore.merge(source);
 }
 
 /**

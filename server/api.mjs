@@ -871,6 +871,163 @@ export const methods = {
   },
 
   /**
+   * What merging `source` into the current branch would do.
+   *
+   * Read-only. Nothing is fetched: unlike a pull, the source is a ref the
+   * user already has, so refreshing it would change what they asked about.
+   */
+  async 'repo.inspectMerge'({ path, source }) {
+    const problems = [];
+
+    if (!source) return { ok: false, problems: ['No branch was given to merge.'] };
+
+    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+    if (code !== 0) {
+      return { ok: false, problems: ['HEAD is detached, so there is no branch to merge into.'] };
+    }
+    const target = sym.trim();
+
+    if (source === target) {
+      return { ok: false, source, target, problems: [`${source} is the branch you are on.`] };
+    }
+
+    const { code: exists } = await runGit(path, ['rev-parse', '--verify', '--quiet', `${source}^{commit}`], { allowFailure: true });
+    if (exists !== 0) {
+      return { ok: false, source, target, problems: [`${source} does not name a commit.`] };
+    }
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const dirty = status.files.filter((f) => f.state !== 'untracked').length;
+    const operation = await detectOperation(path);
+    if (operation) {
+      problems.push(`A ${operation} is already in progress. Finish or abort it first.`);
+    }
+    if (dirty > 0) {
+      problems.push(
+        dirty === 1
+          ? 'You have 1 uncommitted change. Commit or stash it before merging.'
+          : `You have ${dirty} uncommitted changes. Commit or stash them before merging.`
+      );
+    }
+
+    // Already merged: every commit on the source is reachable from HEAD.
+    const { code: contained } = await runGit(path, ['merge-base', '--is-ancestor', source, 'HEAD'], { allowFailure: true });
+    const alreadyMerged = contained === 0;
+
+    // A fast-forward is possible when HEAD is an ancestor of the source, so
+    // the current branch has nothing of its own to keep.
+    const { code: ancestor } = await runGit(path, ['merge-base', '--is-ancestor', 'HEAD', source], { allowFailure: true });
+    const fastForward = ancestor === 0 && !alreadyMerged;
+
+    const { stdout: incoming } = await runGit(
+      path,
+      ['log', '--format=' + ['%H', '%h', '%an', '%at', '%s'].join(US) + RS, `HEAD..${source}`],
+      { allowFailure: true }
+    );
+    const commits = incoming
+      .split(RS)
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((record) => {
+        const [hash, shortHash, author, when, subject] = record.split(US);
+        return { hash, shortHash, author, date: Number(when) * 1000, subject };
+      });
+
+    let changedFiles = 0;
+    let conflicts = [];
+    if (commits.length > 0) {
+      const { stdout: names } = await runGit(path, ['diff', '--name-only', `HEAD...${source}`], { allowFailure: true });
+      changedFiles = names.split('\n').filter((l) => l.trim()).length;
+
+      // Ask Git what would conflict, without touching the working tree or
+      // the index. Knowing this before the dialog is what lets it warn
+      // instead of leaving the user to discover it mid-merge.
+      const { stdout: base } = await runGit(path, ['merge-base', 'HEAD', source], { allowFailure: true });
+      if (base.trim()) {
+        const { stdout: tree, code: treeCode } = await runGit(
+          path,
+          ['merge-tree', '--write-tree', '--name-only', 'HEAD', source],
+          { allowFailure: true }
+        );
+        // `--write-tree` exits non-zero when the merge conflicts. It prints
+        // the resulting tree's id, then the conflicted paths, then a blank
+        // line, then Git's own messages about them. Only the paths are
+        // wanted, so everything from the blank line on is dropped.
+        //
+        // Older Git does not support this form and fails differently, in
+        // which case nothing is claimed rather than guessed.
+        if (treeCode !== 0) {
+          const [head] = tree.split('\n\n');
+          conflicts = head
+            .split('\n')
+            .slice(1) // the tree id
+            .map((l) => l.trim())
+            .filter(Boolean);
+        }
+      }
+    }
+
+    return {
+      ok: problems.length === 0,
+      problems,
+      source,
+      target,
+      commits,
+      incoming: commits.length,
+      alreadyMerged,
+      fastForward,
+      changedFiles,
+      conflicts
+    };
+  },
+
+  /**
+   * Merge a branch into the one checked out.
+   *
+   * A fast-forward is allowed, so a branch with nothing of its own moves up
+   * rather than growing a merge commit that records nothing. `--no-edit`
+   * keeps Git from opening an editor for the message it already wrote.
+   *
+   * A conflict leaves the merge open, exactly as a pull does: the status bar
+   * offers to resolve and continue, or to abandon it.
+   */
+  async 'repo.merge'({ path, source }) {
+    const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const previousHead = before.trim();
+
+    const args = ['merge', '--no-edit', source];
+    const { stderr, stdout, code } = await runGit(path, args, { allowFailure: true });
+
+    if (code !== 0) {
+      const operation = await detectOperation(path);
+      if (operation) {
+        return { ok: false, conflicted: true, operation, previousHead };
+      }
+      throw new GitError(
+        (stderr || stdout).trim() || 'The merge failed.',
+        { command: `git ${args.join(' ')}`, stderr, code }
+      );
+    }
+
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const head = after.trim();
+    const { stdout: count } = await runGit(path, ['rev-list', '--count', `${previousHead}..${head}`], { allowFailure: true });
+    const { stdout: merges } = await runGit(path, ['rev-list', '--count', '--merges', `${previousHead}..${head}`], { allowFailure: true });
+
+    return {
+      ok: true,
+      conflicted: false,
+      applied: Number(count.trim() || 0),
+      previousHead,
+      head,
+      upToDate: previousHead === head,
+      /** False when the branch simply moved up, so no merge commit was made. */
+      mergeCommit: Number(merges.trim() || 0) > 0,
+      output: (stdout || stderr).trim()
+    };
+  },
+
+  /**
    * Bring the upstream branch in.
    *
    * Always a merge: `--no-rebase` makes that explicit rather than leaving it

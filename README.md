@@ -32,6 +32,7 @@ work, and change the history you already have.
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish a branch, and create it on the remote if it is new. Force push replaces the remote branch, after showing what it would remove. |
 | Pull | Bring the upstream branch in, after showing what is coming. |
+| Merge | Join another branch into this one, after showing what would conflict. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
@@ -249,6 +250,32 @@ abandon the merge and put the branch back as it was.
 When a push is refused because the branch is behind, the dialog that explains
 it now offers to pull as the first way out.
 
+## Merging a branch into this one
+
+Right click a branch in the sidebar, in either the Local or the Remote
+section, and choose **Merge into <current branch>**. The item names the branch
+you are on, so it is always clear which way the merge goes.
+
+Before anything is touched, Gitalia asks Git what the merge would do and shows
+it: how many commits are coming, how many files they touch, the first few
+commits by subject and author, and **which files would conflict**. That last
+part is a real answer from Git, not a general warning, and finding it out
+costs nothing: the working tree is not touched and no merge is started.
+
+If the branch you are on has no commits of its own, Gitalia fast-forwards it.
+The branch simply moves up and no merge commit is made, which the dialog says
+plainly so an absent merge commit is never a surprise. Otherwise Git joins the
+two branches with a merge commit. Nothing on either branch is rewritten.
+
+Merging is refused, with the reason named, when you have uncommitted changes,
+when another operation is already running, when HEAD is detached, or when the
+branch is the one you are already on. An untracked file does not block a
+merge. If the branch is already contained in this one, Gitalia says so and
+stops rather than making an empty merge.
+
+A conflicted merge is left open, the same as a conflicted pull: resolve the
+files in the commit panel, then continue or abandon it from the status bar.
+
 ## Stashing work you are not ready to commit
 
 Sometimes you need your working tree clean but you are not finished. Tick the
@@ -345,9 +372,8 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-Interactive rebase, merge and a conflict editor all come later. Tags are shown
-in the graph but cannot yet be created or deleted. The plan document lists the
-order.
+Interactive rebase and a conflict editor come later. Tags are shown in the
+graph but cannot yet be created or deleted. The plan document lists the order.
 
 The diff viewer has no syntax colouring yet, and you cannot stage or roll back
 a single hunk from it. Those are the next steps for it.

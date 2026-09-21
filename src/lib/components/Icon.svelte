@@ -14,7 +14,8 @@
     // Context menu actions.
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
-    | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull';
+    | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull'
+    | 'merge';
 
   interface Props {
     name: IconName;
@@ -128,6 +129,13 @@
     <path d="M8 13.7V7.6" />
     <path d="M5.9 9.7 8 7.6l2.1 2.1" />
     <path d="M2.4 13.6 13.6 2.4" />
+  {:else if name === 'merge'}
+    <!-- Two lines joining into one: a side branch coming back to the trunk. -->
+    <circle cx="4.4" cy="3.2" r="1.6" />
+    <circle cx="11.6" cy="3.2" r="1.6" />
+    <circle cx="4.4" cy="12.8" r="1.6" />
+    <path d="M4.4 4.8v6.4" />
+    <path d="M11.6 4.8v1.4a3 3 0 0 1-3 3H6" />
   {:else if name === 'pull'}
     <!-- The cloud's contents coming down onto the branch, not just into the
          repository: fetch with the arrow landing on a line. -->

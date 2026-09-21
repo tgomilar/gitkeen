@@ -1117,7 +1117,7 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Squash
 -   [ ] Reorder
 -   [x] Stash
--   [ ] Merge
+-   [x] Merge --- from the branch menus, fast-forward when it can
 -   [x] Conflict detection --- detected and marked resolved; no editor yet
 -   [ ] Partial staging --- whole files only, no hunk staging
 -   [ ] Tags --- shown in the graph, but cannot be created or deleted

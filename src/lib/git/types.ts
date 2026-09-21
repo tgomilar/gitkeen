@@ -253,6 +253,40 @@ export interface PullResult {
   output?: string;
 }
 
+/** What a merge would do, read before the confirmation is shown. */
+export interface MergeInspection {
+  ok: boolean;
+  /** Reasons the merge cannot run, written for the user. */
+  problems: string[];
+  source?: string;
+  target?: string;
+  /** What the merge would bring in, newest first. */
+  commits?: IncomingCommit[];
+  incoming?: number;
+  /** True when the source is already contained in the current branch. */
+  alreadyMerged?: boolean;
+  /** True when the branch would simply move up, with no merge commit. */
+  fastForward?: boolean;
+  changedFiles?: number;
+  /** Paths Git says would conflict, found without touching the working tree. */
+  conflicts?: string[];
+}
+
+/** The outcome of a merge. */
+export interface MergeResult {
+  ok: boolean;
+  /** True when Git stopped on a conflict and left the merge open. */
+  conflicted: boolean;
+  operation?: OperationState;
+  applied?: number;
+  previousHead: string;
+  head?: string;
+  upToDate?: boolean;
+  /** False when the branch simply moved up, so no merge commit was made. */
+  mergeCommit?: boolean;
+  output?: string;
+}
+
 /** A commit a force push would remove from the remote. */
 export interface DroppedCommit {
   hash: string;

@@ -9,8 +9,10 @@ import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
-  PullInspection, PullResult, RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult, Stash
+  MergeInspection, MergeResult, PullInspection, PullResult, RepositoryInfo, ResetInspection,
+  ResetMode, SquashInspection, SquashResult, Stash
 } from '../git/types';
+import { pluralize } from '../format';
 import { toasts } from './toasts.svelte';
 import { rememberRepo } from './recent';
 
@@ -356,6 +358,52 @@ class RepoStore {
     } finally {
       this.busy = null;
     }
+  }
+
+  /**
+   * Merge a branch into the one checked out.
+   *
+   * Reported like a pull: a conflict is not a failure, and a fast-forward is
+   * worth naming, because a user who expected a merge commit and did not get
+   * one should be told why rather than left to read the graph.
+   */
+  async merge(source: string): Promise<MergeResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = `Merging ${source}`;
+    try {
+      const result = await repo.merge(source);
+      await this.refresh();
+
+      if (result.conflicted) {
+        toasts.error(
+          `Merging ${source} stopped on a conflict`,
+          'Resolve the conflicted files, then continue or abandon the merge from the status bar.'
+        );
+      } else if (result.upToDate) {
+        toasts.info(`${source} was already merged`, 'Nothing changed.');
+      } else {
+        toasts.success(
+          `Merged ${source} into ${this.currentBranch ?? 'HEAD'}`,
+          result.mergeCommit
+            ? `${pluralize(result.applied ?? 0, 'commit')} came in, with a merge commit.`
+            : `The branch moved straight up. No merge commit was needed.`
+        );
+      }
+      return result;
+    } catch (err) {
+      toasts.error(`Could not merge ${source}`, describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  inspectMerge(source: string): Promise<MergeInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.inspectMerge(source).catch((err) => ({ ok: false, problems: [describe(err)] }));
   }
 
   inspectPull(): Promise<PullInspection> {
