@@ -15,7 +15,7 @@
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
     | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull'
-    | 'merge';
+    | 'merge' | 'move-up' | 'move-down' | 'drop';
 
   interface Props {
     name: IconName;
@@ -129,6 +129,21 @@
     <path d="M8 13.7V7.6" />
     <path d="M5.9 9.7 8 7.6l2.1 2.1" />
     <path d="M2.4 13.6 13.6 2.4" />
+  {:else if name === 'move-up'}
+    <!-- A commit moving one place towards the top of the history. -->
+    <circle cx="8" cy="12.4" r="1.6" />
+    <path d="M8 10.2V4.1" />
+    <path d="M5.5 6.4 8 3.9l2.5 2.5" />
+  {:else if name === 'move-down'}
+    <circle cx="8" cy="3.6" r="1.6" />
+    <path d="M8 5.8v6.1" />
+    <path d="M5.5 9.6 8 12.1l2.5-2.5" />
+  {:else if name === 'drop'}
+    <!-- A commit lifted out of the line it sat in. -->
+    <path d="M3 3.2h10" />
+    <path d="M3 12.8h10" />
+    <path d="M5.6 5.8 10.4 10.2" />
+    <path d="M10.4 5.8 5.6 10.2" />
   {:else if name === 'merge'}
     <!-- Two lines joining into one: a side branch coming back to the trunk. -->
     <circle cx="4.4" cy="3.2" r="1.6" />

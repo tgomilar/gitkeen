@@ -337,6 +337,12 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
         action: () => cherryPickCommits(selected)
       },
       {
+        label: `Drop ${selection.length} Commits…`,
+        icon: 'drop',
+        danger: true,
+        action: () => dropCommits(selected)
+      },
+      {
         label: `Revert ${selection.length} Commits…`,
         icon: 'revert',
         action: () => revertCommits(selected)
@@ -394,6 +400,29 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
     },
     SEPARATOR,
     {
+      label: 'Move Up',
+      icon: 'move-up',
+      hint: isHead ? 'already newest' : 'one place later',
+      disabled: isHead || commit.parents.length > 1,
+      action: () => moveCommit(commit, 'up')
+    },
+    {
+      label: 'Move Down',
+      icon: 'move-down',
+      hint: 'one place earlier',
+      disabled: commit.parents.length > 1,
+      action: () => moveCommit(commit, 'down')
+    },
+    {
+      label: 'Drop Commit…',
+      icon: 'drop',
+      danger: true,
+      hint: commit.parents.length > 1 ? 'a merge cannot be dropped' : undefined,
+      disabled: commit.parents.length > 1,
+      action: () => dropCommits([commit])
+    },
+    SEPARATOR,
+    {
       label: 'Cherry-Pick…',
       icon: 'cherry-pick',
       hint: commit.parents.length > 1 ? 'a merge cannot be copied' : 'copy onto this branch',
@@ -416,6 +445,120 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
   );
 
   return items;
+}
+
+/* ------------------------------------------------------------------ *
+ * Moving and removing commits
+ * ------------------------------------------------------------------ */
+
+/** Shared opening for the rewrites: show whatever stops them. */
+async function rewriteBlocked(title: string, problems: string[], count: number) {
+  await confirm({
+    title,
+    message: problems.join('\n\n'),
+    tone: 'warning',
+    facts: [{ label: 'Selected', value: pluralize(count, 'commit') }],
+    confirmLabel: 'Close',
+    cancelLabel: 'Back'
+  });
+}
+
+/**
+ * Remove commits from the branch.
+ *
+ * This is not a revert: nothing records that the commit was ever there, and
+ * the change it made goes with it. That is the thing the dialog has to make
+ * unmistakable, along with the fact that everything after it is rewritten.
+ */
+export async function dropCommits(commits: Commit[]) {
+  if (commits.length === 0) return;
+  const hashes = commits.map((c) => c.hash);
+
+  const inspection = await repoStore.inspectRewrite(hashes, 'drop');
+  if (!inspection.ok) {
+    await rewriteBlocked('These commits cannot be dropped', inspection.problems, commits.length);
+    return;
+  }
+
+  const rewritten = inspection.rewritten ?? [];
+  const replayed = rewritten.length - commits.length;
+  const published = inspection.published ?? [];
+  const shown = commits.slice(0, 5);
+
+  const ok = await confirm({
+    title: commits.length === 1 ? 'Drop this commit?' : `Drop ${commits.length} commits?`,
+    message:
+      'The commits are removed from the branch and the changes they made go with them. This is not a revert: nothing is left behind to say they were ever here.',
+    tone: 'danger',
+    facts: [
+      { label: 'Branch', value: inspection.branch ?? repoStore.currentBranch ?? 'detached HEAD' },
+      ...shown.map((c) => ({
+        label: 'Dropping',
+        value: `${c.shortHash}  ${c.subject}`,
+        tone: 'danger' as const
+      })),
+      ...(commits.length > shown.length
+        ? [{ label: 'And', value: `${commits.length - shown.length} more`, tone: 'danger' as const }]
+        : []),
+      ...(replayed > 0
+        ? [{ label: 'Rewritten', value: `${pluralize(replayed, 'later commit')} will get a new hash` }]
+        : []),
+      ...(published.length > 0
+        ? [{
+            label: 'Already pushed',
+            value: `Some of these are on ${published.join(', ')}. Publishing the result needs a force push, and anyone who pulled them keeps them.`,
+            tone: 'warning' as const
+          }]
+        : []),
+      { label: 'Instead', value: 'Cancel and revert them if you want the history to record the undo.' }
+    ],
+    confirmLabel: commits.length === 1 ? 'Drop it' : `Drop ${commits.length} commits`
+  });
+  if (!ok) return;
+
+  await repoStore.drop(hashes);
+}
+
+/**
+ * Move a commit one place through the history.
+ *
+ * One step per click. Replaying a commit somewhere else can conflict, and a
+ * conflict mid-rebase is the part worth warning about, because Gitalia
+ * abandons the move rather than leaving a rebase open.
+ */
+export async function moveCommit(commit: Commit, direction: 'up' | 'down') {
+  const inspection = await repoStore.inspectRewrite([commit.hash], 'move');
+  if (!inspection.ok) {
+    await rewriteBlocked('This commit cannot be moved', inspection.problems, 1);
+    return;
+  }
+
+  const published = inspection.published ?? [];
+
+  // Only the published case is worth stopping for. An unpublished reorder is
+  // cheap, reversible with the hash the toast names, and asking every time
+  // would make moving three places a five-dialog job.
+  if (published.length > 0) {
+    const ok = await confirm({
+      title: direction === 'up' ? 'Move this commit later?' : 'Move this commit earlier?',
+      message:
+        'Moving a commit rewrites it and everything after it, so they all get new hashes.',
+      tone: 'warning',
+      facts: [
+        { label: 'Commit', value: `${commit.shortHash}  ${commit.subject}` },
+        {
+          label: 'Already pushed',
+          value: `This history is on ${published.join(', ')}. Publishing the result needs a force push.`,
+          tone: 'warning'
+        },
+        { label: 'If it conflicts', value: 'the move is abandoned and the branch is left as it was' }
+      ],
+      confirmLabel: 'Move it'
+    });
+    if (!ok) return;
+  }
+
+  await repoStore.move(commit.hash, direction);
 }
 
 /* ------------------------------------------------------------------ *

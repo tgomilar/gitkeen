@@ -8,7 +8,8 @@ import { GitRepository } from '../git/repository';
 import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
-  ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
+  ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, DropResult, GitStatus,
+  HeadInfo, MoveResult, RewriteInspection,
   MergeInspection, MergeResult, PullInspection, PullResult, RepositoryInfo, ResetInspection,
   ResetMode, SquashInspection, SquashResult, Stash, TagInspection
 } from '../git/types';
@@ -319,6 +320,61 @@ class RepoStore {
 
   deleteTag(name: string) {
     return this.operate(`Deleting ${name}`, (r) => r.deleteTag(name), `Deleted tag ${name}`);
+  }
+
+  /**
+   * Remove commits from the branch.
+   *
+   * Reported like a reset: the previous HEAD is named in the message, because
+   * a rewrite cannot be undone through Gitalia and that hash is what makes it
+   * recoverable with `git reset` from the terminal.
+   */
+  async drop(hashes: string[]): Promise<DropResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = hashes.length === 1 ? 'Dropping 1 commit' : `Dropping ${hashes.length} commits`;
+    try {
+      const result = await repo.drop(hashes);
+      await this.refresh();
+      toasts.success(
+        `Dropped ${pluralize(result.dropped, 'commit')}`,
+        `The branch was at ${result.previousHead.slice(0, 7)} before.`
+      );
+      return result;
+    } catch (err) {
+      toasts.error('Could not drop', describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  async move(hash: string, direction: 'up' | 'down'): Promise<MoveResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = 'Moving the commit';
+    try {
+      const result = await repo.move(hash, direction);
+      await this.refresh();
+      toasts.success(
+        direction === 'up' ? 'Moved the commit later' : 'Moved the commit earlier',
+        `The branch was at ${result.previousHead.slice(0, 7)} before.`
+      );
+      return result;
+    } catch (err) {
+      toasts.error('Could not move the commit', describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  inspectRewrite(hashes: string[], mode: 'drop' | 'move'): Promise<RewriteInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.inspectRewrite(hashes, mode).catch((err) => ({ ok: false, problems: [describe(err)] }));
   }
 
   inspectTag(name: string): Promise<TagInspection | null> {

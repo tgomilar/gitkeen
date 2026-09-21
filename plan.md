@@ -1115,7 +1115,7 @@ product value is the **interaction model around the Git DAG**.
 
 -   [ ] Interactive rebase
 -   [x] Squash
--   [ ] Reorder
+-   [x] Reorder --- move a commit one place at a time, up or down
 -   [x] Stash
 -   [x] Merge --- from the branch menus, fast-forward when it can
 -   [x] Conflict detection --- detected and marked resolved; no editor yet

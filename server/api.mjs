@@ -606,6 +606,47 @@ async function pushTarget(path, branch) {
   return stdout.trim();
 }
 
+/** The first parent of a commit, which is where a rebase over it starts. */
+async function firstParentOf(path, hash) {
+  const { stdout } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+  const ids = stdout.trim().split(' ');
+  return ids[1] ?? hash;
+}
+
+/**
+ * Run `git rebase -i` with an exact todo list, leaving nothing half-finished.
+ *
+ * The helper writes the plan verbatim, so this is where reorder and drop
+ * actually happen. A failure aborts the rebase rather than leaving the
+ * repository stopped in the middle of one, because a user who asked to move
+ * a commit did not ask to be handed a rebase to finish by hand.
+ */
+async function runRebasePlan(path, base, todo) {
+  const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+  const env = {
+    GIT_SEQUENCE_EDITOR: `${editor} sequence`,
+    GITALIA_TODO: todo
+  };
+  try {
+    await runGit(path, ['rebase', '--interactive', base], { env });
+  } catch (err) {
+    await runGit(path, ['rebase', '--abort'], { allowFailure: true });
+
+    // A conflict here is not something the user can resolve and continue:
+    // the rebase has already been abandoned, so say what happened and what
+    // the branch looks like now, rather than passing Git's progress output
+    // on as if it were an error message.
+    const text = `${err?.stderr ?? ''}\n${err?.message ?? ''}`;
+    if (/could not apply|CONFLICT|Merge conflict/i.test(text)) {
+      throw new GitError(
+        'The commits could not be replayed in that order: one of them depends on a change another makes. Nothing was altered, and the branch is as it was.',
+        { command: 'git rebase --interactive', stderr: err?.stderr ?? '', code: 1 }
+      );
+    }
+    throw err;
+  }
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -1301,15 +1342,31 @@ export const methods = {
       return { ok: true, commit: created.trim(), previousHead: head, replayed: 0 };
     }
 
+    const newestHash = hashes[0];
     const dir = await mkdtemp(join(tmpdir(), 'gitalia-squash-'));
     const messageFile = join(dir, 'message.txt');
     await writeFile(messageFile, text, 'utf8');
+
+    // The plan, oldest first: the oldest selected commit keeps its pick and
+    // the rest fold into it, then everything after it is replayed untouched.
+    const selected = [...hashes].reverse();
+    const { stdout: after } = await runGit(
+      path,
+      ['rev-list', '--reverse', `${newestHash}..HEAD`],
+      { allowFailure: true }
+    );
+    const replayedHashes = after.split('\n').map((h) => h.trim()).filter(Boolean);
+
+    const todo = [
+      ...selected.map((sha, i) => `${i === 0 ? 'pick' : 'squash'} ${sha}`),
+      ...replayedHashes.map((sha) => `pick ${sha}`)
+    ].join('\n');
 
     const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
     const env = {
       GIT_SEQUENCE_EDITOR: `${editor} sequence`,
       GIT_EDITOR: `${editor} message`,
-      GITALIA_SQUASH_COUNT: String(hashes.length),
+      GITALIA_TODO: todo,
       GITALIA_SQUASH_MESSAGE_FILE: messageFile
     };
 
@@ -1325,6 +1382,214 @@ export const methods = {
 
     const { stdout: newHead } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     return { ok: true, commit: newHead.trim(), previousHead: head, replayed: inspection.replayed };
+  },
+
+  /**
+   * Shared groundwork for the rewrites that move or remove commits.
+   *
+   * Both run `git rebase -i` over the same span, so both need the same
+   * answers: is the working tree clean, is the commit on this branch, what
+   * would be rewritten, and has any of it been published. Read-only.
+   */
+  async 'commits.inspectRewrite'({ path, hashes, mode }) {
+    const problems = [];
+
+    if (!Array.isArray(hashes) || hashes.length === 0) {
+      return { ok: false, problems: ['Select at least one commit.'] };
+    }
+
+    const parents = new Map();
+    for (const hash of hashes) {
+      const { stdout, code } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
+      if (code !== 0) return { ok: false, problems: [`Commit ${hash.slice(0, 7)} no longer exists.`] };
+      parents.set(hash, stdout.trim().split(' ').slice(1));
+    }
+
+    const merges = hashes.filter((h) => (parents.get(h) ?? []).length > 1);
+    if (merges.length > 0) {
+      problems.push(
+        `The selection contains ${merges.length === 1 ? 'a merge commit' : `${merges.length} merge commits`}. Rewriting history across a merge is not supported.`
+      );
+    }
+
+    const { stdout: headOid } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const head = headOid.trim();
+
+    // Everything must be on the current branch, or rebase has nothing to move.
+    for (const hash of hashes) {
+      const { code } = await runGit(path, ['merge-base', '--is-ancestor', hash, 'HEAD'], { allowFailure: true });
+      if (code !== 0) {
+        problems.push(`${hash.slice(0, 7)} is not in the history of the current branch.`);
+        break;
+      }
+    }
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const dirty = status.files.filter((f) => f.state !== 'untracked').length;
+    if (dirty > 0) {
+      problems.push(
+        dirty === 1
+          ? 'You have 1 uncommitted change. Commit or stash it first.'
+          : `You have ${dirty} uncommitted changes. Commit or stash them first.`
+      );
+    }
+    if (status.operation) {
+      problems.push(`A ${status.operation} is already in progress. Finish or abort it first.`);
+    }
+
+    // The oldest commit involved decides where the rebase starts.
+    const oldest = hashes[hashes.length - 1];
+    const base = (parents.get(oldest) ?? [])[0] ?? null;
+    if (!base) {
+      problems.push('This reaches the first commit of the repository, which cannot be rewritten this way.');
+    }
+
+    // Everything from the base up is rewritten and gets a new hash.
+    let rewritten = [];
+    if (base) {
+      const { stdout: span } = await runGit(
+        path,
+        ['log', '--format=' + ['%H', '%h', '%s'].join(US) + RS, `${base}..HEAD`],
+        { allowFailure: true }
+      );
+      rewritten = span
+        .split(RS)
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .map((record) => {
+          const [hash, shortHash, subject] = record.split(US);
+          return { hash, shortHash, subject };
+        });
+    }
+
+    // Anything already on a remote is the part that costs a force push.
+    const published = [];
+    for (const commit of rewritten) {
+      const { stdout: on } = await runGit(
+        path,
+        ['branch', '--remotes', '--contains', commit.hash, '--format=%(refname:short)'],
+        { allowFailure: true }
+      );
+      for (const ref of on.split('\n').map((r) => r.trim()).filter(Boolean)) {
+        if (!published.includes(ref)) published.push(ref);
+      }
+    }
+
+    const { stdout: branch } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+
+    return {
+      ok: problems.length === 0,
+      problems,
+      mode,
+      base,
+      head,
+      branch: branch.trim() || null,
+      /** Commits that would be rewritten, newest first. Includes the selection. */
+      rewritten,
+      published
+    };
+  },
+
+  /**
+   * Remove commits from the branch entirely.
+   *
+   * The change they made goes with them, which is what separates this from a
+   * revert: nothing records that the commit was ever there. Everything after
+   * them is replayed and gets a new hash.
+   */
+  async 'commits.drop'({ path, hashes }) {
+    const inspection = await methods['commits.inspectRewrite']({ path, hashes, mode: 'drop' });
+    if (!inspection.ok) {
+      throw new GitError(inspection.problems.join('\n'), { command: '', stderr: '', code: 1 });
+    }
+
+    const { base, head, rewritten } = inspection;
+    const dropping = new Set(hashes);
+    if (rewritten.every((c) => dropping.has(c.hash))) {
+      // Every commit in the span goes, so there is nothing for rebase to
+      // replay. Moving the branch back is the same result and cannot conflict.
+      await git(path, ['reset', '--hard', base]);
+      return { ok: true, previousHead: head, head: base, dropped: hashes.length, replayed: 0 };
+    }
+
+    // Oldest first, which is the order the todo list runs in.
+    const todo = [...rewritten]
+      .reverse()
+      .map((c) => `${dropping.has(c.hash) ? 'drop' : 'pick'} ${c.hash}`)
+      .join('\n');
+
+    await runRebasePlan(path, base, todo);
+
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return {
+      ok: true,
+      previousHead: head,
+      head: after.trim(),
+      dropped: hashes.length,
+      replayed: rewritten.length - hashes.length
+    };
+  },
+
+  /**
+   * Move one commit one place earlier or later in the history.
+   *
+   * One step at a time, so the result of each move is a history the user can
+   * read and judge before making the next one.
+   */
+  async 'commits.move'({ path, hash, direction }) {
+    if (direction !== 'up' && direction !== 'down') {
+      throw new GitError('A move must be "up" or "down".', { command: '', stderr: '', code: 1 });
+    }
+
+    // `up` means later in history, which is towards HEAD and so earlier in a
+    // newest-first list.
+    //
+    // The whole branch is listed, not just the part above the commit: moving
+    // the newest commit down needs the one below it, which a range starting
+    // at this commit's own parent would not contain.
+    const { stdout: listing } = await runGit(
+      path,
+      ['log', '--format=%H', '--first-parent', 'HEAD'],
+      { allowFailure: true }
+    );
+    const order = listing.split('\n').map((h) => h.trim()).filter(Boolean); // newest first
+    const at = order.indexOf(hash);
+    if (at === -1) {
+      throw new GitError('That commit is not on the current branch.', { command: '', stderr: '', code: 1 });
+    }
+
+    const neighbour = direction === 'up' ? at - 1 : at + 1;
+    if (neighbour < 0) {
+      throw new GitError('That commit is already the newest on this branch.', { command: '', stderr: '', code: 1 });
+    }
+    if (neighbour >= order.length) {
+      throw new GitError('That commit is already the oldest that can be moved.', { command: '', stderr: '', code: 1 });
+    }
+
+    // The span to rebase starts below whichever of the two sits lower.
+    const lowest = order[Math.max(at, neighbour)];
+    const inspection = await methods['commits.inspectRewrite']({ path, hashes: [lowest], mode: 'move' });
+    if (!inspection.ok) {
+      throw new GitError(inspection.problems.join('\n'), { command: '', stderr: '', code: 1 });
+    }
+
+    const { base, head, rewritten } = inspection;
+
+    // Swap the pair, then write the span out oldest first.
+    const swapped = [...rewritten.map((c) => c.hash)];
+    const i = swapped.indexOf(hash);
+    const j = swapped.indexOf(order[neighbour]);
+    if (i === -1 || j === -1) {
+      throw new GitError('The commits to swap are no longer where they were.', { command: '', stderr: '', code: 1 });
+    }
+    [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
+
+    const todo = swapped.reverse().map((sha) => `pick ${sha}`).join('\n');
+
+    await runRebasePlan(path, base, todo);
+
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    return { ok: true, previousHead: head, head: after.trim(), moved: hash, direction };
   },
 
   /**

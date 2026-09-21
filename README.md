@@ -34,6 +34,8 @@ work, and change the history you already have.
 | Pull | Bring the upstream branch in, after showing what is coming. |
 | Merge | Join another branch into this one, after showing what would conflict. |
 | Tags | Name a commit, with or without a description, and delete tags. |
+| Reorder | Move a commit one place earlier or later in the history. |
+| Drop | Remove commits from the branch entirely. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
@@ -250,6 +252,35 @@ abandon the merge and put the branch back as it was.
 
 When a push is refused because the branch is behind, the dialog that explains
 it now offers to pull as the first way out.
+
+## Moving and removing commits
+
+Both of these rewrite history. Gitalia drives real `git rebase --interactive`
+underneath, writing the todo list for you, so the result is what Git would
+have produced had you edited that list by hand.
+
+**Move Up** and **Move Down** in a commit's menu shift it one place towards or
+away from HEAD. One step per click, so you can read the result before taking
+the next one. **Drop Commit** removes a commit and the change it made.
+
+Dropping is not reverting, and the dialog says so. A revert adds a new commit
+that undoes an old one, and the history records both. Dropping takes the
+commit out as though it had never been made, so nothing is left to say it was
+there. If you want the record, cancel and revert instead.
+
+Everything after the commit you touch is replayed and gets a new hash. The
+dialog says how many commits that is, and warns you when any of them have
+already been pushed, because publishing the result then needs a force push.
+
+If the commits cannot be replayed in the new order, because one depends on a
+change another makes, Gitalia abandons the attempt and puts the branch back
+exactly as it was. You are never left with a half-finished rebase to sort out.
+Nothing is altered, and the message says so.
+
+Neither is offered for a merge commit.
+
+Both name the branch's previous position in the message that follows. Gitalia
+cannot undo a rewrite, but `git reset --hard <that hash>` in a terminal can.
 
 ## Tagging a commit
 

@@ -398,6 +398,44 @@ export interface ApplyResult {
   head?: string;
 }
 
+/** A commit a rewrite would give a new hash. */
+export interface RewrittenCommit {
+  hash: string;
+  shortHash: string;
+  subject: string;
+}
+
+/** What moving or dropping commits would cost, read before the dialog. */
+export interface RewriteInspection {
+  ok: boolean;
+  /** Reasons the rewrite cannot run, written for the user. */
+  problems: string[];
+  mode?: 'drop' | 'move';
+  base?: string | null;
+  head?: string;
+  branch?: string | null;
+  /** Commits that would be rewritten, newest first. Includes the selection. */
+  rewritten?: RewrittenCommit[];
+  /** Remote branches holding any of them, which a rewrite would need forcing. */
+  published?: string[];
+}
+
+export interface DropResult {
+  ok: boolean;
+  previousHead: string;
+  head: string;
+  dropped: number;
+  replayed: number;
+}
+
+export interface MoveResult {
+  ok: boolean;
+  previousHead: string;
+  head: string;
+  moved: string;
+  direction: 'up' | 'down';
+}
+
 export type ResetMode = 'soft' | 'mixed' | 'hard';
 
 export interface ResetInspection {

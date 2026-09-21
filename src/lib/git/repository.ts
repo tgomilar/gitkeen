@@ -7,7 +7,8 @@
 import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
-  CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
+  CommitResult, DropResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, MoveResult,
+  OperationResult, RewriteInspection,
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
@@ -235,6 +236,22 @@ export class GitRepository {
   /** Undo commits with new commits that reverse them. */
   revert(hashes: string[], mainline = 1): Promise<ApplyResult> {
     return transport.call('commits.revert', { path: this.path, hashes, mainline });
+  }
+
+  /* Moving and removing commits, both of which rewrite history. */
+
+  inspectRewrite(hashes: string[], mode: 'drop' | 'move'): Promise<RewriteInspection> {
+    return transport.call('commits.inspectRewrite', { path: this.path, hashes, mode });
+  }
+
+  /** Remove commits from the branch. Hashes come newest first. */
+  drop(hashes: string[]): Promise<DropResult> {
+    return transport.call('commits.drop', { path: this.path, hashes });
+  }
+
+  /** Move one commit one place towards HEAD (`up`) or away from it (`down`). */
+  move(hash: string, direction: 'up' | 'down'): Promise<MoveResult> {
+    return transport.call('commits.move', { path: this.path, hash, direction });
   }
 
   /** What a reset would cost, read before anything moves. */

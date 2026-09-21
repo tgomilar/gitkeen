@@ -4,11 +4,19 @@
  *
  * Git is told to run this file in two roles:
  *
- *   sequence  rewrite the todo list, turning the selected commits into one
+ *   sequence  rewrite the todo list into the plan Gitalia decided on
  *   message   write the final commit message
  *
  * Doing it this way means the user never sees an editor, and Gitalia keeps
  * using real Git rather than reimplementing what rebase does.
+ *
+ * The sequence role takes its plan from the environment rather than working
+ * it out here. GITALIA_TODO holds one command per selected commit, oldest
+ * first, as newline-separated `<command> <sha>` pairs. The helper checks that
+ * the todo list Git produced holds exactly the commits the plan names, in the
+ * order it expects, and refuses rather than guessing if it does not: writing
+ * a todo list that does not match the plan is how a rebase silently loses a
+ * commit.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -21,29 +29,65 @@ if (!role || !target) {
 }
 
 if (role === 'sequence') {
-  const count = Number(process.env.GITALIA_SQUASH_COUNT);
-  if (!Number.isInteger(count) || count < 2) {
-    console.error('rebase-helper: GITALIA_SQUASH_COUNT must be 2 or more');
+  const plan = (process.env.GITALIA_TODO ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [command, sha] = line.split(/\s+/);
+      return { command, sha };
+    });
+
+  if (plan.length === 0) {
+    console.error('rebase-helper: GITALIA_TODO is empty');
     process.exit(1);
   }
 
   const lines = readFileSync(target, 'utf8').split('\n');
-  let picked = 0;
-  const rewritten = lines.map((line) => {
-    // Only real todo commands count; comments and blanks are left alone.
-    if (!/^pick\s/.test(line)) return line;
-    picked++;
-    // The oldest selected commit keeps its pick and absorbs the rest.
-    if (picked === 1 || picked > count) return line;
-    return line.replace(/^pick\s/, 'squash ');
-  });
 
-  if (picked < count) {
-    console.error(`rebase-helper: expected at least ${count} commits in the todo list, found ${picked}`);
+  // The commits Git listed, oldest first, in the order it means to apply them.
+  const picks = [];
+  for (const line of lines) {
+    const match = /^pick\s+(\S+)/.exec(line);
+    if (match) picks.push(match[1]);
+  }
+
+  // Git abbreviates in the todo list, so the plan's full hashes are matched
+  // by prefix in whichever direction the abbreviation runs.
+  const same = (a, b) => a.startsWith(b) || b.startsWith(a);
+
+  // The plan must name exactly the commits Git listed, no more and no fewer.
+  // Order is deliberately not compared: reordering is the whole point, so the
+  // plan's order is what Git is told to use. What must hold is that no commit
+  // was invented and none quietly went missing.
+  if (picks.length !== plan.length) {
+    console.error(
+      `rebase-helper: the todo list holds ${picks.length} commits, the plan names ${plan.length}`
+    );
+    process.exit(1);
+  }
+  const unmatched = [...picks];
+  for (const entry of plan) {
+    const at = unmatched.findIndex((sha) => same(sha, entry.sha));
+    if (at === -1) {
+      console.error(`rebase-helper: the plan names ${entry.sha}, which is not in the todo list`);
+      process.exit(1);
+    }
+    unmatched.splice(at, 1);
+  }
+
+  // The plan is written out in full, so the order it gives is the order Git
+  // applies. A dropped commit is simply left out, which is what `drop` means.
+  const rewritten = plan
+    .filter((p) => p.command !== 'drop')
+    .map((p) => `${p.command} ${p.sha}`);
+
+  if (rewritten.length === 0) {
+    console.error('rebase-helper: the plan would leave no commits to apply');
     process.exit(1);
   }
 
-  writeFileSync(target, rewritten.join('\n'));
+  writeFileSync(target, rewritten.join('\n') + '\n');
   process.exit(0);
 }
 
