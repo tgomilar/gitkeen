@@ -26,7 +26,7 @@ class RepoStore {
   status = $state<GitStatus | null>(null);
   head = $state<HeadInfo | null>(null);
   remotes = $state<string[]>([]);
-  /** The shelf, which is Git's stash list. Newest first. */
+  /** Git's stash list. Newest first. */
   stashes = $state<Stash[]>([]);
 
   /**

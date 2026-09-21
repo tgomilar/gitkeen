@@ -28,7 +28,7 @@ work, and change the history you already have.
 | Revert | Undo a commit with a new commit that reverses it. |
 | Reset | Move the current branch to another commit, in one of three modes. |
 | Conflicts | Mark files resolved, then continue or abandon the operation. |
-| Shelve | Set work aside without committing it, and take it back later. |
+| Stash | Set work aside without committing it, and take it back later. |
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish the current branch, and create it on the remote if it is new. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
@@ -217,41 +217,39 @@ refuses to mark a file that still contains markers, so a line such as
 There is no conflict editor in Gitalia yet. The plan puts a three way merge
 view in the next phase.
 
-## Shelving work you are not ready to commit
+## Stashing work you are not ready to commit
 
 Sometimes you need your working tree clean but you are not finished. Tick the
-files in the commit panel and press the shelve button in its toolbar. The
+files in the commit panel and press the stash button in its toolbar. The
 changes are saved and taken out of your working tree, which is left as though
 you had never made them.
 
-Shelving is IntelliJ IDEA's name for it. Underneath, Gitalia uses Git's own
-stash, so a change shelved here is an ordinary stash: `git stash list` shows
-it, and the command line can reach it.
+This is Git's own stash, not a private store of Gitalia's own: `git stash
+list` shows what you set aside here, and the command line can reach it.
 
-Only the files you tick are shelved. Everything else stays in your working
+Only the files you tick are stashed. Everything else stays in your working
 tree, so you can set one piece of work aside and carry on with another.
 
-The **Shelf** section at the bottom of the commit panel holds what you have set
-aside. Open a shelved change to see the files in it, and click a file to read
-what it holds. Right click a shelved change for the rest.
+The **Stashes** section at the bottom of the commit panel holds what you have
+set aside. Open a stash to see the files in it, and click a file to read what
+it holds. Right click a stash for the rest.
 
 | Action | What it does |
 |---|---|
-| Unshelve | Puts the change back into your working tree and takes it off the shelf. |
-| Apply and Keep | Puts the change back and leaves a copy on the shelf. |
+| Unstash | Puts the change back into your working tree and removes the stash. |
+| Apply and Keep | Puts the change back and keeps the stash as well. |
 | Delete | Throws the change away. It is in no commit, so this cannot be undone. |
 
 Two details worth knowing:
 
-1. An unversioned file that you shelve is removed from disk until you put it
+1. An unversioned file that you stash is removed from disk until you put it
    back. The dialog says so before it runs.
-2. If a shelved change does not fit the files you have now, Git leaves you
-   with conflicts to resolve and keeps the change on the shelf, so nothing is
-   lost. Delete it yourself once you are happy with the result.
+2. If a stash does not fit the files you have now, Git leaves you with
+   conflicts to resolve and keeps the stash, so nothing is lost. Delete it
+   yourself once you are happy with the result.
 
-Shelved changes do not appear in the graph. Git stores each one as a commit,
-but they are not part of your history, so showing them would only be
-confusing.
+Stashes do not appear in the graph. Git stores each one as a commit, but they
+are not part of your history, so showing them would only be confusing.
 
 ## The Stats report
 
@@ -419,7 +417,7 @@ in use.
 | `src/lib/components/Icon.svelte` | The small glyphs used across the panels. |
 | `src/lib/components/CommitPanel.svelte` | The commit panel. |
 | `src/lib/components/DiffViewer.svelte` | The diff viewer. |
-| `src/lib/components/ShelfSection.svelte` | The shelf, at the bottom of the commit panel. |
+| `src/lib/components/StashSection.svelte` | The stash list, at the bottom of the commit panel. |
 | `src/lib/components/StatsPanel.svelte` | The Stats panel: the question the report answers. |
 | `src/lib/components/StatsReport.svelte` | The report itself. |
 | `src/lib/state/stats.svelte.ts` | The filters, and the report that came back. |

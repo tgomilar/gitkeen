@@ -8,12 +8,12 @@
   export type IconName =
     | 'branch' | 'local' | 'remote' | 'tag' | 'folder' | 'head'
     // Tool rail and commit panel toolbar.
-    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'shelve' | 'stats'
+    | 'commit' | 'refresh' | 'rollback' | 'expand' | 'collapse' | 'tree' | 'stash' | 'stats'
     // File kinds, so a changed file is recognisable before its name is read.
     | 'file' | 'doc' | 'markup' | 'code' | 'image'
     // Context menu actions.
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
-    | 'squash' | 'diff' | 'plus' | 'check' | 'unshelve' | 'exclude' | 'include'
+    | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
     | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push';
 
   interface Props {
@@ -85,7 +85,7 @@
     <path d="M6.2 1.8 8 3.6l1.8-1.8" />
     <path d="M6.2 14.2 8 12.4l1.8 1.8" />
     <path d="M2.4 8h11.2" />
-  {:else if name === 'shelve'}
+  {:else if name === 'stash'}
     <!-- A tray with work being lowered into it, to be taken out later. -->
     <path d="M8 1.9v5.6" />
     <path d="M5.6 5.3 8 7.7l2.4-2.4" />
@@ -188,8 +188,8 @@
     <path d="M3.2 8h9.6" />
   {:else if name === 'check'}
     <path d="M3.2 8.4 6.4 11.6l6.4-7.2" />
-  {:else if name === 'unshelve'}
-    <!-- The shelve tray, with the work coming back up out of it. -->
+  {:else if name === 'unstash'}
+    <!-- The stash tray, with the work coming back up out of it. -->
     <path d="M8 7.7V2.1" />
     <path d="M5.6 4.5 8 2.1l2.4 2.4" />
     <path d="M2.2 9.4h3.1a2.7 2.7 0 0 0 5.4 0h3.1" />

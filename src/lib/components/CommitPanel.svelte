@@ -11,12 +11,12 @@
   import ChangeRow from './ChangeRow.svelte';
   import ChangeTreeNode from './ChangeTreeNode.svelte';
   import ContextMenu from './ContextMenu.svelte';
-  import ShelfSection from './ShelfSection.svelte';
+  import StashSection from './StashSection.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
   import {
     commitChanges, commitAndPush, rollbackChanges, changeMenuItems, showWorkingTreeDiff,
-    shelveChanges, stashMenuItems
+    stashChanges, stashMenuItems
   } from '../actions';
   import { buildChangeTree } from '../changes';
   import { pluralize } from '../format';
@@ -52,7 +52,7 @@
 
   /** Every collapsible key on screen, for the collapse-all button. */
   const allKeys = $derived.by(() => {
-    const keys = [...groups.map((g) => g.key), 'shelf'];
+    const keys = [...groups.map((g) => g.key), 'stashes'];
     if (!commitStore.groupByDirectory) return keys;
     const walk = (nodes: ReturnType<typeof buildChangeTree>) => {
       for (const node of nodes) {
@@ -117,14 +117,14 @@
 
     <button
       class="tool"
-      onclick={() => shelveChanges(checkedChanges)}
+      onclick={() => stashChanges(checkedChanges)}
       disabled={checkedChanges.length === 0}
       title={checkedChanges.length === 0
-        ? 'Tick the files to shelve'
+        ? 'Tick the files to stash'
         : `Set the ${checkedChanges.length} ticked ${checkedChanges.length === 1 ? 'file' : 'files'} aside, and take them out of the working tree`}
-      aria-label="Shelve ticked files"
+      aria-label="Stash ticked files"
     >
-      <Icon name="shelve" size={14} />
+      <Icon name="stash" size={14} />
     </button>
 
     <span class="gap"></span>
@@ -229,9 +229,9 @@
     {/if}
 
     {#if !empty || repoStore.stashes.length > 0}
-      <ShelfSection
-        open={!commitStore.collapsed.has('shelf')}
-        ontoggle={() => commitStore.toggleCollapsed('shelf')}
+      <StashSection
+        open={!commitStore.collapsed.has('stashes')}
+        ontoggle={() => commitStore.toggleCollapsed('stashes')}
         onmenu={openStashMenu}
       />
     {/if}

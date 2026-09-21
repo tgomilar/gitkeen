@@ -1115,7 +1115,7 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] Interactive rebase
 -   [x] Squash
 -   [ ] Reorder
--   [x] Stash --- as the Shelf
+-   [x] Stash
 -   [ ] Merge
 -   [x] Conflict detection --- detected and marked resolved; no editor yet
 -   [ ] Partial staging --- whole files only, no hunk staging

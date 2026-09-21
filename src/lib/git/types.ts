@@ -342,11 +342,11 @@ export interface OperationResult {
 }
 
 /**
- * One shelved change.
+ * One stashed change.
  *
- * Shelving is Git's stash under the IntelliJ IDEA name, so `ref` is a position
- * such as `stash@{0}`, not an identity. `sha` is the identity, and every
- * action carries it so a shifted shelf cannot be acted on by mistake.
+ * `ref` is a position such as `stash@{0}`, not an identity: dropping one
+ * renumbers the rest. `sha` is the identity, and every action carries it so a
+ * shifted stash cannot be acted on by mistake.
  */
 export interface Stash {
   ref: string;
@@ -354,7 +354,7 @@ export interface Stash {
   date: number;
   branch: string | null;
   message: string;
-  /** True when Git also put untracked files on the shelf. */
+  /** True when Git also put untracked files in the stash. */
   hasUntracked: boolean;
 }
 
@@ -370,7 +370,7 @@ export interface StashFile {
 
 export interface StashResult {
   ok: boolean;
-  /** True when Git found nothing to shelve. */
+  /** True when Git found nothing to stash. */
   empty?: boolean;
   ref?: string;
   sha?: string;

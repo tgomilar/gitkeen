@@ -51,9 +51,9 @@ class CommitStore {
   /** The row the user last clicked. It drives the diff viewer. */
   selected = $state<string | null>(null);
 
-  /** Shelved changes the user has opened, and the files each one holds. */
-  shelfOpen = $state<Set<string>>(new Set());
-  shelfFiles = $state<Record<string, StashFile[]>>({});
+  /** Stashes the user has opened, and the files each one holds. */
+  stashOpen = $state<Set<string>>(new Set());
+  stashFiles = $state<Record<string, StashFile[]>>({});
 
   head = $state<HeadCommit | null>(null);
   busy = $state<string | null>(null);
@@ -436,63 +436,63 @@ class CommitStore {
   }
 
   /**
-   * Show or hide the files inside a shelved change.
+   * Show or hide the files inside a stash.
    *
    * The file list costs a Git call each, so it is read the first time the
-   * change is opened and kept until the shelf is read again.
+   * stash is opened and kept until the stash list is read again.
    */
-  async toggleShelf(stash: Stash) {
-    const next = new Set(this.shelfOpen);
+  async toggleStash(stash: Stash) {
+    const next = new Set(this.stashOpen);
     if (next.has(stash.sha)) {
       next.delete(stash.sha);
-      this.shelfOpen = next;
+      this.stashOpen = next;
       return;
     }
     next.add(stash.sha);
-    this.shelfOpen = next;
+    this.stashOpen = next;
 
-    if (this.shelfFiles[stash.sha]) return;
+    if (this.stashFiles[stash.sha]) return;
     const repo = repoStore.repo;
     if (!repo) return;
     try {
       const { files } = await repo.stashFiles(stash.ref);
-      this.shelfFiles = { ...this.shelfFiles, [stash.sha]: files };
+      this.stashFiles = { ...this.stashFiles, [stash.sha]: files };
     } catch (err) {
-      toasts.error('Could not read the shelved change', describe(err));
+      toasts.error('Could not read the stash', describe(err));
     }
   }
 
-  /** Put the chosen files on the shelf and take them out of the working tree. */
-  async shelve(message: string, paths: string[], includeUntracked: boolean) {
+  /** Stash the chosen files and take them out of the working tree. */
+  async stash(message: string, paths: string[], includeUntracked: boolean) {
     const repo = repoStore.repo;
     if (!repo) return false;
-    const result = await this.run('Shelving', () => repo.shelve({ message, paths, includeUntracked }));
+    const result = await this.run('Stashing', () => repo.createStash({ message, paths, includeUntracked }));
     await repoStore.refresh();
     if (!result) return false;
 
     if (result.empty) {
-      toasts.info('Nothing was shelved', 'Git found no change in the files you chose.');
+      toasts.info('Nothing was stashed', 'Git found no change in the files you chose.');
       return false;
     }
 
-    // Shelved files are gone from the working tree, so the ticks that named
+    // Stashed files are gone from the working tree, so the ticks that named
     // them mean nothing now.
     const done = new Set(paths);
     this.excluded = new Set([...this.excluded].filter((p) => !done.has(p)));
     this.included = new Set([...this.included].filter((p) => !done.has(p)));
 
     toasts.success(
-      `Shelved ${paths.length} ${paths.length === 1 ? 'file' : 'files'}`,
-      'Find it under Shelf in this panel, or with "git stash list".'
+      `Stashed ${paths.length} ${paths.length === 1 ? 'file' : 'files'}`,
+      'Find it under Stashes in this panel, or with "git stash list".'
     );
     return true;
   }
 
-  /** Put a shelved change back. `drop` also takes it off the shelf. */
-  async unshelve(stash: Stash, drop: boolean) {
+  /** Put a stash back. `drop` also removes it from the stash list. */
+  async unstash(stash: Stash, drop: boolean) {
     const repo = repoStore.repo;
     if (!repo) return false;
-    const result = await this.run(drop ? 'Unshelving' : 'Applying the shelved change', () =>
+    const result = await this.run(drop ? 'Unstashing' : 'Applying the stash', () =>
       repo.applyStash(stash.ref, stash.sha, drop)
     );
     await repoStore.refresh();
@@ -500,26 +500,26 @@ class CommitStore {
 
     if (result.conflicted) {
       toasts.error(
-        `The shelved change did not fit cleanly`,
-        `${result.conflicts} ${result.conflicts === 1 ? 'file has' : 'files have'} conflicts. The change is still on the shelf, so nothing is lost. Resolve the files, then drop it yourself.`
+        `The stash did not fit cleanly`,
+        `${result.conflicts} ${result.conflicts === 1 ? 'file has' : 'files have'} conflicts. The stash is still there, so nothing is lost. Resolve the files, then delete it yourself.`
       );
       return false;
     }
 
     toasts.success(
-      drop ? 'Unshelved the change' : 'Applied the shelved change',
-      drop ? null : 'It is still on the shelf.'
+      drop ? 'Unstashed the change' : 'Applied the stash',
+      drop ? null : 'It is still in the stash list.'
     );
     return true;
   }
 
-  async dropShelved(stash: Stash) {
+  async dropStash(stash: Stash) {
     const repo = repoStore.repo;
     if (!repo) return false;
-    const result = await this.run('Deleting the shelved change', () => repo.dropStash(stash.ref, stash.sha));
+    const result = await this.run('Deleting the stash', () => repo.dropStash(stash.ref, stash.sha));
     await repoStore.refresh();
     if (!result) return false;
-    toasts.success('Deleted the shelved change');
+    toasts.success('Deleted the stash');
     return true;
   }
 

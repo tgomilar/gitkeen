@@ -1182,23 +1182,23 @@ export async function abortOperation() {
 
 
 /* ------------------------------------------------------------------ *
- * The shelf
+ * Stashes
  * ------------------------------------------------------------------ */
 
 /**
  * Put the ticked files aside.
  *
- * IntelliJ IDEA calls this shelving. Underneath it is `git stash`, so a change
- * shelved here is an ordinary stash that the command line can also reach.
+ * This is `git stash`, so anything set aside here is an ordinary stash that
+ * the command line can also reach.
  */
-export async function shelveChanges(changes: Change[]) {
+export async function stashChanges(changes: Change[]) {
   if (changes.length === 0) return;
 
   const untracked = changes.filter((c) => c.kind === 'unversioned');
   const branch = repoStore.currentBranch ?? 'detached HEAD';
 
   const message = await prompt({
-    title: changes.length === 1 ? 'Shelve 1 file' : `Shelve ${changes.length} files`,
+    title: changes.length === 1 ? 'Stash 1 file' : `Stash ${changes.length} files`,
     message:
       'The changes are saved and taken out of your working tree, leaving it as though you had not made them. You can put them back at any time.',
     facts: [
@@ -1215,81 +1215,81 @@ export async function shelveChanges(changes: Change[]) {
       placeholder: 'What you are setting aside',
       validate: () => null // Git writes its own name when this is left empty
     },
-    confirmLabel: 'Shelve'
+    confirmLabel: 'Stash'
   });
   if (message === null) return;
 
-  await commitStore.shelve(message, changes.map((c) => c.path), untracked.length > 0);
+  await commitStore.stash(message, changes.map((c) => c.path), untracked.length > 0);
 }
 
-/** Put a shelved change back into the working tree. */
-export async function unshelve(stash: Stash, drop: boolean) {
+/** Put a stash back into the working tree. */
+export async function unstash(stash: Stash, drop: boolean) {
   const dirty = repoStore.dirtyFileCount;
 
   const ok = await confirm({
-    title: drop ? 'Unshelve this change?' : 'Apply this change and keep it shelved?',
+    title: drop ? 'Unstash this change?' : 'Apply this stash and keep it?',
     message: drop
-      ? 'The change goes back into your working tree and comes off the shelf.'
-      : 'The change goes back into your working tree and stays on the shelf as well.',
+      ? 'The change goes back into your working tree and the stash is removed.'
+      : 'The change goes back into your working tree and the stash stays as well.',
     tone: dirty > 0 ? 'warning' : 'normal',
     facts: [
-      { label: 'Shelved', value: stash.message || '(no name)' },
+      { label: 'Stash', value: stash.message || '(no name)' },
       { label: 'From', value: `${stash.branch ?? 'an unknown branch'}, ${relativeTime(stash.date)}` },
       ...(dirty > 0
         ? [{
             label: 'Your work',
-            value: `${pluralize(dirty, 'changed file')} in the working tree. If the shelved change touches the same lines, you will get conflicts to resolve.`,
+            value: `${pluralize(dirty, 'changed file')} in the working tree. If the stash touches the same lines, you will get conflicts to resolve.`,
             tone: 'warning' as const
           }]
         : []),
       ...(drop
-        ? [{ label: 'If it conflicts', value: 'the change stays on the shelf, so nothing is lost' }]
+        ? [{ label: 'If it conflicts', value: 'the stash is kept, so nothing is lost' }]
         : [])
     ],
-    confirmLabel: drop ? 'Unshelve' : 'Apply and keep'
+    confirmLabel: drop ? 'Unstash' : 'Apply and keep'
   });
   if (!ok) return;
 
-  await commitStore.unshelve(stash, drop);
+  await commitStore.unstash(stash, drop);
 }
 
-export async function deleteShelved(stash: Stash) {
+export async function deleteStash(stash: Stash) {
   const ok = await confirm({
-    title: 'Delete this shelved change?',
+    title: 'Delete this stash?',
     message:
       'The change is thrown away. It is not in any commit and not in your working tree, so this cannot be undone through Gitalia.',
     tone: 'danger',
     facts: [
-      { label: 'Shelved', value: stash.message || '(no name)' },
+      { label: 'Stash', value: stash.message || '(no name)' },
       { label: 'From', value: `${stash.branch ?? 'an unknown branch'}, ${relativeTime(stash.date)}` },
-      { label: 'Instead', value: 'Cancel and unshelve it first if you want to keep the work.' }
+      { label: 'Instead', value: 'Cancel and unstash it first if you want to keep the work.' }
     ],
     confirmLabel: 'Delete it'
   });
   if (!ok) return;
-  await commitStore.dropShelved(stash);
+  await commitStore.dropStash(stash);
 }
 
-/** Show what one file inside a shelved change holds. */
-export function showShelvedDiff(stash: Stash, file: StashFile) {
+/** Show what one file inside a stash holds. */
+export function showStashedDiff(stash: Stash, file: StashFile) {
   diffStore.show({
     file: file.path,
     origPath: file.origPath,
-    // A file that was untracked when it was shelved sits in a third parent of
+    // A file that was untracked when it was stashed sits in a third parent of
     // the stash commit, with nothing to compare it against but the empty tree.
     hash: file.untracked ? `${stash.ref}^3` : stash.ref,
     base: file.untracked ? EMPTY_TREE : `${stash.ref}^1`,
-    source: `Shelved: ${stash.message || '(no name)'}`
+    source: `Stash: ${stash.message || '(no name)'}`
   });
 }
 
-/** Context menu for a shelved change. */
+/** Context menu for a stash. */
 export function stashMenuItems(stash: Stash): MenuItem[] {
   return [
-    { label: 'Unshelve', icon: 'unshelve', hint: 'apply and remove', action: () => unshelve(stash, true) },
-    { label: 'Apply and Keep', icon: 'shelve', action: () => unshelve(stash, false) },
+    { label: 'Unstash', icon: 'unstash', hint: 'apply and remove', action: () => unstash(stash, true) },
+    { label: 'Apply and Keep', icon: 'stash', action: () => unstash(stash, false) },
     SEPARATOR,
-    { label: 'Delete…', icon: 'delete', danger: true, action: () => deleteShelved(stash) },
+    { label: 'Delete…', icon: 'delete', danger: true, action: () => deleteStash(stash) },
     SEPARATOR,
     { label: 'Copy name', icon: 'copy', action: () => copy(stash.message || stash.ref, 'name') },
     { label: 'Copy stash reference', icon: 'copy', action: () => copy(stash.ref, stash.ref) }

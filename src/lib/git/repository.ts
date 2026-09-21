@@ -100,7 +100,7 @@ export class GitRepository {
     return transport.call('stats.report', { path: this.path, ...range });
   }
 
-  /* The shelf, which is Git's stash. */
+  /* Stashes. */
 
   stashes(): Promise<{ stashes: Stash[] }> {
     return transport.call('stash.list', { path: this.path });
@@ -110,11 +110,11 @@ export class GitRepository {
     return transport.call('stash.files', { path: this.path, ref });
   }
 
-  shelve(options: { message: string; paths: string[]; includeUntracked: boolean }): Promise<StashResult> {
+  createStash(options: { message: string; paths: string[]; includeUntracked: boolean }): Promise<StashResult> {
     return transport.call('stash.create', { path: this.path, ...options });
   }
 
-  /** `drop` makes this an unshelve: put it back, and take it off the shelf. */
+  /** `drop` makes this an unstash: put it back, and remove the stash. */
   applyStash(ref: string, sha: string, drop: boolean): Promise<StashApplyResult> {
     return transport.call('stash.apply', { path: this.path, ref, sha, drop });
   }

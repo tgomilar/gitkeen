@@ -1,17 +1,17 @@
 <script lang="ts">
   /**
-   * The shelf: work set aside, waiting to come back.
+   * Stashes: work set aside, waiting to come back.
    *
-   * Each row is one shelved change. Opening it lists the files it holds, and
-   * clicking a file shows what is in it, so the shelf can be read before
-   * anything is taken off it.
+   * Each row is one stash. Opening it lists the files it holds, and clicking
+   * a file shows what is in it, so a stash can be read before anything is
+   * taken out of it.
    */
   import Icon from './Icon.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
   import { fileIcon } from '../changes';
   import { relativeTime, absoluteTime, pluralize } from '../format';
-  import { showShelvedDiff } from '../actions';
+  import { showStashedDiff } from '../actions';
   import type { Stash } from '../git/types';
 
   interface Props {
@@ -28,8 +28,8 @@
 <div class="group-head">
   <button class="disclosure" onclick={ontoggle} aria-expanded={open} disabled={stashes.length === 0}>
     <span class="chevron" class:open aria-hidden="true">›</span>
-    <span class="glyph" aria-hidden="true"><Icon name="shelve" size={13} /></span>
-    <span class="title">Shelf</span>
+    <span class="glyph" aria-hidden="true"><Icon name="stash" size={13} /></span>
+    <span class="title">Stashes</span>
     <span class="count">
       {stashes.length === 0 ? 'empty' : pluralize(stashes.length, 'change')}
     </span>
@@ -38,12 +38,12 @@
 
 {#if open}
   {#each stashes as stash (stash.sha)}
-    {@const shown = commitStore.shelfOpen.has(stash.sha)}
-    {@const files = commitStore.shelfFiles[stash.sha]}
+    {@const shown = commitStore.stashOpen.has(stash.sha)}
+    {@const files = commitStore.stashFiles[stash.sha]}
     <div class="stash">
       <button
         class="row"
-        onclick={() => commitStore.toggleShelf(stash)}
+        onclick={() => commitStore.toggleStash(stash)}
         oncontextmenu={(e) => onmenu(stash, e)}
         aria-expanded={shown}
         title="{stash.message || '(no name)'}&#10;{stash.branch ? `On ${stash.branch}` : ''} {absoluteTime(stash.date)}&#10;&#10;Right click for what you can do with it."
@@ -51,7 +51,7 @@
         <span class="chevron" class:open={shown} aria-hidden="true">›</span>
         <span class="name">{stash.message || '(no name)'}</span>
         {#if stash.hasUntracked}
-          <span class="flag" title="This shelved change also holds files that were not under version control">+new</span>
+          <span class="flag" title="This stash also holds files that were not under version control">+new</span>
         {/if}
         <span class="when">{relativeTime(stash.date)}</span>
       </button>
@@ -60,12 +60,12 @@
         {#if !files}
           <p class="pending">Reading…</p>
         {:else if files.length === 0}
-          <p class="pending">This shelved change holds no files.</p>
+          <p class="pending">This stash holds no files.</p>
         {:else}
           {#each files as file (file.path)}
             <button
               class="file"
-              onclick={() => showShelvedDiff(stash, file)}
+              onclick={() => showStashedDiff(stash, file)}
               title="{file.path}&#10;&#10;Click to see what is in it."
             >
               <span class="glyph" aria-hidden="true"><Icon name={fileIcon(file.path)} size={13} /></span>

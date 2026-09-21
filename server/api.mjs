@@ -241,7 +241,7 @@ async function verifyStash(path, ref, sha) {
   const { stdout, code } = await runGit(path, ['rev-parse', ref], { allowFailure: true });
   if (code !== 0 || stdout.trim() !== sha) {
     throw new GitError(
-      'The shelf has changed since this list was read. Refresh and try again.',
+      'The stash list has changed since it was read. Refresh and try again.',
       { command: `git rev-parse ${ref}`, stderr: '', code: 1 }
     );
   }
@@ -644,7 +644,7 @@ export const methods = {
       args.push(...scoped, '--');
     } else if (all) {
       // `--all` sweeps in everything under refs/, and that includes refs/stash.
-      // A shelved change would then appear in the graph as two commits nobody
+      // A stash would then appear in the graph as two commits nobody
       // asked for, so it is excluded. `--exclude` only applies to the `--all`
       // that follows it.
       args.push('--exclude=refs/stash', '--all', 'HEAD');
@@ -1031,11 +1031,10 @@ export const methods = {
   },
 
   /**
-   * The shelf.
+   * Stashes.
    *
-   * Shelving is Git's stash. Keeping the IntelliJ IDEA name for the action and
-   * Git's own mechanism underneath means a shelf made here is a stash like any
-   * other: `git stash list` shows it, and the command line can reach it.
+   * Nothing is wrapped or reinterpreted: a stash made here is an ordinary
+   * stash, so `git stash list` shows it and the command line can reach it.
    */
   async 'stash.list'({ path }) {
     const fmt = ['%gd', '%H', '%ct', '%gs'].join(US);
@@ -1063,7 +1062,7 @@ export const methods = {
     return { stashes };
   },
 
-  /** The files one shelved change holds. */
+  /** The files one stash holds. */
   async 'stash.files'({ path, ref }) {
     const files = [];
 
@@ -1105,7 +1104,7 @@ export const methods = {
   },
 
   /**
-   * Put the chosen files on the shelf and take them out of the working tree.
+   * Stash the chosen files and take them out of the working tree.
    *
    * A pathspec keeps this to the files the user ticked, so the rest of their
    * work stays where it is.
@@ -1128,7 +1127,7 @@ export const methods = {
   },
 
   /**
-   * Take a shelved change back into the working tree.
+   * Take a stash back into the working tree.
    *
    * `sha` is checked against the ref first. Stash references shift whenever
    * one is removed, so acting on a stale `stash@{2}` would reach the wrong
@@ -1144,12 +1143,12 @@ export const methods = {
       const status = parseStatus(await git(path, STATUS_ARGS));
       const unmerged = status.files.filter((f) => f.state === 'conflicted');
       if (unmerged.length === 0 && code !== 0) {
-        throw new GitError((stderr || stdout).trim() || 'The shelved change could not be applied.', {
+        throw new GitError((stderr || stdout).trim() || 'The stash could not be applied.', {
           command: `git stash apply ${ref}`, stderr, code
         });
       }
       // Git keeps the stash when applying it conflicts, which is what makes
-      // it safe to resolve: the shelved copy is still there to fall back on.
+      // it safe to resolve: the stashed copy is still there to fall back on.
       return { ok: true, conflicted: true, dropped: false, conflicts: unmerged.length };
     }
 
@@ -1401,7 +1400,7 @@ export const methods = {
     let untracked = false;
 
     if (hash && base) {
-      // Both sides named outright. A shelved change needs this: its content
+      // Both sides named outright. A stash needs this: its content
       // sits between two revisions that are not parent and child.
       args = [...common, base, hash, '--', ...(origPath ? [file, origPath] : [file])];
     } else if (hash) {
