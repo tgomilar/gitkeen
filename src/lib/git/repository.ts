@@ -9,7 +9,7 @@ import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
-  SquashInspection, SquashResult, Stash, StashApplyResult,
+  SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
   KeyStatus
 } from './types';
@@ -195,6 +195,21 @@ export class GitRepository {
 
   push(options: PushOptions = {}): Promise<PushResult> {
     return transport.call('repo.push', { path: this.path, ...options });
+  }
+
+  /* Tags. A message makes the tag annotated; without one it is lightweight. */
+
+  createTag(name: string, at: string | null, message: string): Promise<{ ok: boolean; name: string; annotated: boolean }> {
+    return transport.call('tag.create', { path: this.path, name, at, message });
+  }
+
+  /** What deleting a tag would cost. Read-only, and it asks the remotes. */
+  inspectTag(name: string): Promise<TagInspection> {
+    return transport.call('tag.inspect', { path: this.path, name });
+  }
+
+  deleteTag(name: string): Promise<{ ok: boolean; name: string }> {
+    return transport.call('tag.delete', { path: this.path, name });
   }
 
   /** Safety probe run before offering a destructive branch action. */

@@ -30,6 +30,20 @@ export interface Branch {
   date: number;
 }
 
+/** What deleting a tag would cost, read before the confirmation is shown. */
+export interface TagInspection {
+  name: string;
+  oid: string;
+  shortHash: string;
+  subject: string;
+  /** True for an annotated tag, which records who tagged it and when. */
+  annotated: boolean;
+  /** Remotes that also hold this tag, where deleting here leaves it. */
+  onRemote: string[];
+  /** True when a remote could not be reached, so `onRemote` may be short. */
+  unreachable: boolean;
+}
+
 export interface BranchSet {
   local: Branch[];
   remote: Branch[];

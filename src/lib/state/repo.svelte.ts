@@ -10,7 +10,7 @@ import { layoutGraph } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
   MergeInspection, MergeResult, PullInspection, PullResult, RepositoryInfo, ResetInspection,
-  ResetMode, SquashInspection, SquashResult, Stash
+  ResetMode, SquashInspection, SquashResult, Stash, TagInspection
 } from '../git/types';
 import { pluralize } from '../format';
 import { toasts } from './toasts.svelte';
@@ -307,6 +307,24 @@ class RepoStore {
 
   renameBranch(from: string, to: string) {
     return this.operate(`Renaming ${from}`, (r) => r.renameBranch(from, to), `Renamed to ${to}`);
+  }
+
+  createTag(name: string, at: string | null, message: string) {
+    return this.operate(
+      `Creating ${name}`,
+      (r) => r.createTag(name, at, message),
+      message.trim() ? `Created annotated tag ${name}` : `Created tag ${name}`
+    );
+  }
+
+  deleteTag(name: string) {
+    return this.operate(`Deleting ${name}`, (r) => r.deleteTag(name), `Deleted tag ${name}`);
+  }
+
+  inspectTag(name: string): Promise<TagInspection | null> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve(null);
+    return repo.inspectTag(name).catch(() => null);
   }
 
   checkoutCommit(hash: string) {

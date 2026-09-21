@@ -33,6 +33,7 @@ work, and change the history you already have.
 | Push | Publish a branch, and create it on the remote if it is new. Force push replaces the remote branch, after showing what it would remove. |
 | Pull | Bring the upstream branch in, after showing what is coming. |
 | Merge | Join another branch into this one, after showing what would conflict. |
+| Tags | Name a commit, with or without a description, and delete tags. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
@@ -250,6 +251,31 @@ abandon the merge and put the branch back as it was.
 When a push is refused because the branch is behind, the dialog that explains
 it now offers to pull as the first way out.
 
+## Tagging a commit
+
+Right click a commit in the graph and choose **New tag here**, or right click
+the **Tags** heading in the sidebar for a tag at HEAD. The heading carries its
+own menu so there is a way in when you have no tags yet.
+
+Gitalia asks for the name first and checks it against the rules Git uses, so a
+name Git would refuse is caught before it is sent. It then asks for an
+optional description:
+
+| You type | What you get |
+|---|---|
+| A description | An annotated tag, which records who made it and when. Use these for releases. |
+| Nothing | A lightweight tag: a plain name pointing at the commit, and nothing else. |
+
+Tags appear in the Tags section of the sidebar and beside the commit in the
+graph. Right click one to create a branch from it, copy its name or target, or
+delete it.
+
+Deleting removes the tag from your repository. The commit it pointed at is
+untouched and stays in the history. If the tag has also been pushed, the
+dialog says which remotes hold it and warns that it stays there: deleting a
+pushed tag here does not remove it for anyone else, and your next fetch can
+bring it back.
+
 ## Merging a branch into this one
 
 Right click a branch in the sidebar, in either the Local or the Remote
@@ -372,8 +398,8 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-Interactive rebase and a conflict editor come later. Tags are shown in the
-graph but cannot yet be created or deleted. The plan document lists the order.
+Interactive rebase and a conflict editor come later. The plan document lists
+the order.
 
 The diff viewer has no syntax colouring yet, and you cannot stage or roll back
 a single hunk from it. Those are the next steps for it.

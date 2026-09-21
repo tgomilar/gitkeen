@@ -5,7 +5,9 @@
   import type { IconName } from './Icon.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { buildBranchTree } from '../branchTree';
-  import { branchMenuItems, switchToBranch, checkoutRemoteBranch, createBranchFrom } from '../actions';
+  import {
+    branchMenuItems, switchToBranch, checkoutRemoteBranch, createBranchFrom, createTag
+  } from '../actions';
   import type { Branch } from '../git/types';
   import type { MenuItem } from '../menu';
 
@@ -68,6 +70,29 @@
   function openMenu(branch: Branch, kind: 'local' | 'remote' | 'tag', event: MouseEvent) {
     event.preventDefault();
     menu = { x: event.clientX, y: event.clientY, items: branchMenuItems(branch, kind) };
+  }
+
+  /**
+   * The Tags heading carries its own menu, because with no tags yet there is
+   * no row to right click and no other way in from here.
+   */
+  function openSectionMenu(kind: 'local' | 'remote' | 'tag', event: MouseEvent) {
+    if (kind !== 'tag') return;
+    event.preventDefault();
+    const head = repoStore.head;
+    menu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          label: 'New tag at HEAD…',
+          icon: 'tag',
+          hint: head?.oid?.slice(0, 7),
+          disabled: !head?.oid,
+          action: () => createTag(head?.oid ?? null, `HEAD (${head?.oid?.slice(0, 7)})`)
+        }
+      ]
+    };
   }
 
   const head = $derived(repoStore.head);
@@ -150,6 +175,7 @@
     {#each sections as section (section.key)}
       <section>
         <button class="section-head" onclick={() => toggleSection(section.key)}
+                oncontextmenu={(e) => openSectionMenu(section.kind, e)}
                 aria-expanded={!sectionsClosed.has(section.key)}>
           <span class="chevron" class:open={!sectionsClosed.has(section.key)} aria-hidden="true">›</span>
           <Icon name={section.icon} size={12} />

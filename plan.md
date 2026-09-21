@@ -1120,7 +1120,7 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Merge --- from the branch menus, fast-forward when it can
 -   [x] Conflict detection --- detected and marked resolved; no editor yet
 -   [ ] Partial staging --- whole files only, no hunk staging
--   [ ] Tags --- shown in the graph, but cannot be created or deleted
+-   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [ ] Command palette
 -   [x] Keyboard shortcuts
 -   [ ] Large repository optimization

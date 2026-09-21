@@ -21,18 +21,34 @@ import { diffStore } from './state/diff.svelte';
 /** Git's empty tree, the only thing a file with no history can be compared with. */
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-/** Mirrors the rules `git check-ref-format` enforces, so we fail before Git does. */
-export function validateBranchName(name: string): string | null {
-  if (!name) return 'A branch name is required.';
-  if (/\s/.test(name)) return 'Branch names cannot contain spaces.';
-  if (/[~^:?*[\\]/.test(name)) return 'Branch names cannot contain ~ ^ : ? * [ or \\.';
-  if (name.includes('..')) return 'Branch names cannot contain "..".';
-  if (name.includes('@{')) return 'Branch names cannot contain "@{".';
-  if (name.startsWith('/') || name.endsWith('/')) return 'Branch names cannot start or end with "/".';
-  if (name.startsWith('-')) return 'Branch names cannot start with "-".';
-  if (name.endsWith('.') || name.endsWith('.lock')) return 'Branch names cannot end with "." or ".lock".';
+/**
+ * Mirrors the rules `git check-ref-format` enforces, so we fail before Git
+ * does. `kind` only shapes the wording; the rules are the same for both.
+ */
+function validateRefName(name: string, kind: 'Branch' | 'Tag'): string | null {
+  if (!name) return `A ${kind.toLowerCase()} name is required.`;
+  if (/\s/.test(name)) return `${kind} names cannot contain spaces.`;
+  if (/[~^:?*[\\]/.test(name)) return `${kind} names cannot contain ~ ^ : ? * [ or \\.`;
+  if (name.includes('..')) return `${kind} names cannot contain "..".`;
+  if (name.includes('@{')) return `${kind} names cannot contain "@{".`;
+  if (name.startsWith('/') || name.endsWith('/')) return `${kind} names cannot start or end with "/".`;
+  if (name.startsWith('-')) return `${kind} names cannot start with "-".`;
+  if (name.endsWith('.') || name.endsWith('.lock')) return `${kind} names cannot end with "." or ".lock".`;
   if (name === 'HEAD') return 'HEAD is reserved.';
+  return null;
+}
+
+export function validateBranchName(name: string): string | null {
+  const problem = validateRefName(name, 'Branch');
+  if (problem) return problem;
   if (repoStore.branches.local.some((b) => b.name === name)) return `Branch "${name}" already exists.`;
+  return null;
+}
+
+export function validateTagName(name: string): string | null {
+  const problem = validateRefName(name, 'Tag');
+  if (problem) return problem;
+  if (repoStore.branches.tags.some((t) => t.name === name)) return `Tag "${name}" already exists.`;
   return null;
 }
 
@@ -366,6 +382,11 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       action: () => createBranchFrom(commit.hash, `${commit.shortHash} (${commit.subject})`)
     },
     {
+      label: 'New tag here…',
+      icon: 'tag',
+      action: () => createTag(commit.hash, `${commit.shortHash} (${commit.subject})`)
+    },
+    {
       label: 'Check out commit',
       icon: 'switch',
       hint: 'detached',
@@ -397,17 +418,118 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
   return items;
 }
 
-/** Context menu for a branch in the sidebar. */
+/* ------------------------------------------------------------------ *
+ * Tags
+ * ------------------------------------------------------------------ */
+
+/**
+ * Name a commit.
+ *
+ * Asked in two steps because a dialog here holds one field: the name, which
+ * is validated, then the message, which is optional. A message makes the tag
+ * annotated, recording who made it and when; without one it is a lightweight
+ * tag, a plain name pointing at the commit.
+ */
+export async function createTag(at: string | null, describeTarget: string) {
+  const name = await prompt({
+    title: 'Create tag',
+    message: `The tag will point at ${describeTarget}.`,
+    input: {
+      label: 'Tag name',
+      value: '',
+      placeholder: 'v1.0.0',
+      validate: validateTagName
+    },
+    confirmLabel: 'Next'
+  });
+  if (!name) return;
+
+  const message = await prompt({
+    title: `Describe ${name}?`,
+    message:
+      'A description makes this an annotated tag, which records who made it and when. Leave it empty for a plain tag that plots the commit and nothing else.',
+    facts: [
+      { label: 'Tag', value: name },
+      { label: 'At', value: describeTarget }
+    ],
+    input: {
+      label: 'Description',
+      value: '',
+      placeholder: 'Optional, for example: the 1.0 release',
+      // Empty is a real answer here, so nothing is rejected.
+      validate: () => null
+    },
+    confirmLabel: 'Create tag'
+  });
+  // Cancelling the second step cancels the tag: the user has not agreed to
+  // make one yet, and a half-finished dialog should not write to the
+  // repository.
+  if (message === null) return;
+
+  await repoStore.createTag(name, at, message);
+}
+
+/**
+ * Remove a tag.
+ *
+ * A tag that has been pushed is only removed here, which the dialog has to
+ * say: a user who deletes a release tag and assumes it is gone everywhere
+ * would be wrong in the way that matters.
+ */
+export async function deleteTag(name: string) {
+  const inspection = await repoStore.inspectTag(name);
+
+  const ok = await confirm({
+    title: `Delete tag ${name}?`,
+    message: inspection?.annotated
+      ? 'The tag and its description are removed. The commit it points at is untouched, and stays in the history.'
+      : 'The tag is removed. The commit it points at is untouched, and stays in the history.',
+    tone: (inspection?.onRemote.length ?? 0) > 0 ? 'warning' : 'normal',
+    facts: [
+      { label: 'Tag', value: name },
+      ...(inspection
+        ? [{ label: 'At', value: `${inspection.shortHash}  ${inspection.subject}` }]
+        : []),
+      ...(inspection && inspection.onRemote.length > 0
+        ? [{
+            label: 'Also on',
+            value: `${inspection.onRemote.join(', ')}. Deleting here leaves it there, and a fetch can bring it back.`,
+            tone: 'warning' as const
+          }]
+        : []),
+      ...(inspection?.unreachable
+        ? [{
+            label: 'Warning',
+            value: 'A remote could not be reached, so the tag may also exist on it.',
+            tone: 'warning' as const
+          }]
+        : [])
+    ],
+    confirmLabel: 'Delete it'
+  });
+  if (!ok) return;
+
+  await repoStore.deleteTag(name);
+}
+
 /** How far ahead of its upstream a branch is, for a menu hint. */
 function aheadHint(branch: Branch): string | undefined {
   if (branch.behind > 0) return `${branch.behind} behind`;
   return branch.ahead > 0 ? `${branch.ahead} ahead` : 'up to date';
 }
 
+/** Context menu for a branch or tag in the sidebar. */
 export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'): MenuItem[] {
   if (kind === 'tag') {
     return [
       { label: 'Create branch from tag…', icon: 'branch', action: () => createBranchFrom(branch.name, `tag ${branch.name}`) },
+      SEPARATOR,
+      {
+        label: 'Delete…',
+        icon: 'delete',
+        danger: true,
+        action: () => deleteTag(branch.name)
+      },
       SEPARATOR,
       { label: 'Copy tag name', icon: 'copy', action: () => copy(branch.name, branch.name) },
       { label: 'Copy target hash', icon: 'copy', action: () => copy(branch.oid, 'target hash') }

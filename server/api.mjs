@@ -754,6 +754,71 @@ export const methods = {
     return { ok: true };
   },
 
+  /**
+   * Create a tag at a commit.
+   *
+   * A message makes it annotated, which records who tagged it and when; with
+   * none it is a lightweight tag, a plain name pointing at the commit. Git
+   * decides that by whether `-m` is present, so the dialog's optional message
+   * field is all that separates the two.
+   */
+  async 'tag.create'({ path, name, at = null, message = '' }) {
+    const args = ['tag'];
+    const annotated = typeof message === 'string' && message.trim().length > 0;
+    if (annotated) args.push('-m', message.trim());
+    args.push(name);
+    if (at) args.push(at);
+    await git(path, args);
+    return { ok: true, name, annotated };
+  },
+
+  /**
+   * What deleting a tag would cost, read before the confirmation is shown.
+   *
+   * A tag that has been pushed is the case worth knowing about: deleting it
+   * here leaves it on the remote, so the dialog has to say so rather than
+   * implying the tag is gone everywhere.
+   */
+  async 'tag.inspect'({ path, name }) {
+    const { stdout: oid } = await runGit(path, ['rev-parse', `${name}^{commit}`], { allowFailure: true });
+    const { stdout: subject } = await runGit(path, ['log', '-1', '--format=%s', `${name}^{commit}`], { allowFailure: true });
+    const { stdout: kind } = await runGit(path, ['cat-file', '-t', name], { allowFailure: true });
+
+    // `git tag` alone cannot say where a tag was pushed, so the remotes are
+    // asked. A remote that cannot be reached is skipped rather than guessed
+    // at: claiming a tag is only local when it is not would be the worse
+    // mistake of the two.
+    const onRemote = [];
+    let unreachable = false;
+    const { stdout: remotes } = await runGit(path, ['remote'], { allowFailure: true });
+    for (const remote of remotes.split('\n').map((r) => r.trim()).filter(Boolean)) {
+      const { stdout: ls, code } = await runGit(
+        path,
+        ['ls-remote', '--tags', remote, `refs/tags/${name}`],
+        { allowFailure: true }
+      );
+      if (code !== 0) { unreachable = true; continue; }
+      if (ls.trim()) onRemote.push(remote);
+    }
+
+    return {
+      name,
+      oid: oid.trim(),
+      shortHash: oid.trim().slice(0, 7),
+      subject: subject.trim(),
+      /** 'tag' for an annotated tag, 'commit' for a lightweight one. */
+      annotated: kind.trim() === 'tag',
+      onRemote,
+      unreachable
+    };
+  },
+
+  /** Delete a tag locally. A copy on a remote is left where it is. */
+  async 'tag.delete'({ path, name }) {
+    await git(path, ['tag', '-d', name]);
+    return { ok: true, name };
+  },
+
   async 'branch.rename'({ path, from, to }) {
     await git(path, ['branch', '-m', from, to]);
     return { ok: true };
