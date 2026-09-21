@@ -1105,7 +1105,8 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Commit
 -   [x] Stage / unstage --- by ticking files, IntelliJ style
 -   [x] Diff
--   [~] Push / pull / fetch --- push, force push and fetch done; pull missing
+-   [x] Push / pull / fetch --- pull merges, never rebases. Push and force
+    push work on any local branch, not only the checked-out one.
 -   [x] Cherry-pick
 -   [x] Revert
 -   [x] Reset

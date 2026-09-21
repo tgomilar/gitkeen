@@ -773,6 +773,152 @@ export const methods = {
     return { ok: true, output: stderr.trim() };
   },
 
+  /**
+   * What a pull would bring in, so the confirmation can state it as fact.
+   *
+   * Read-only, but it fetches first: deciding what to merge from stale
+   * remote-tracking refs would describe the wrong thing. A failed fetch is
+   * reported rather than thrown, because the commits already fetched are
+   * still worth showing.
+   */
+  async 'repo.inspectPull'({ path }) {
+    const problems = [];
+
+    const { stdout: sym, code } = await runGit(path, ['symbolic-ref', '--short', 'HEAD'], { allowFailure: true });
+    if (code !== 0) {
+      return { ok: false, problems: ['HEAD is detached, so there is no branch to pull into.'] };
+    }
+    const branch = sym.trim();
+
+    const fetched = await runGit(path, ['fetch', '--prune'], { allowFailure: true });
+
+    const { stdout: up } = await runGit(
+      path,
+      ['for-each-ref', '--format=%(upstream:short)', `refs/heads/${branch}`],
+      { allowFailure: true }
+    );
+    const upstream = up.trim() || null;
+    if (!upstream) {
+      return {
+        ok: false,
+        branch,
+        upstream: null,
+        problems: [`${branch} does not track a remote branch, so there is nothing to pull from.`]
+      };
+    }
+
+    // A pull merges into the working tree, so Git refuses to start one that
+    // would overwrite an uncommitted change.
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const dirty = status.files.filter((f) => f.state !== 'untracked').length;
+    const operation = await detectOperation(path);
+    if (operation) {
+      problems.push(`A ${operation} is already in progress. Finish or abort it first.`);
+    }
+    if (dirty > 0) {
+      problems.push(
+        dirty === 1
+          ? 'You have 1 uncommitted change. Commit or stash it before pulling.'
+          : `You have ${dirty} uncommitted changes. Commit or stash them before pulling.`
+      );
+    }
+
+    // What is coming in, newest first, and how far the branch has gone its
+    // own way. Both are needed to say whether this is a fast-forward.
+    const { stdout: incoming } = await runGit(
+      path,
+      ['log', '--format=' + ['%H', '%h', '%an', '%at', '%s'].join(US) + RS, `HEAD..${upstream}`],
+      { allowFailure: true }
+    );
+    const commits = incoming
+      .split(RS)
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((record) => {
+        const [hash, shortHash, author, when, subject] = record.split(US);
+        return { hash, shortHash, author, date: Number(when) * 1000, subject };
+      });
+
+    const { stdout: ahead } = await runGit(path, ['rev-list', '--count', `${upstream}..HEAD`], { allowFailure: true });
+    const localOnly = Number(ahead.trim() || 0);
+
+    // Which files the merge would touch, so the dialog can warn before Git
+    // does. Only meaningful when there is something to merge.
+    let changedFiles = 0;
+    if (commits.length > 0) {
+      const { stdout: names } = await runGit(
+        path,
+        ['diff', '--name-only', `HEAD...${upstream}`],
+        { allowFailure: true }
+      );
+      changedFiles = names.split('\n').filter((l) => l.trim()).length;
+    }
+
+    return {
+      ok: problems.length === 0,
+      problems,
+      branch,
+      upstream,
+      commits,
+      behind: commits.length,
+      ahead: localOnly,
+      /** True when the merge is a straight fast-forward, with no merge commit. */
+      fastForward: localOnly === 0,
+      changedFiles,
+      /** True when the fetch failed, so this picture may be out of date. */
+      staleRefs: fetched.code !== 0
+    };
+  },
+
+  /**
+   * Bring the upstream branch in.
+   *
+   * Always a merge: `--no-rebase` makes that explicit rather than leaving it
+   * to whatever `pull.rebase` happens to be configured as, so what the
+   * confirmation described is what runs. Nothing local is rewritten.
+   *
+   * A conflict leaves the merge open on purpose, exactly as a cherry-pick
+   * does: the status bar already offers resolve, continue and abort.
+   */
+  async 'repo.pull'({ path }) {
+    const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const previousHead = before.trim();
+
+    const args = ['pull', '--no-rebase', '--no-edit'];
+    const { stderr, stdout, code } = await runGit(path, args, { allowFailure: true });
+
+    if (code !== 0) {
+      const operation = await detectOperation(path);
+      if (operation) {
+        return { ok: false, conflicted: true, operation, previousHead };
+      }
+      throw new GitError(
+        (stderr || stdout).trim() || 'The pull failed.',
+        { command: `git ${args.join(' ')}`, stderr, code }
+      );
+    }
+
+    const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+    const head = after.trim();
+    // How many commits actually arrived, counted after the fact rather than
+    // trusting the count the dialog was built from.
+    const { stdout: count } = await runGit(
+      path,
+      ['rev-list', '--count', `${previousHead}..${head}`],
+      { allowFailure: true }
+    );
+
+    return {
+      ok: true,
+      conflicted: false,
+      applied: Number(count.trim() || 0),
+      previousHead,
+      head,
+      upToDate: previousHead === head,
+      output: (stdout || stderr).trim()
+    };
+  },
+
   /** Full messages for several commits at once, used to seed a squash. */
   async 'commits.messages'({ path, hashes }) {
     const messages = [];

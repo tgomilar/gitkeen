@@ -9,7 +9,7 @@ import { GitCallError } from '../git/transport';
 import { layoutGraph } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, GitStatus, HeadInfo,
-  RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult, Stash
+  PullInspection, PullResult, RepositoryInfo, ResetInspection, ResetMode, SquashInspection, SquashResult, Stash
 } from '../git/types';
 import { toasts } from './toasts.svelte';
 import { rememberRepo } from './recent';
@@ -318,6 +318,50 @@ class RepoStore {
 
   fetch(remote?: string) {
     return this.operate('Fetching', (r) => r.fetch(remote), 'Fetch complete');
+  }
+
+  /**
+   * Pull, which is a merge, so a conflict leaves it open rather than failing.
+   *
+   * Reported the way `apply` reports a cherry-pick, with one difference: a
+   * pull that brought nothing in is worth saying plainly, rather than
+   * announcing nought commits and the hash the branch has not moved from.
+   */
+  async pull(): Promise<PullResult | null> {
+    const repo = this.repo;
+    if (!repo) return null;
+    this.busy = 'Pulling';
+    try {
+      const result = await repo.pull();
+      await this.refresh();
+
+      if (result.conflicted) {
+        toasts.error(
+          'The pull stopped on a conflict',
+          'Resolve the conflicted files, then continue or abandon the merge from the status bar.'
+        );
+      } else if (result.upToDate) {
+        toasts.info(`${this.currentBranch ?? 'The branch'} is already up to date`);
+      } else {
+        toasts.success(
+          `Pulled ${result.applied} ${result.applied === 1 ? 'commit' : 'commits'} into ${this.currentBranch ?? 'HEAD'}`,
+          `The branch was at ${result.previousHead.slice(0, 7)} before.`
+        );
+      }
+      return result;
+    } catch (err) {
+      toasts.error('Pull failed', describe(err));
+      await this.refresh();
+      return null;
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  inspectPull(): Promise<PullInspection> {
+    const repo = this.repo;
+    if (!repo) return Promise.resolve({ ok: false, problems: ['No repository is open.'] });
+    return repo.inspectPull().catch((err) => ({ ok: false, problems: [describe(err)] }));
   }
 
   inspectBranch(name: string) {

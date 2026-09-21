@@ -8,7 +8,7 @@ import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, OperationResult,
-  ForcePushInspection, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
+  ForcePushInspection, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
   KeyStatus
@@ -166,6 +166,16 @@ export class GitRepository {
   /** Throw away the working-tree changes to these paths. */
   rollback(paths: string[]): Promise<RollbackResult> {
     return transport.call('changes.rollback', { path: this.path, paths });
+  }
+
+  /** What a pull would bring in. Read-only, but it fetches first. */
+  inspectPull(): Promise<PullInspection> {
+    return transport.call('repo.inspectPull', { path: this.path });
+  }
+
+  /** Bring the upstream branch in, as a merge. */
+  pull(): Promise<PullResult> {
+    return transport.call('repo.pull', { path: this.path });
   }
 
   /** What a force push would overwrite. Read-only. Defaults to the checked-out branch. */

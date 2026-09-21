@@ -576,6 +576,91 @@ export async function commitAndPush() {
 }
 
 /**
+ * Bring the upstream branch in, saying what is coming before it arrives.
+ *
+ * Gitalia says "behind the remote" in several places and, until now, could
+ * only tell the user to go and pull elsewhere. The probe fetches first, so
+ * the dialog names the commits that would actually arrive rather than what
+ * a stale remote-tracking ref remembers.
+ */
+export async function pullBranch() {
+  const inspection = await repoStore.inspectPull();
+
+  if (!inspection.ok) {
+    await confirm({
+      title: 'This branch cannot be pulled',
+      message: inspection.problems.join('\n\n'),
+      tone: 'warning',
+      facts: [
+        { label: 'Branch', value: inspection.branch ?? repoStore.currentBranch ?? 'detached HEAD' },
+        ...(inspection.upstream ? [{ label: 'Tracks', value: inspection.upstream }] : [])
+      ],
+      confirmLabel: 'Close',
+      cancelLabel: 'Back'
+    });
+    return;
+  }
+
+  const commits = inspection.commits ?? [];
+  const upstream = inspection.upstream ?? 'the remote';
+
+  // Nothing to bring in. Saying so and stopping is more honest than opening
+  // a dialog that would merge nothing.
+  if (commits.length === 0) {
+    toasts.info(
+      `${inspection.branch} is already up to date`,
+      inspection.ahead ? `You have ${pluralize(inspection.ahead, 'commit')} to push.` : null
+    );
+    return;
+  }
+
+  const shown = commits.slice(0, 5);
+  const ok = await confirm({
+    title: `Pull ${inspection.branch}?`,
+    message: inspection.fastForward
+      ? `Your branch has no commits of its own, so it moves straight up to ${upstream}. Nothing is merged and no merge commit is made.`
+      : `${upstream} and your branch have both moved on. Git merges them, making a merge commit. Your own commits are kept as they are.`,
+    facts: [
+      { label: 'Branch', value: inspection.branch! },
+      { label: 'From', value: upstream },
+      { label: 'Bringing in', value: pluralize(commits.length, 'commit') },
+      ...(inspection.changedFiles
+        ? [{ label: 'Touching', value: pluralize(inspection.changedFiles, 'file') }]
+        : []),
+      ...shown.map((c) => ({
+        label: 'Incoming',
+        value: `${c.shortHash}  ${c.subject} — ${c.author}, ${relativeTime(c.date)}`
+      })),
+      ...(commits.length > shown.length
+        ? [{ label: 'And', value: `${commits.length - shown.length} more` }]
+        : []),
+      ...(inspection.fastForward
+        ? []
+        : [{
+            label: 'Your commits',
+            value: `${pluralize(inspection.ahead ?? 0, 'commit')} of your own, which stay and are merged with these`,
+            tone: 'warning' as const
+          }]),
+      ...(inspection.fastForward
+        ? []
+        : [{ label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }]),
+      ...(inspection.staleRefs
+        ? [{
+            label: 'Warning',
+            value: 'The remote could not be reached, so this list may be out of date.',
+            tone: 'warning' as const
+          }]
+        : [])
+    ],
+    tone: inspection.fastForward ? 'normal' : 'warning',
+    confirmLabel: inspection.fastForward ? 'Pull' : 'Merge and pull'
+  });
+  if (!ok) return;
+
+  await repoStore.pull();
+}
+
+/**
  * The branch a push acts on: the one named, or the one checked out.
  *
  * A branch does not have to be checked out to be pushed, so the sidebar can
@@ -679,11 +764,22 @@ export async function pushBranch(name?: string) {
  * alone.
  */
 async function pushRejected(branch: Branch) {
+  // Pulling is only on offer for the branch you are on: a merge happens in
+  // the working tree, which a branch that is not checked out does not have.
+  const canPull = branch.isHead;
+
   const choice = await choose({
     title: `${branch.name} is behind the remote`,
     message:
       'The remote has commits this branch does not, so Git will refuse an ordinary push.',
     choices: [
+      ...(canPull
+        ? [{
+            value: 'pull',
+            label: 'Pull, then push',
+            detail: 'Brings the remote commits in and merges them with yours. Nothing is lost.'
+          }]
+        : []),
       {
         value: 'fetch',
         label: 'Fetch and look first',
@@ -700,6 +796,10 @@ async function pushRejected(branch: Branch) {
     confirmLabel: 'Continue'
   });
 
+  if (choice === 'pull') {
+    await pullBranch();
+    return;
+  }
   if (choice === 'fetch') {
     await repoStore.fetch();
     return;

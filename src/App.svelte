@@ -21,7 +21,7 @@
   import { commitStore } from './lib/state/commit.svelte';
   import { diffStore } from './lib/state/diff.svelte';
   import { statsStore } from './lib/state/stats.svelte';
-  import { commitMenuItems, createBranchFrom, pushBranch } from './lib/actions';
+  import { commitMenuItems, createBranchFrom, pushBranch, pullBranch } from './lib/actions';
   import type { MenuItem } from './lib/menu';
 
   const THEME_KEY = 'gitalia.theme';
@@ -175,6 +175,12 @@
     if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
       event.preventDefault();
       pushBranch();
+      return;
+    }
+    // ⌘⇧P is push, so pull takes L. It confirms before merging anything.
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'l') {
+      event.preventDefault();
+      pullBranch();
       return;
     }
 

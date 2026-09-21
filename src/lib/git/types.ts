@@ -212,6 +212,47 @@ export interface PushResult {
   forced?: boolean;
 }
 
+/** A commit a pull would bring in. */
+export interface IncomingCommit {
+  hash: string;
+  shortHash: string;
+  author: string;
+  date: number;
+  subject: string;
+}
+
+/** What a pull would do, read before the confirmation is shown. */
+export interface PullInspection {
+  ok: boolean;
+  /** Reasons the pull cannot run, written for the user. */
+  problems: string[];
+  branch?: string;
+  upstream?: string | null;
+  /** What is coming in, newest first. */
+  commits?: IncomingCommit[];
+  behind?: number;
+  ahead?: number;
+  /** True when the merge is a straight fast-forward, with no merge commit. */
+  fastForward?: boolean;
+  changedFiles?: number;
+  /** True when the remote refs could not be refreshed, so this may be stale. */
+  staleRefs?: boolean;
+}
+
+/** The outcome of a pull. Shaped like ApplyResult so it reports the same way. */
+export interface PullResult {
+  ok: boolean;
+  /** True when Git stopped on a conflict and left the merge open. */
+  conflicted: boolean;
+  operation?: OperationState;
+  applied?: number;
+  previousHead: string;
+  head?: string;
+  /** True when the branch was already up to date, so nothing moved. */
+  upToDate?: boolean;
+  output?: string;
+}
+
 /** A commit a force push would remove from the remote. */
 export interface DroppedCommit {
   hash: string;

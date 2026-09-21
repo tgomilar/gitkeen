@@ -5,7 +5,7 @@
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
   import {
-    branchMenuItems, createBranchFrom, switchToBranch, pushBranch, forcePushBranch
+    branchMenuItems, createBranchFrom, switchToBranch, pushBranch, forcePushBranch, pullBranch
   } from '../actions';
   import type { MenuItem } from '../menu';
 
@@ -64,6 +64,7 @@
         { label: 'Refresh', icon: 'refresh', hint: '⌘R', action: () => repoStore.refresh() },
         { label: 'Fetch all remotes', icon: 'fetch', hint: '⌘⇧F', action: () => repoStore.fetch() },
         { separator: true },
+        { label: 'Pull', icon: 'pull', hint: '⌘⇧L', action: () => pullBranch() },
         { label: 'Push', icon: 'push', hint: '⌘⇧P', action: () => pushBranch() },
         {
           label: 'Force push…',
@@ -111,6 +112,14 @@
     </button>
     <button class="op" onclick={() => repoStore.refresh()} disabled={!!repoStore.busy}>
       <Icon name="refresh" />Refresh
+    </button>
+    <button
+      class="op"
+      onclick={() => pullBranch()}
+      disabled={!!repoStore.busy}
+      title={head?.detached ? 'HEAD is detached, so there is no branch to pull into' : 'Pull this branch (⌘⇧L)'}
+    >
+      <Icon name="pull" />Pull
     </button>
     <!--
       Push, with force push behind the caret: the IntelliJ arrangement. The

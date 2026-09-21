@@ -30,14 +30,13 @@ work, and change the history you already have.
 | Conflicts | Mark files resolved, then continue or abandon the operation. |
 | Stash | Set work aside without committing it, and take it back later. |
 | Roll back | Throw away your changes to chosen files. |
-| Push | Publish the current branch, and create it on the remote if it is new. |
+| Push | Publish a branch, and create it on the remote if it is new. Force push replaces the remote branch, after showing what it would remove. |
+| Pull | Bring the upstream branch in, after showing what is coming. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Themes | Switch between a dark and a light theme. |
-
-Fetch and push are available. Pull is not yet built.
 
 ## How squashing works
 
@@ -217,6 +216,39 @@ refuses to mark a file that still contains markers, so a line such as
 There is no conflict editor in Gitalia yet. The plan puts a three way merge
 view in the next phase.
 
+## Bringing in what others have pushed
+
+Press **Pull** in the toolbar, or Command or Control with Shift and L. Gitalia
+fetches first, then tells you what is actually coming before anything is
+merged: how many commits, how many files they touch, and the first few of them
+by subject, author and age.
+
+Pull always merges. It never rebases, so nothing you have already committed is
+rewritten and a pull can never leave you needing a force push. Git's own
+`pull.rebase` setting is deliberately bypassed, so what the dialog described is
+what runs.
+
+What the dialog says depends on what it found:
+
+| Situation | What happens |
+|---|---|
+| You have no commits of your own | The branch moves straight up to the remote. No merge commit is made. |
+| You and the remote have both moved on | Git merges them and makes a merge commit. Your commits are kept as they are. |
+| Nothing new on the remote | Gitalia says so and stops, rather than opening a dialog that would merge nothing. |
+
+A pull will not start if you have uncommitted changes, if another operation is
+already running, if the branch tracks nothing, or if HEAD is detached. The
+reason is named in each case. An untracked file does not block a pull, because
+Git can merge around it.
+
+If the merge conflicts, Gitalia stops and leaves it open, exactly as it does
+for a cherry-pick. The conflicted files appear in the commit panel, and the
+status bar offers to continue once you have marked them resolved, or to
+abandon the merge and put the branch back as it was.
+
+When a push is refused because the branch is behind, the dialog that explains
+it now offers to pull as the first way out.
+
 ## Stashing work you are not ready to commit
 
 Sometimes you need your working tree clean but you are not finished. Tick the
@@ -313,8 +345,9 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-Pull, interactive rebase and a conflict editor all come later. The plan
-document lists the order.
+Interactive rebase, merge and a conflict editor all come later. Tags are shown
+in the graph but cannot yet be created or deleted. The plan document lists the
+order.
 
 The diff viewer has no syntax colouring yet, and you cannot stage or roll back
 a single hunk from it. Those are the next steps for it.
@@ -366,6 +399,8 @@ The plan asks for a keyboard first application. These keys work now.
 | Command or Control with K | Move the cursor to the search box. |
 | Command or Control with R | Reload the repository state. |
 | Command or Control with Shift and F | Fetch from all remotes. |
+| Command or Control with Shift and L | Pull the current branch. |
+| Command or Control with Shift and P | Push the current branch. |
 | Command or Control with Shift and K | Open the commit panel and start typing a message. |
 | Command or Control with Enter | Commit, while the message box has the cursor. |
 | Enter | Read the diff of the selected file in the commit panel. |
@@ -418,6 +453,7 @@ in use.
 | `src/lib/components/CommitPanel.svelte` | The commit panel. |
 | `src/lib/components/DiffViewer.svelte` | The diff viewer. |
 | `src/lib/components/StashSection.svelte` | The stash list, at the bottom of the commit panel. |
+| `src/lib/components/SplitButton.svelte` | A button with a rarer second action behind a caret, used for Push. |
 | `src/lib/components/StatsPanel.svelte` | The Stats panel: the question the report answers. |
 | `src/lib/components/StatsReport.svelte` | The report itself. |
 | `src/lib/state/stats.svelte.ts` | The filters, and the report that came back. |
