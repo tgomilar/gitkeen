@@ -1450,11 +1450,17 @@ export const methods = {
     }
 
     // Everything from the base up is rewritten and gets a new hash.
+    //
+    // `--first-parent` is what makes this match the todo list Git builds: an
+    // interactive rebase walks the branch, not both sides of every merge, so
+    // a plain `base..HEAD` would count the commits a merge brought in as well
+    // and the plan would name more commits than Git offers.
     let rewritten = [];
+    let spanMerges = 0;
     if (base) {
       const { stdout: span } = await runGit(
         path,
-        ['log', '--format=' + ['%H', '%h', '%s'].join(US) + RS, `${base}..HEAD`],
+        ['log', '--first-parent', '--format=' + ['%H', '%h', '%P', '%s'].join(US) + RS, `${base}..HEAD`],
         { allowFailure: true }
       );
       rewritten = span
@@ -1462,9 +1468,23 @@ export const methods = {
         .map((r) => r.trim())
         .filter(Boolean)
         .map((record) => {
-          const [hash, shortHash, subject] = record.split(US);
-          return { hash, shortHash, subject };
+          const [hash, shortHash, parentIds, subject] = record.split(US);
+          const isMerge = parentIds.trim().split(' ').filter(Boolean).length > 1;
+          if (isMerge) spanMerges++;
+          return { hash, shortHash, subject, isMerge };
         });
+    }
+
+    // A merge anywhere in the span, not only in the selection. `rebase -i`
+    // flattens what it replays, so rewriting across a merge would quietly
+    // discard the branch structure the merge records. Refusing is the only
+    // honest answer: there is no todo list that preserves it.
+    if (spanMerges > 0) {
+      problems.push(
+        spanMerges === 1
+          ? 'A merge commit sits between here and the tip of the branch. Rewriting across a merge would flatten it, so Gitalia does not offer it.'
+          : `${spanMerges} merge commits sit between here and the tip of the branch. Rewriting across a merge would flatten them, so Gitalia does not offer it.`
+      );
     }
 
     // Anything already on a remote is the part that costs a force push.

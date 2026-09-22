@@ -314,7 +314,11 @@ change another makes, Gitalia abandons the attempt and puts the branch back
 exactly as it was. You are never left with a half-finished rebase to sort out.
 Nothing is altered, and the message says so.
 
-Neither is offered for a merge commit.
+Neither is offered for a merge commit, and neither is offered when a merge
+sits between the commit and the tip of the branch. Replaying commits across a
+merge flattens it, throwing away the branch structure the merge records, so
+Gitalia refuses rather than quietly rewriting your history into a straight
+line. The same applies to the rebase editor.
 
 Both name the branch's previous position in the message that follows. Gitalia
 cannot undo a rewrite, but `git reset --hard <that hash>` in a terminal can.
