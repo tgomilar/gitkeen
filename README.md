@@ -532,6 +532,31 @@ The plan asks for a keyboard first application. These keys work now.
 | Escape | Close the diff viewer. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
 
+## Tests
+
+```bash
+npm test
+```
+
+Node's own test runner, so there is nothing to install. The tests run against
+real Git: each one builds a throwaway repository in a temporary directory,
+drives the same methods the user interface calls, and deletes it afterwards.
+Your own repositories are never touched.
+
+| File | What it covers |
+|---|---|
+| `server/test/harness.mjs` | Building and throwing away test repositories. |
+| `server/test/rewrite.test.mjs` | Moving and dropping commits, and what must refuse. |
+| `server/test/rebase.test.mjs` | Squash and the interactive rebase editor. |
+| `server/test/remote.test.mjs` | Push, force push, pull and merge. |
+| `server/test/repo.test.mjs` | Branch and tag operations, stashes, and the listings. |
+
+The cases worth having are the ones where Gitalia must **refuse**. A wrong
+refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
+a force push is still blocked when the remote moved unseen, that a rewrite
+across a merge is turned down rather than flattening it, and that a rebase
+that cannot be replayed puts the branch back exactly as it was.
+
 ## How it is built
 
 The plan asks for Tauri* and Rust*. Rust is not installed on this machine, so
