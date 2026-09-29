@@ -55,24 +55,43 @@ async function detectOperation(root) {
   return null;
 }
 
-/** Split `%D` decoration into structured refs attached to a commit. */
+/**
+ * Split `%D` decoration into structured refs attached to a commit.
+ *
+ * The log is read with `--decorate=full`, so every name carries its
+ * namespace and says what it is. A short name cannot: `feature/login` could
+ * be a local branch or a branch on a remote called `feature`.
+ */
 function parseRefs(decoration) {
   const refs = [];
   if (!decoration) return refs;
   for (const raw of decoration.split(', ')) {
-    const part = raw.trim();
+    let part = raw.trim();
     if (!part) continue;
-    if (part.startsWith('tag: ')) {
-      refs.push({ kind: 'tag', name: part.slice(5), isHead: false });
-    } else if (part.startsWith('HEAD -> ')) {
-      refs.push({ kind: 'local', name: part.slice(8), isHead: true });
-    } else if (part === 'HEAD') {
+    let isHead = false;
+    if (part === 'HEAD') {
       refs.push({ kind: 'head', name: 'HEAD', isHead: true });
-    } else if (part.includes('/') && !part.startsWith('refs/')) {
-      refs.push({ kind: 'remote', name: part, isHead: false });
-    } else {
-      refs.push({ kind: 'local', name: part, isHead: false });
+      continue;
     }
+    if (part.startsWith('HEAD -> ')) {
+      isHead = true;
+      part = part.slice(8);
+    }
+    if (part.startsWith('tag: ')) part = part.slice(5);
+    if (part.startsWith('refs/heads/')) {
+      refs.push({ kind: 'local', name: part.slice(11), isHead });
+    } else if (part.startsWith('refs/remotes/')) {
+      const name = part.slice(13);
+      // `origin/HEAD` only says which branch the remote calls its default.
+      if (!name.endsWith('/HEAD')) refs.push({ kind: 'remote', name, isHead: false });
+    } else if (part.startsWith('refs/tags/')) {
+      refs.push({ kind: 'tag', name: part.slice(10), isHead: false });
+    } else if (part.startsWith('refs/bisect/')) {
+      // A bisect marks the commits it was told about: `bad`, `good-<hash>`
+      // and `skip-<hash>`. They are shown as what they are, not as branches.
+      refs.push({ kind: 'bisect', name: part.slice(12).replace(/-.*$/, ''), isHead: false });
+    }
+    // Anything else (refs/stash, notes, recovery points) is not drawn.
   }
   return refs;
 }
@@ -1205,7 +1224,7 @@ export const methods = {
   async 'log.search'({ path, query = '', refs = null, limit = 1000 }) {
     const parsed = parseSearch(query);
     const args = [
-      'log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`,
+      'log', `--pretty=format:${LOG_FORMAT}`, '--decorate=full', '--date-order', `--max-count=${limit + 1}`,
       `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, '--regexp-ignore-case', '--fixed-strings', '--all-match'
     ];
     for (const author of parsed.author) args.push(`--author=${author}`);
@@ -1226,7 +1245,7 @@ export const methods = {
     // One lone word may be a hash rather than message text.
     if (parsed.words.length === 1 && /^[0-9a-f]{4,40}$/i.test(parsed.words[0]) && !parsed.author.length && !parsed.paths.length) {
       const { stdout: found, code: ok } = await runGit(
-        path, ['log', '-1', `--pretty=format:${LOG_FORMAT}`, `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, `${parsed.words[0]}^{commit}`, '--'],
+        path, ['log', '-1', `--pretty=format:${LOG_FORMAT}`, '--decorate=full', `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, `${parsed.words[0]}^{commit}`, '--'],
         { allowFailure: true }
       );
       const byHash = ok === 0 ? parseLog(found) : [];
@@ -1249,7 +1268,7 @@ export const methods = {
     // Recovery points are refs, and must not be drawn as branches. Options go
     // before the refs and the `--` that ends them.
     const args = [
-      'log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`,
+      'log', `--pretty=format:${LOG_FORMAT}`, '--decorate=full', '--date-order', `--max-count=${limit + 1}`,
       `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`
     ];
     if (skip > 0) args.push(`--skip=${skip}`);

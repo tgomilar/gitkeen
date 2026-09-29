@@ -226,3 +226,23 @@ describe('searching the whole history', () => {
     });
   });
 });
+
+describe('ref labels in the graph', () => {
+  test('a local branch with a slash is local, not remote', async () => {
+    await withRepo(async (repo) => {
+      await repo.commits(1);
+      await repo.git(['branch', 'feature/login']);
+      await repo.git(['tag', 'v1']);
+      await repo.withRemote();
+      await repo.git(['push', '-q', 'origin', 'main']);
+      await repo.git(['fetch', '-q', 'origin']);
+      const { commits } = await methods['log.list']({ path: repo.path });
+      const refs = Object.fromEntries(commits[0].refs.map((r) => [r.name, r.kind]));
+      assert.equal(refs['feature/login'], 'local');
+      assert.equal(refs['origin/main'], 'remote');
+      assert.equal(refs.v1, 'tag');
+      assert.equal(refs.main, 'local');
+      assert.ok(commits[0].refs.find((r) => r.name === 'main').isHead);
+    });
+  });
+});
