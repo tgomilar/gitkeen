@@ -94,6 +94,15 @@
       event.preventDefault();
       event.stopPropagation();
       diffStore.close();
+      return;
+    }
+    // S presses "Stage selected" (or "Unstage selected" on the Staged tab).
+    const mod = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+    const target = event.target as HTMLElement | null;
+    const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+    if (!mod && !typing && event.key.toLowerCase() === 's' && hunkable && working) {
+      event.preventDefault();
+      applySelection();
     }
   }
 
@@ -175,7 +184,7 @@
                 ? `${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`
                 : `${selectedHunks.length} of ${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`}
             </span>
-            <button disabled={!selectedHunks.length || staging || diffStore.loading} onclick={applySelection}>
+            <button disabled={!selectedHunks.length || staging || diffStore.loading} onclick={applySelection} title="S">
               {request.side === 'staged' ? 'Unstage selected' : 'Stage selected'}
             </button>
             {#if limited.hidden > 0}

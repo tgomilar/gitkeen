@@ -105,8 +105,9 @@ class PaletteStore {
     else this.show();
   }
 
-  show() {
-    this.query = '';
+  /** Open the palette, optionally with the search already typed. */
+  show(query = '') {
+    this.query = query;
     this.active = 0;
     this.open = true;
   }
@@ -262,6 +263,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       label: `Switch to ${local.name}`,
       keywords: `checkout branch ${isCurrent ? 'current' : ''}`,
       icon: 'switch',
+      hint: '⌘B',
       group: 'Branches',
       disabled: isCurrent,
       run: () => switchToBranch(local.name)
@@ -311,6 +313,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     label: commits.length === 1 ? `Revert ${cursorCommit?.shortHash}` : 'Revert the selected commits',
     keywords: 'undo',
     icon: 'revert',
+    hint: 'R',
     group: 'History',
     disabled: commits.length === 0,
     run: () => revertCommits(commits)
@@ -409,6 +412,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     label: 'Focus the commit graph',
     keywords: 'jump move selection history',
     icon: 'commit',
+    hint: 'G',
     group: 'View',
     run: () => b.focusGraph()
   });

@@ -586,6 +586,13 @@ The plan asks for a keyboard first application. These keys work now.
 | Enter | Read the diff of the selected file in the commit panel. |
 | Escape | Close the diff viewer. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
+| Command or Control with B | Switch branch: opens the command palette with the branches listed. |
+| G | Put the keyboard on the commit graph. |
+| R | Revert the selected commits. Gitalia asks before it changes anything. |
+| S | Stage or unstage the file selected in the commit panel. In the diff viewer, stage or unstage the selected hunks. |
+
+The single keys G, R and S do nothing while you type in a text field or while
+a dialog or an editor is open.
 
 The command palette is a searchable list of everything the application can
 do. It opens with Command or Control with Shift and P, filters as you type,

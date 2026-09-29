@@ -5,6 +5,7 @@
   let choice = $state('');
   let error = $state<string | null>(null);
   let field = $state<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  let panel = $state<HTMLElement | null>(null);
 
   const request = $derived(dialogs.current);
 
@@ -26,6 +27,10 @@
           field.select();
         }
       });
+    } else if (req) {
+      // With no field to type in, the dialog itself takes the keyboard, so
+      // Escape and Command+Enter work however it was opened.
+      queueMicrotask(() => panel?.focus());
     }
   });
 
@@ -66,6 +71,7 @@
 
   <div
     class="dialog"
+    bind:this={panel}
     class:danger={request.tone === 'danger'}
     class:warning={request.tone === 'warning'}
     class:wide={!!request.input?.multiline}

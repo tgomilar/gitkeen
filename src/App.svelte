@@ -25,7 +25,7 @@
   import { commitStore } from './lib/state/commit.svelte';
   import { diffStore } from './lib/state/diff.svelte';
   import { statsStore } from './lib/state/stats.svelte';
-  import { commitMenuItems, createBranchFrom, pushBranch, pullBranch } from './lib/actions';
+  import { commitMenuItems, createBranchFrom, pushBranch, pullBranch, revertCommits } from './lib/actions';
   import CommandPalette from './lib/components/CommandPalette.svelte';
   import { paletteStore } from './lib/state/palette.svelte';
   import { dialogs } from './lib/state/dialogs.svelte';
@@ -100,7 +100,7 @@
       tick().then(() => commitPanel?.focusMessage());
     },
     focusSearch: () => titleBar?.focusSearch(),
-    focusGraph: () => graphView?.revealCursor(),
+    focusGraph: () => graphView?.focus(),
     toggleTheme
   });
 
@@ -127,6 +127,11 @@
     }
     node.addEventListener('pointerdown', down);
     return { destroy: () => node.removeEventListener('pointerdown', down) };
+  }
+
+  /** True while a dialog, an editor or Settings sits over the application. */
+  function overlaid() {
+    return !!dialogs.current || rebaseStore.open || mergeStore.open || settingsStore.open;
   }
 
   function isTyping(target: EventTarget | null) {
@@ -201,7 +206,13 @@
     // is on screen.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
       event.preventDefault();
-      if (!dialogs.current && !rebaseStore.open && !mergeStore.open && !settingsStore.open) paletteStore.show();
+      if (!overlaid()) paletteStore.show();
+      return;
+    }
+    // ⌘B switches branch: the palette, already narrowed to the branches.
+    if (mod && !event.shiftKey && event.key.toLowerCase() === 'b') {
+      event.preventDefault();
+      if (!overlaid()) paletteStore.show('Switch to ');
       return;
     }
     // Push has a confirmation of its own, so the shortcut cannot send anything
@@ -222,6 +233,37 @@
     if (typing) {
       if (event.key === 'Escape') (event.target as HTMLElement).blur();
       return;
+    }
+
+    // Single keys. A dialog or an editor on screen owns the keyboard, and a
+    // key held with a modifier belongs to the browser or the system.
+    if (overlaid()) return;
+    if (!mod && !event.altKey && !event.shiftKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'g') {
+        event.preventDefault();
+        graphView?.focus();
+        return;
+      }
+      if (key === 's') {
+        // Stage or unstage the file selected in the commit panel.
+        const change = commitStore.all.find((c) => c.path === commitStore.selected);
+        if (dock === 'commit' && change) {
+          event.preventDefault();
+          commitStore.toggle(change);
+        }
+        return;
+      }
+      if (key === 'r') {
+        // Revert asks before it does anything, so one key is enough.
+        const hashes = repoStore.selection.length > 0 ? repoStore.selection : repoStore.cursor ? [repoStore.cursor] : [];
+        const commits = hashes.map((h) => repoStore.commitByHash(h)).filter((c) => !!c);
+        if (commits.length > 0) {
+          event.preventDefault();
+          revertCommits(commits);
+        }
+        return;
+      }
     }
 
     switch (event.key) {

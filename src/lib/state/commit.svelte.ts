@@ -64,7 +64,8 @@ class CommitStore {
   head = $state<HeadCommit | null>(null);
   busy = $state<string | null>(null);
 
-  private all = $derived((repoStore.status?.files ?? []).map(toChange));
+  /** Every change in the working tree, unversioned files included. */
+  all = $derived((repoStore.status?.files ?? []).map(toChange));
 
   changes = $derived(this.all.filter((c) => c.kind !== 'unversioned'));
   unversioned = $derived(this.all.filter((c) => c.kind === 'unversioned'));

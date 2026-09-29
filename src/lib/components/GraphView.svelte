@@ -46,6 +46,12 @@
   });
 
   /** Keep the keyboard cursor on screen as it moves. */
+  /** Put the keyboard on the graph, with the cursor row in view. */
+  export function focus() {
+    viewport?.focus();
+    revealCursor();
+  }
+
   export function revealCursor() {
     const hash = repoStore.cursor;
     if (!hash || !viewport) return;

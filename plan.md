@@ -1129,10 +1129,8 @@ product value is the **interaction model around the Git DAG**.
     Not built: staging single lines.
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
--   [~] Keyboard shortcuts: search, refresh, commit, push, fetch, create
-    branch and the command palette are built. Not built: switch branch
-    (Cmd/Ctrl + B), the single-key G, S and R, and configurable shortcuts
-    (section 17).
+-   [~] Keyboard shortcuts: every shortcut in section 17 is built. Not
+    built: letting the user change them (section 17 asks for that).
 -   [~] Large repository optimization --- the graph opens with the newest
     window and paints as soon as the log lands, only the visible rows exist,
     and "Load older commits" walks deeper one page at a time. Not built: a
