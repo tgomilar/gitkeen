@@ -4,10 +4,9 @@ Gitalia is a standalone visual Git* client. It gives you the commit graph and
 the history tools that IntelliJ IDEA* offers, without asking you to change your
 editor. Your editor writes code. Gitalia manages your history.
 
-This repository holds Prototype 1, as defined in
-`standalone-git-management-app-plan.md`. It covers one workflow: open a
-repository*, read its history, select commits, switch branches, commit your
-work, and change the history you already have.
+The plan the app is built from is `plan.md`. Today Gitalia covers one
+workflow: open a repository*, read its history, select commits, switch
+branches, commit your work, and change the history you already have.
 
 ## What works today
 
@@ -35,7 +34,7 @@ work, and change the history you already have.
 | Merge | Join another branch into this one, after showing what would conflict. |
 | Tags | Name a commit, with or without a description, and delete tags. |
 | Reorder | Move a commit one place earlier or later in the history. |
-| Rebase | Edit a run of commits in one go: reorder, reword, squash, fixup, drop. |
+| Rebase | Edit a run of commits in one go: reorder, reword, squash, fixup, drop, and stop at a commit to amend it. |
 | Drop | Remove commits from the branch entirely. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Filter the graph by message, author, hash* or branch name. |
@@ -89,12 +88,13 @@ setting file should never join a commit because you failed to notice it.
 A tick is a real stage, the way `git add` and `git reset` work: what Git's own
 index holds is exactly what the panel shows as ticked. Stage a file with
 `git add` in a terminal and it appears ticked; unstage it and it loses its tick.
-A partially staged file — some of its changes in the index, the rest not — is
-shown with its tick on and its name in a mixed colour, because part of it is
-committed and part is not.
+A partly staged file has some of its changes in the index and the rest not.
+Its box shows a dash instead of a tick, and the row says **partly staged**,
+because a commit would take only part of it. Click the box once to stage the
+rest of the file. Click it again to unstage the whole file.
 
 When you press Commit, Gitalia commits exactly what the index holds: whole
-ticked files and, if you staged some of a file, only those hunks. A file you
+ticked files and, if you staged some of a file, only those hunks*. A file you
 prepared with `git add` but left untouched is part of the commit; a change you
 never staged stays out of it, on purpose. A renamed file is one row on screen,
 and Gitalia sends both the old name and the new name to Git, so the rename is
@@ -228,20 +228,32 @@ out.
 Open the commit panel to see the conflicted files. A merge, pull, cherry-pick
 or revert that stops on a conflict stays open, and the status bar's **Resolve…**
 button, or right clicking the file and choosing **Resolve in Merge Editor…**,
-opens the three-way merge editor.
+opens the merge editor.
 
 The editor walks the file from top to bottom. Around each `<<<<<<<` block it
-shows the two sides — **Ours**, the current branch, and **Theirs**, the
-incoming one — with **Keep ours** and **Keep theirs** buttons, and a **Show
-base** toggle revealing the common ancestor the two sides both changed. A
-block with no choice keeps Git's markers. **Mark resolved** writes the file
-and tells Git the conflict is dealt with, and the operation's **Continue** then
-lights up in the status bar.
+shows the two sides, with a **Keep ours** and a **Keep theirs** button:
+
+| Side | In a merge, cherry-pick or revert | In a rebase |
+|---|---|---|
+| Ours | The branch you are on. | The branch you are rebasing onto. |
+| Theirs | The commit or branch coming in. | Your own commit, being replayed. |
+
+The editor says which is which during a rebase, because there the two names
+are the reverse of what most people expect. **Show base** shows the common
+ancestor that both sides changed. A block with no choice keeps Git's markers.
+**Mark resolved** writes the file and tells Git the conflict is dealt with.
+The operation's **Continue** in the status bar then becomes available.
+
+When one side deleted the file and the other side changed it, the editor shows
+the whole file as one choice. The side that deleted it offers **Delete the
+file**, and choosing it removes the file.
 
 Gitalia refuses to mark a file that still contains markers, so a line such as
-`<<<<<<<` cannot reach your history by accident. A binary file, or one you
-would rather fix by hand, can still be resolved outside Gitalia and then
-marked resolved from the commit panel.
+`<<<<<<<` cannot reach your history by accident. It also refuses to open a
+symbolic link*, because writing through one could change a file outside the
+repository. A binary file, a link, or a file you would rather fix by hand can
+still be resolved outside Gitalia and then marked resolved from the commit
+panel.
 
 ## Bringing in what others have pushed
 
@@ -304,9 +316,23 @@ are working in it. A folded row is indented under the one it joins.
 An **Edit** row does exactly what the name says. The run stops at that commit,
 the status bar reports the rebase as paused, and you amend it however you want:
 edit its files in your own editor, or write a new message for it here first.
-**Continue** in the status bar folds that into the commit and applies the rest
-of the plan, pausing again at the next Edit row if there is one. **Abandon**
+**Continue** in the status bar adds that to the commit and applies the rest of
+the plan. It pauses again at the next Edit row if there is one. **Abandon**
 puts the branch back as it was before the rebase started.
+
+This is what Continue adds to the stopped commit:
+
+| Change | Added? |
+|---|---|
+| A new message written for the Edit row | Yes |
+| Edits to files Git already tracks | Yes, staged or not |
+| A new file you staged | Yes |
+| A new file you did not stage | No. It stays in the working tree, untracked. |
+
+If you make commits of your own while the rebase is paused (for example, to
+split the commit in two), Continue keeps them exactly as you made them and
+amends nothing. The plan is saved with the rebase, so Continue still writes
+the messages that come later in the plan after you reload Gitalia.
 
 Nothing runs until you press **Start Rebase**. Until then the plan is only a
 plan, and Cancel costs nothing. **Reset** puts every row back as it arrived.
@@ -507,10 +533,8 @@ binary conflicts still go through an external editor.
 The diff viewer has no syntax colouring yet, and it cannot roll back a single
 hunk. Hunk staging is built; rolling back a hunk is the next step for it.
 
-Gitalia does not offer a separate staging area. It follows the IntelliJ IDEA
-model, where a tick box decides what goes into the commit. The tick is a real
-stage: prepare files with `git add` outside Gitalia and they arrive ticked, and
-a commit writes exactly what the index holds.
+Staging a single line is not built yet. You can stage a whole file or a hunk,
+but not part of a hunk.
 
 ## Requirements
 
@@ -583,9 +607,12 @@ Your own repositories are never touched.
 |---|---|
 | `server/test/harness.mjs` | Building and throwing away test repositories. |
 | `server/test/rewrite.test.mjs` | Moving and dropping commits, and what must refuse. |
-| `server/test/rebase.test.mjs` | Squash and the interactive rebase editor. |
+| `server/test/rebase.test.mjs` | Squash, the interactive rebase editor, and continuing an Edit stop. |
 | `server/test/remote.test.mjs` | Push, force push, pull and merge. |
 | `server/test/repo.test.mjs` | Branch and tag operations, stashes, and the listings. |
+| `server/test/changes.test.mjs` | Staging files and hunks, and what a commit takes from the index. |
+| `server/test/conflicts.test.mjs` | Reading a conflicted file for the merge editor, and writing a resolution. |
+| `server/test/log.test.mjs` | Reading the history a page at a time. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
@@ -701,3 +728,39 @@ aborts it, which leaves the branch where it started.
    the report says so and counts only those.
 7. The Stats report groups people by email address, so one person with two
    addresses is counted as two contributors.
+
+## Glossary
+
+Every term marked with an asterisk (*) in this document is explained here.
+
+**Git**: A program that records every change made to a set of files, so that
+people can see the history, work in parallel and combine their work.
+
+**Hash**: The unique name Git gives a commit. It is a long string of letters
+and numbers, and Gitalia usually shows only its first seven characters.
+
+**HTTP**: Hypertext Transfer Protocol. The way a web browser and a server send
+requests and answers to each other.
+
+**Hunk**: One block of changed lines inside a file, with a few unchanged lines
+around it. A file with changes in two separate places has two hunks.
+
+**IDEA**: IntelliJ IDEA, a code editor made by the company JetBrains. Its Git
+tools are the model for Gitalia.
+
+**Node.js**: A program that runs JavaScript outside a web browser. Gitalia's
+backend runs on it during development.
+
+**Repository**: A folder whose history Git records, together with that
+history.
+
+**Rust**: A programming language. Tauri applications are written in it.
+
+**Svelte**: A tool for building web user interfaces. Gitalia's screens are
+written with it.
+
+**Symbolic link**: A special file that points to another file or folder, which
+can be anywhere on the computer.
+
+**Tauri**: A tool for turning a web application into a desktop application for
+Windows, macOS and Linux.

@@ -1122,21 +1122,32 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Merge --- from the branch menus, fast-forward when it can
 -   [x] Conflict detection --- detected, marked resolved, and resolved in the
     merge editor, which walks the file block by block letting the user pick
-    ours or theirs per conflict, with the common ancestor behind a toggle
--   [x] Partial staging --- whole files by ticking, hunks from the diff viewer
+    ours or theirs per conflict, with the common ancestor behind a toggle.
+    A rebase that stops on a conflict when it starts is still abandoned
+    automatically; only a conflict met while continuing reaches the editor.
+-   [~] Partial staging --- whole files by ticking, hunks from the diff viewer.
+    Not built: staging single lines.
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
--   [x] Keyboard shortcuts
--   [x] Large repository optimization --- the graph opens with the newest
+-   [~] Keyboard shortcuts: search, refresh, commit, push, fetch, create
+    branch and the command palette are built. Not built: switch branch
+    (Cmd/Ctrl + B), the single-key G, S and R, and configurable shortcuts
+    (section 17).
+-   [~] Large repository optimization --- the graph opens with the newest
     window and paints as soon as the log lands, only the visible rows exist,
-    and "Load older commits" walks deeper one page at a time
+    and "Load older commits" walks deeper one page at a time. Not built: a
+    refresh keeps the pages already loaded (it returns to the newest page),
+    and a new page is laid out without laying out the loaded ones again.
 -   [x] Statistics report
 
 ### P2 --- Later
 
--   [x] Conflict resolution editor --- walks a conflicted file top to bottom;
+-   [~] Conflict resolution editor --- walks a conflicted file top to bottom;
     ours vs. theirs per block, base behind a toggle, markers kept for blocks
-    with no choice so nothing half-finished can be staged
+    with no choice so nothing half-finished can be staged. A modify/delete
+    conflict can be resolved by deleting the file. Not built: the OURS /
+    RESULT / THEIRS layout of section 6 with an editable result, and keeping
+    both sides of a block.
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration
