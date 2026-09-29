@@ -724,7 +724,7 @@ aborts it, which leaves the branch where it started.
 1. The browser cannot open a folder chooser, so you paste a path instead. Tauri
    will provide a real folder chooser.
 2. The graph starts with the newest 5000 commits. "Load older commits" adds
-   more a page at a time, and a refresh returns to the newest window.
+   more a page at a time. A refresh keeps the commits already loaded.
 3. The recent list is stored in the browser, so it is lost if you clear the
    browser data.
 4. The backend runs only during development. There is no packaged application

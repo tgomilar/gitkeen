@@ -1131,11 +1131,11 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Command palette
 -   [~] Keyboard shortcuts: every shortcut in section 17 is built. Not
     built: letting the user change them (section 17 asks for that).
--   [~] Large repository optimization --- the graph opens with the newest
+-   [x] Large repository optimization --- the graph opens with the newest
     window and paints as soon as the log lands, only the visible rows exist,
-    and "Load older commits" walks deeper one page at a time. Not built: a
-    refresh keeps the pages already loaded (it returns to the newest page),
-    and a new page is laid out without laying out the loaded ones again.
+    and "Load older commits" walks deeper one page at a time. A new page is
+    laid out on top of the rows already drawn, and a refresh keeps the pages
+    already loaded.
 -   [x] Statistics report
 
 ### P2 --- Later

@@ -6,7 +6,7 @@
  */
 import { GitRepository } from '../git/repository';
 import { GitCallError } from '../git/transport';
-import { layoutGraph } from '../graph/layout';
+import { layoutGraph, type GraphLayout } from '../graph/layout';
 import type {
   ApplyInspection, ApplyResult, Branch, BranchSet, Commit, CommitDetails, DropResult, GitStatus,
   HeadInfo, MoveResult, RebasePlanEntry, RebaseSpan, RewriteInspection,
@@ -63,7 +63,23 @@ class RepoStore {
 
   filter = $state('');
 
-  layout = $derived(layoutGraph(this.commits));
+  /**
+   * The graph's lanes for `commits`. Kept rather than derived, so a page of
+   * older history is laid out on top of the rows already drawn instead of the
+   * whole history being laid out again.
+   */
+  layout = $state.raw<GraphLayout>(layoutGraph([]));
+
+  /** Replace the commits shown, or with `older`, add a page beneath them. */
+  private setCommits(commits: Commit[], older?: Commit[]) {
+    if (older) {
+      this.layout = layoutGraph(older, this.layout);
+      this.commits = commits.concat(older);
+    } else {
+      this.layout = layoutGraph(commits);
+      this.commits = commits;
+    }
+  }
 
   selectedSet = $derived(new Set(this.selection));
 
@@ -126,7 +142,7 @@ class RepoStore {
     this.repo = null;
     this.info = null;
     this.logGeneration++;
-    this.commits = [];
+    this.setCommits([]);
     this.branches = { local: [], remote: [], tags: [] };
     this.status = null;
     this.head = null;
@@ -139,10 +155,10 @@ class RepoStore {
   }
 
   /** What to ask the log for, given the branch the graph is narrowed to. */
-  private logOptions(skip = 0) {
+  private logOptions(skip = 0, limit = LOG_LIMIT) {
     return this.scope
-      ? { limit: LOG_LIMIT, refs: [this.scope.ref], skip }
-      : { limit: LOG_LIMIT, all: true, skip };
+      ? { limit, refs: [this.scope.ref], skip }
+      : { limit, all: true, skip };
   }
 
   /**
@@ -169,7 +185,7 @@ class RepoStore {
       const generation = ++this.logGeneration;
       const log = await repo.log(this.logOptions());
       if (repo !== this.repo || generation !== this.logGeneration) return;
-      this.commits = log.commits;
+      this.setCommits(log.commits);
       this.truncated = log.truncated;
       this.pruneSelection();
     } catch (err) {
@@ -206,11 +222,16 @@ class RepoStore {
       ]);
       // Nothing may reject unobserved while the log is awaited.
       rest.catch(() => {});
-      const log = await repo.log(this.logOptions());
+      // As deep as the user has already walked, so a refresh after an
+      // operation does not throw away the pages they loaded. With the whole
+      // history on screen, a page's worth of room is added, so commits made
+      // since cannot push the oldest ones off the end.
+      const depth = Math.max(LOG_LIMIT, this.commits.length + (this.truncated ? 0 : LOG_LIMIT));
+      const log = await repo.log(this.logOptions(0, depth));
       if (repo !== this.repo) return;
       const current = generation === this.logGeneration;
       if (current) {
-        this.commits = log.commits;
+        this.setCommits(log.commits);
         this.truncated = log.truncated;
       }
 
@@ -238,7 +259,7 @@ class RepoStore {
         const widened = ++this.logGeneration;
         const all = await repo.log(this.logOptions());
         if (repo !== this.repo || widened !== this.logGeneration) return;
-        this.commits = all.commits;
+        this.setCommits(all.commits);
         this.truncated = all.truncated;
         this.pruneSelection();
       } else if (current) {
@@ -255,9 +276,10 @@ class RepoStore {
    * Read the next page of history and append it beneath the graph.
    *
    * The graph window never loads the whole history: every page walks deeper
-   * with `--skip`, and the DOM holds only the visible rows. A refresh goes
-   * back to the newest window, so pages are a way to travel deep, not a
-   * cache that sticks.
+   * with `--skip`, and the DOM holds only the visible rows. A refresh reads
+   * as deep as the pages already loaded, so an operation part way down a
+   * long history leaves the user where they were. Narrowing to a branch
+   * starts again from its newest page.
    */
   async loadOlder() {
     const repo = this.repo;
@@ -271,7 +293,7 @@ class RepoStore {
       // repeat commits.
       if (repo !== this.repo || generation !== this.logGeneration) return;
       const seen = new Set(this.commits.map((c) => c.hash));
-      this.commits = this.commits.concat(log.commits.filter((c) => !seen.has(c.hash)));
+      this.setCommits(this.commits, log.commits.filter((c) => !seen.has(c.hash)));
       this.truncated = log.truncated;
     } catch (err) {
       toasts.error('Could not read older commits', describe(err));

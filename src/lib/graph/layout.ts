@@ -32,6 +32,11 @@ export interface GraphRow {
 
 export interface GraphLayout {
   rows: GraphRow[];
+  /**
+   * The lanes still open below the last row, each waiting for the hash it
+   * names. A page of older commits continues from exactly here.
+   */
+  open: (string | null)[];
   /** Widest point of the graph, used to size the graph column. */
   laneCount: number;
   index: Map<string, number>;
@@ -42,16 +47,25 @@ function firstFree(lanes: (string | null)[]): number {
   return i === -1 ? lanes.length : i;
 }
 
-export function layoutGraph(commits: Commit[]): GraphLayout {
-  const rows: GraphRow[] = [];
-  const index = new Map<string, number>();
+/**
+ * Lay the commits out in lanes, newest first.
+ *
+ * Given the layout of the commits above them, `commits` are laid out as its
+ * continuation: the rows already drawn are kept as they are, and the result is
+ * the same as laying out the whole history in one pass. That is what lets a
+ * page of older history be added without redoing the pages before it.
+ */
+export function layoutGraph(commits: Commit[], above?: GraphLayout): GraphLayout {
+  const rows: GraphRow[] = above ? above.rows.slice() : [];
+  const index = above ? new Map(above.index) : new Map<string, number>();
   /** lanes[i] = hash the lane is currently waiting for, or null if free. */
-  const lanes: (string | null)[] = [];
-  let laneCount = 0;
+  const lanes: (string | null)[] = above ? above.open.slice() : [];
+  let laneCount = above ? above.laneCount : 0;
+  const offset = rows.length;
 
   for (let r = 0; r < commits.length; r++) {
     const commit = commits[r];
-    index.set(commit.hash, r);
+    index.set(commit.hash, offset + r);
 
     // Lanes already expecting this commit. More than one means a merge point:
     // the leftmost becomes the node's lane, the rest end here.
@@ -111,7 +125,7 @@ export function layoutGraph(commits: Commit[]): GraphLayout {
     rows.push({ commit, lane, passes, incoming, outgoing });
   }
 
-  return { rows, laneCount, index };
+  return { rows, open: lanes, laneCount, index };
 }
 
 /** Lane colours. Deliberately desaturated so the graph never shouts. */
