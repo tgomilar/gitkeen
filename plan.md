@@ -650,7 +650,7 @@ Potential examples:
   Search commits         Cmd/Ctrl + K
   Refresh                Cmd/Ctrl + R
   Commit                 Cmd/Ctrl + Enter
-  Push                   Cmd/Ctrl + Shift + P
+  Push                   Cmd/Ctrl + Shift + U
   Fetch                  Cmd/Ctrl + Shift + F
   Switch branch          Cmd/Ctrl + B
   Create branch          Cmd/Ctrl + Shift + B
@@ -1122,7 +1122,7 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Conflict detection --- detected and marked resolved; no editor yet
 -   [x] Partial staging --- whole files by ticking, hunks from the diff viewer
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
--   [ ] Command palette
+-   [x] Command palette
 -   [x] Keyboard shortcuts
 -   [ ] Large repository optimization
 -   [x] Statistics report

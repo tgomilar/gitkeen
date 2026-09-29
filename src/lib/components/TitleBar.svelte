@@ -4,6 +4,7 @@
   import SplitButton from './SplitButton.svelte';
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
+  import { paletteStore } from '../state/palette.svelte';
   import {
     branchMenuItems, createBranchFrom, switchToBranch, pushBranch, forcePushBranch, pullBranch
   } from '../actions';
@@ -63,9 +64,10 @@
       items: [
         { label: 'Refresh', icon: 'refresh', hint: '⌘R', action: () => repoStore.refresh() },
         { label: 'Fetch all remotes', icon: 'fetch', hint: '⌘⇧F', action: () => repoStore.fetch() },
+        { label: 'Command palette…', icon: 'commit', hint: '⌘⇧P', action: () => paletteStore.show() },
         { separator: true },
         { label: 'Pull', icon: 'pull', hint: '⌘⇧L', action: () => pullBranch() },
-        { label: 'Push', icon: 'push', hint: '⌘⇧P', action: () => pushBranch() },
+        { label: 'Push', icon: 'push', hint: '⌘⇧U', action: () => pushBranch() },
         {
           label: 'Force push…',
           icon: 'force-push',
@@ -130,7 +132,7 @@
       label="Push"
       icon="push"
       disabled={!!repoStore.busy}
-      title={head?.detached ? 'HEAD is detached, so there is no branch to push' : 'Push this branch (⌘⇧P)'}
+      title={head?.detached ? 'HEAD is detached, so there is no branch to push' : 'Push this branch (⌘⇧U)'}
       onclick={() => pushBranch()}
       items={[
         {

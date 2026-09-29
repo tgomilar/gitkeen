@@ -24,6 +24,9 @@
   import { diffStore } from './lib/state/diff.svelte';
   import { statsStore } from './lib/state/stats.svelte';
   import { commitMenuItems, createBranchFrom, pushBranch, pullBranch } from './lib/actions';
+  import CommandPalette from './lib/components/CommandPalette.svelte';
+  import { paletteStore } from './lib/state/palette.svelte';
+  import { dialogs } from './lib/state/dialogs.svelte';
   import type { MenuItem } from './lib/menu';
 
   const THEME_KEY = 'gitalia.theme';
@@ -85,6 +88,20 @@
     theme = theme === 'dark' ? 'light' : 'dark';
   }
 
+  // The palette drives things that live on this screen, so it is told how.
+  // The assignment is one-way: the palette stays a store, not an outlet.
+  paletteStore.bind({
+    setDock: (panel) => (dock = panel),
+    openCommit: () => {
+      dock = 'commit';
+      // The panel may not be mounted yet, so wait for the render it triggers.
+      tick().then(() => commitPanel?.focusMessage());
+    },
+    focusSearch: () => titleBar?.focusSearch(),
+    focusGraph: () => graphView?.revealCursor(),
+    toggleTheme
+  });
+
   /** Drag a divider, persisting the result. */
   function resizer(node: HTMLElement, options: { axis: 'x' | 'y'; apply: (delta: number) => void; commit: () => void }) {
     let start = 0;
@@ -140,6 +157,10 @@
     // keyboard. Its own Escape handler closes it.
     if (diffStore.open) return;
 
+    // The palette owns the keyboard while it is open, arrows and Escape
+    // included. Everything below this point is for the graph and the bar.
+    if (paletteStore.open) return;
+
     if (mod && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       titleBar?.focusSearch();
@@ -172,14 +193,22 @@
       createBranchFrom(repoStore.cursor ?? undefined, repoStore.cursor ? 'the selected commit' : 'HEAD');
       return;
     }
+    // ⌘⇧P is the command palette. It cannot stack on a question the app is
+    // already waiting for, so it stays quiet while a dialog is on screen.
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
+      event.preventDefault();
+      if (!dialogs.current) paletteStore.show();
+      return;
+    }
     // Push has a confirmation of its own, so the shortcut cannot send anything
     // on its own. Force push is deliberately left off the keyboard.
-    if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'u') {
       event.preventDefault();
       pushBranch();
       return;
     }
-    // ⌘⇧P is push, so pull takes L. It confirms before merging anything.
+    // Pull takes L: the palette owns ⌘⇧P and push has to make room for it.
+    // It confirms before merging anything.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'l') {
       event.preventDefault();
       pullBranch();
@@ -298,6 +327,7 @@
 
 <DiffViewer />
 <Dialog />
+<CommandPalette />
 {#if rebaseStore.open}<RebaseEditor />{/if}
 {#if settingsStore.open}<SettingsPanel />{/if}
 <Toasts />

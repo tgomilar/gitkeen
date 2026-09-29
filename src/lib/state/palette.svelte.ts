@@ -1,0 +1,414 @@
+/**
+ * The command palette: one searchable list of everything the app can do.
+ *
+ * The list is rebuilt whenever the palette is open, so the commands always
+ * match what is selected and what branch is checked out. Running one closes
+ * the palette and hands over to the command, which keeps its own
+ * confirmation and dialogs.
+ */
+import { repoStore } from './repo.svelte';
+import { commitStore } from './commit.svelte';
+import { settingsStore } from './settings.svelte';
+import { rebaseStore } from './rebase.svelte';
+import type { Commit } from '../git/types';
+import type { IconName } from '../components/Icon.svelte';
+import { toasts } from './toasts.svelte';
+import {
+  switchToBranch,
+  createBranchFrom,
+  squashCommits,
+  dropCommits,
+  createTag,
+  commitAndPush,
+  mergeBranch,
+  pullBranch,
+  pushBranch,
+  forcePushBranch,
+  cherryPickCommits,
+  revertCommits,
+  resetToCommit,
+  stashChanges,
+  canSquash,
+  defaultRemote
+} from '../actions';
+
+/** What the app has to let commands drive, provided by the shell. */
+export interface PaletteBindings {
+  setDock(panel: 'branches' | 'commit' | 'stats'): void;
+  /** Focus the commit panel's message box, opening the panel first. */
+  openCommit(): void;
+  focusSearch(): void;
+  focusGraph(): void;
+  toggleTheme(): void;
+}
+
+const NOOP: PaletteBindings = {
+  setDock() {},
+  openCommit() {},
+  focusSearch() {},
+  focusGraph() {},
+  toggleTheme() {}
+};
+
+export interface PaletteCommand {
+  id: string;
+  label: string;
+  /** Extra words to match that are not shown, like "checkout" for "switch". */
+  keywords: string;
+  icon: IconName | null;
+  hint: string;
+  group: string;
+  danger: boolean;
+  disabled: boolean;
+  run: () => void | Promise<unknown>;
+}
+
+/** How well a command matches the query; -1 means it does not. */
+function rank(candidate: string, query: string): number {
+  const hay = candidate.toLowerCase();
+  const q = query.toLowerCase();
+  if (hay === q) return 0;
+  if (hay.startsWith(q)) return 1;
+  if (hay.includes(` ${q}`)) return 2;
+  if (hay.includes(q)) return 3;
+  return -1;
+}
+
+class PaletteStore {
+  open = $state(false);
+  query = $state('');
+  active = $state(0);
+
+  private bindings = $state<PaletteBindings>(NOOP);
+
+  /** The whole command set, rebuilt reactively so it tracks the selection. */
+  all = $derived.by(() => commands(this.bindings));
+
+  filtered = $derived.by(() => {
+    const q = this.query.trim();
+    if (!q) return this.all;
+    const scored = this.all
+      .map((c, i) => ({ c, i, s: rank(`${c.label} ${c.keywords}`, q) }))
+      .filter((m) => m.s >= 0);
+    scored.sort((a, b) => a.s - b.s || a.i - b.i);
+    return scored.map((m) => m.c);
+  });
+
+  shown = $derived(this.filtered.slice(0, 48));
+
+  bind(bindings: PaletteBindings) {
+    this.bindings = bindings;
+  }
+
+  toggle() {
+    if (this.open) this.close();
+    else this.show();
+  }
+
+  show() {
+    this.query = '';
+    this.active = 0;
+    this.open = true;
+  }
+
+  close() {
+    this.open = false;
+  }
+
+  step(delta: number) {
+    const n = this.shown.length;
+    if (n === 0) return;
+    this.active = (this.active + delta + n) % n;
+  }
+
+  /** Run the highlighted command, closing the palette first. */
+  run() {
+    const command = this.shown[this.active];
+    if (!command || command.disabled) return false;
+    this.close();
+    command.run();
+    return true;
+  }
+}
+
+function commands(b: PaletteBindings): PaletteCommand[] {
+  const out: PaletteCommand[] = [];
+  const add = (
+    o: Omit<PaletteCommand, 'keywords' | 'icon' | 'hint' | 'group' | 'danger' | 'disabled'>
+      & Partial<Pick<PaletteCommand, 'keywords' | 'icon' | 'hint' | 'group' | 'danger' | 'disabled'>>
+  ) => {
+    out.push({
+      keywords: '',
+      icon: null,
+      hint: '',
+      group: 'Repository',
+      danger: false,
+      disabled: false,
+      ...o
+    } as PaletteCommand);
+  };
+
+  const cursor = repoStore.cursor;
+  const cursorCommit = cursor ? repoStore.commitByHash(cursor) : undefined;
+  const selection = repoStore.selection
+    .map((h) => repoStore.commitByHash(h))
+    .filter((c): c is Commit => !!c);
+  /** What the commit commands act on: the selection, or the cursor alone. */
+  const commits = selection.length > 0 ? selection : cursorCommit ? [cursorCommit] : [];
+  const branch = repoStore.currentBranch;
+  const publishable = !!repoStore.status?.upstream || !!defaultRemote();
+
+  add({
+    id: 'refresh',
+    label: 'Refresh repository',
+    keywords: 'reload reread',
+    icon: 'refresh',
+    hint: '⌘R',
+    run: () => repoStore.refresh()
+  });
+  add({
+    id: 'fetch',
+    label: 'Fetch all remotes',
+    icon: 'fetch',
+    hint: '⌘⇧F',
+    run: () => repoStore.fetch()
+  });
+  add({
+    id: 'pull',
+    label: 'Pull',
+    icon: 'pull',
+    hint: '⌘⇧L',
+    disabled: repoStore.head?.detached === true,
+    run: () => pullBranch()
+  });
+  add({
+    id: 'push',
+    label: 'Push',
+    icon: 'push',
+    hint: '⌘⇧U',
+    disabled: !publishable,
+    run: () => pushBranch()
+  });
+  add({
+    id: 'force-push',
+    label: 'Force push…',
+    icon: 'force-push',
+    group: 'Repository',
+    danger: true,
+    disabled: !repoStore.status?.upstream,
+    run: () => forcePushBranch()
+  });
+  add({
+    id: 'settings',
+    label: 'Open settings',
+    keywords: 'keys ai providers theme',
+    icon: 'settings',
+    group: 'Repository',
+    run: () => settingsStore.show()
+  });
+  add({
+    id: 'theme',
+    label: 'Toggle dark / light theme',
+    keywords: 'appearance night',
+    icon: 'settings',
+    group: 'Repository',
+    run: () => b.toggleTheme()
+  });
+  add({
+    id: 'close-repo',
+    label: 'Close repository',
+    icon: 'close',
+    group: 'Repository',
+    run: () => repoStore.close()
+  });
+
+  add({
+    id: 'commit',
+    label: 'Commit…',
+    keywords: 'stage staged message',
+    icon: 'commit',
+    hint: '⌘⇧K',
+    group: 'Changes',
+    run: () => b.openCommit()
+  });
+  add({
+    id: 'commit-push',
+    label: 'Commit and push…',
+    keywords: 'commit push together',
+    icon: 'push',
+    group: 'Changes',
+    disabled: !commitStore.canCommit,
+    run: () => commitAndPush()
+  });
+  add({
+    id: 'stash',
+    label: 'Stash all changes…',
+    icon: 'stash',
+    group: 'Changes',
+    disabled: repoStore.dirtyFileCount === 0 && commitStore.checkedPaths.length === 0,
+    run: () => stashChanges([...commitStore.changes, ...commitStore.unversioned])
+  });
+
+  // Branch commands list every usable branch by name, so switching and
+  // merging are one or two keystrokes away.
+  for (const local of repoStore.branches.local) {
+    const isCurrent = local.name === branch;
+    add({
+      id: `switch-${local.name}`,
+      label: `Switch to ${local.name}`,
+      keywords: `checkout branch ${isCurrent ? 'current' : ''}`,
+      icon: 'switch',
+      group: 'Branches',
+      disabled: isCurrent,
+      run: () => switchToBranch(local.name)
+    });
+    add({
+      id: `merge-${local.name}`,
+      label: `Merge ${local.name} into ${branch ?? 'HEAD'}`,
+      keywords: 'merge branch',
+      icon: 'merge',
+      group: 'Branches',
+      disabled: isCurrent,
+      run: () => mergeBranch(local.name)
+    });
+  }
+  add({
+    id: 'create-branch',
+    label: 'Create branch…',
+    keywords: 'new checkout',
+    icon: 'branch-plus',
+    hint: '⌘⇧B',
+    group: 'Branches',
+    run: () => createBranchFrom(cursor ?? undefined, cursor ? 'the selected commit' : 'HEAD')
+  });
+
+  const selectedText = commits.length === 1 ? cursorCommit?.shortHash ?? '' : `${commits.length} commits`;
+  const target =
+    commits.length === 1
+      ? cursorCommit?.subject ?? 'the selected commit'
+      : `${commits.length} selected commits`;
+
+  add({
+    id: 'cherry-pick',
+    label: commits.length === 1 ? `Cherry-pick ${cursorCommit?.shortHash}` : 'Cherry-pick the selected commits',
+    keywords: 'apply copy commit',
+    icon: 'cherry-pick',
+    hint: selectedText,
+    group: 'History',
+    disabled: commits.length === 0,
+    run: () => cherryPickCommits(commits)
+  });
+  add({
+    id: 'revert',
+    label: commits.length === 1 ? `Revert ${cursorCommit?.shortHash}` : 'Revert the selected commits',
+    keywords: 'undo',
+    icon: 'revert',
+    group: 'History',
+    disabled: commits.length === 0,
+    run: () => revertCommits(commits)
+  });
+  add({
+    id: 'squash',
+    label: commits.length === 1 ? `Squash ${cursorCommit?.shortHash} into the one below…` : `Squash ${commits.length} commits…`,
+    keywords: 'fold combine merge together',
+    icon: 'squash',
+    group: 'History',
+    disabled: !canSquash(commits).ok,
+    run: () => squashCommits(commits)
+  });
+  add({
+    id: 'drop',
+    label: commits.length === 1 ? `Drop ${cursorCommit?.shortHash}` : `Drop ${commits.length} commits`,
+    keywords: 'delete remove throw away',
+    icon: 'drop',
+    group: 'History',
+    danger: true,
+    disabled: commits.length === 0,
+    run: () => dropCommits(commits)
+  });
+  add({
+    id: 'reset',
+    label: 'Reset… to the selected commit',
+    keywords: 'undo hard soft mixed move head',
+    icon: 'reset',
+    group: 'History',
+    disabled: !cursorCommit,
+    run: () => resetToCommit(cursorCommit!)
+  });
+  add({
+    id: 'rebase',
+    label: 'Interactive rebase from the selected commit…',
+    keywords: 'edit reword squash reorder history todo',
+    icon: 'rebase',
+    group: 'History',
+    disabled: !cursor,
+    run: () => rebaseStore.show(cursor!)
+  });
+  add({
+    id: 'tag',
+    label: 'Create tag at the selected commit…',
+    keywords: 'annotate version release',
+    icon: 'tag',
+    group: 'History',
+    disabled: !cursorCommit,
+    run: () => createTag(cursor ?? null, target)
+  });
+  add({
+    id: 'copy-hash',
+    label: 'Copy the selected commit hash',
+    keywords: 'full sha clipboard',
+    icon: 'copy',
+    group: 'History',
+    disabled: !cursorCommit,
+    run: () => {
+      void navigator.clipboard.writeText(cursorCommit!.hash);
+      toasts.success('Copied the hash', cursorCommit!.shortHash);
+    }
+  });
+
+  add({
+    id: 'view-commit',
+    label: 'Show the commit panel',
+    keywords: 'changes files message commit box',
+    icon: 'commit',
+    group: 'View',
+    run: () => b.setDock('commit')
+  });
+  add({
+    id: 'view-branches',
+    label: 'Show the branches list',
+    keywords: 'sidebar refs tags',
+    icon: 'branch',
+    group: 'View',
+    run: () => b.setDock('branches')
+  });
+  add({
+    id: 'view-stats',
+    label: 'Show the statistics report',
+    keywords: 'activity contributors report charts',
+    icon: 'stats',
+    group: 'View',
+    run: () => b.setDock('stats')
+  });
+  add({
+    id: 'focus-graph',
+    label: 'Focus the commit graph',
+    keywords: 'jump move selection history',
+    icon: 'commit',
+    group: 'View',
+    run: () => b.focusGraph()
+  });
+  add({
+    id: 'search',
+    label: 'Search commits',
+    keywords: 'filter find type',
+    icon: 'commit',
+    hint: '⌘K',
+    group: 'View',
+    run: () => b.focusSearch()
+  });
+
+  return out;
+}
+
+export const paletteStore = new PaletteStore();

@@ -537,12 +537,18 @@ The plan asks for a keyboard first application. These keys work now.
 | Command or Control with R | Reload the repository state. |
 | Command or Control with Shift and F | Fetch from all remotes. |
 | Command or Control with Shift and L | Pull the current branch. |
-| Command or Control with Shift and P | Push the current branch. |
+| Command or Control with Shift and U | Push the current branch. |
+| Command or Control with Shift and P | Open the command palette. |
 | Command or Control with Shift and K | Open the commit panel and start typing a message. |
 | Command or Control with Enter | Commit, while the message box has the cursor. |
 | Enter | Read the diff of the selected file in the commit panel. |
 | Escape | Close the diff viewer. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
+
+The command palette is a searchable list of everything the application can
+do. It opens with Command or Control with Shift and P, filters as you type,
+and runs a command with Enter. Selection based commands follow the commit you
+have marked.
 
 ## Tests
 

@@ -717,7 +717,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
     {
       label: branch.upstream ? 'Push…' : 'Push and set upstream…',
       icon: 'push',
-      hint: branch.isHead ? '⌘⇧P' : (branch.upstream ? aheadHint(branch) : undefined),
+      hint: branch.isHead ? '⌘⇧U' : (branch.upstream ? aheadHint(branch) : undefined),
       disabled: !publishable,
       action: () => pushBranch(branch.name)
     },
