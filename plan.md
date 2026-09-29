@@ -1134,6 +1134,9 @@ product value is the **interaction model around the Git DAG**.
     laid out on top of the rows already drawn, and a refresh keeps the pages
     already loaded.
 -   [x] Statistics report
+-   [x] Operation log and recovery points (section 18): every operation that
+    rewrites or deletes history saves a recovery ref first, and the Undo
+    panel restores it
 
 ### P2 --- Later
 

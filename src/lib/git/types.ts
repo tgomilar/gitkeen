@@ -787,3 +787,32 @@ export interface StatsReport {
   extensions: ExtensionStats[];
   recent: RecentCommitStats[];
 }
+
+/** One operation in the log, with the recovery point saved before it ran. */
+export interface RecoveryEntry {
+  id: string;
+  /** When it ran, in milliseconds. */
+  time: number;
+  /** The method that ran, such as `branch.reset`. */
+  operation: string;
+  /** What happened, in words: "Reset main (hard)". */
+  label: string;
+  /** What it changed. A remote target is the remote-tracking branch a force push replaced. */
+  target: { kind: 'branch' | 'tag' | 'stash' | 'remote'; name: string };
+  /** Where the target pointed before, which is what a restore goes back to. */
+  before: string;
+  /** Where it pointed after, or null when it was deleted. */
+  after: string | null;
+  /** False once the recovery point is gone, so there is nothing to restore. */
+  restorable: boolean;
+}
+
+export interface RecoveryResult {
+  ok: boolean;
+  kind: 'branch' | 'tag' | 'stash';
+  /** The branch, tag or stash that was put back. */
+  name: string;
+  at: string;
+  /** True when it had been deleted and was made again. */
+  recreated: boolean;
+}

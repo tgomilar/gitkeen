@@ -34,7 +34,7 @@ import {
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
-  setDock(panel: 'branches' | 'commit' | 'stats'): void;
+  setDock(panel: 'branches' | 'commit' | 'stats' | 'undo'): void;
   /** Focus the commit panel's message box, opening the panel first. */
   openCommit(): void;
   focusSearch(): void;
@@ -406,6 +406,14 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     icon: 'stats',
     group: 'View',
     run: () => b.setDock('stats')
+  });
+  add({
+    id: 'undo-log',
+    label: 'Open the operation log',
+    keywords: 'undo restore recover reflog history lost commits',
+    icon: 'rollback',
+    group: 'View',
+    run: () => b.setDock('undo')
   });
   add({
     id: 'focus-graph',

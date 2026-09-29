@@ -20,6 +20,7 @@
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import DiffViewer from './lib/components/DiffViewer.svelte';
   import MergeEditor from './lib/components/MergeEditor.svelte';
+  import RecoveryPanel from './lib/components/RecoveryPanel.svelte';
   import { tick } from 'svelte';
   import { repoStore } from './lib/state/repo.svelte';
   import { commitStore } from './lib/state/commit.svelte';
@@ -325,6 +326,8 @@
           <CommitPanel bind:this={commitPanel} />
         {:else if dock === 'stats'}
           <StatsPanel />
+        {:else if dock === 'undo'}
+          <RecoveryPanel />
         {:else}
           <BranchSidebar />
         {/if}

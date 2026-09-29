@@ -40,6 +40,7 @@ branches, commit your work, and change the history you already have.
 | Search | Filter the graph by message, author, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
+| Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
 | Themes | Switch between a dark and a light theme. |
 
 ## How squashing works
@@ -470,6 +471,31 @@ Two details worth knowing:
 Stashes do not appear in the graph. Git stores each one as a commit, but they
 are not part of your history, so showing them would only be confusing.
 
+## Undoing an operation
+
+Before an operation rewrites or deletes history, Gitalia saves where the
+affected branch, tag or stash pointed. This is a recovery point. It keeps the
+old commits safe from Git's clean up, and it never appears in the graph.
+
+Choose **Undo** in the rail on the left to see these operations, newest first.
+**Restore** puts things back where they were before that operation:
+
+| Operation | What Restore does |
+|---|---|
+| Reset, squash, drop, move, rebase or amend | Moves the branch back to its old commit. |
+| Delete a branch | Creates the branch again at its old commit. |
+| Delete a tag | Creates the tag again, if no tag has taken its name since. |
+| Drop a stash | Puts the stash back on the stash list. |
+| Force push | Creates a local branch named `recovered/<branch>` at the commit the remote had. Push it yourself to put the remote back. |
+
+A restore is logged as well, so you can undo a restore the same way. Restoring
+the branch you are on keeps your uncommitted changes. If a restore would
+overwrite a file you changed, Git refuses it and nothing moves. Nothing can be
+restored while a merge, rebase or other operation is still open.
+
+The log keeps the newest 100 operations. It is stored in the repository's
+`.git` folder, so it belongs to the repository and not to Gitalia.
+
 ## The Stats report
 
 Press **Stats** in the rail on the left. Gitalia reads the history and writes a
@@ -624,6 +650,7 @@ Your own repositories are never touched.
 | `server/test/changes.test.mjs` | Staging files and hunks, and what a commit takes from the index. |
 | `server/test/conflicts.test.mjs` | Reading a conflicted file for the merge editor, and writing a resolution. |
 | `server/test/log.test.mjs` | Reading the history a page at a time. |
+| `server/test/recovery.test.mjs` | The operation log, and restoring what an operation changed. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

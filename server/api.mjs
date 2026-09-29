@@ -9,6 +9,7 @@ import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs'
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
+import * as recovery from './recovery.mjs';
 import { access, mkdtemp, writeFile, rm, readFile, lstat, realpath } from 'node:fs/promises';
 import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1115,8 +1116,10 @@ export const methods = {
       // A stash would then appear in the graph as two commits nobody
       // asked for, so it is excluded. `--exclude` only applies to the `--all`
       // that follows it.
-      args.push('--exclude=refs/stash', '--all', 'HEAD');
+      args.push('--exclude=refs/stash', `--exclude=${recovery.RECOVERY_PREFIX}*`, '--all', 'HEAD');
     }
+    // Recovery points are refs, and must not be drawn as branches.
+    args.push(`--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`);
     const { stdout, code } = await runGit(path, args, { allowFailure: true });
     // An empty repository has no HEAD to log; that is not an error.
     if (code !== 0) return { commits: [], truncated: false };
@@ -2214,7 +2217,7 @@ export const methods = {
 
     const scoped = Array.isArray(refs) ? refs.filter((r) => typeof r === 'string' && r.trim()) : [];
     if (scoped.length > 0) args.push(...scoped);
-    else args.push('--exclude=refs/stash', '--all', 'HEAD');
+    else args.push('--exclude=refs/stash', `--exclude=${recovery.RECOVERY_PREFIX}*`, '--all', 'HEAD');
 
     // Pathspec exclusions keep generated files (lockfiles, bundles, vendored
     // trees) from drowning out hand-written work in the line counts.
@@ -3239,6 +3242,78 @@ export const methods = {
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
 };
+
+/* ------------------------------------------------------------------ *
+ * The operation log
+ * ------------------------------------------------------------------ */
+
+methods['recovery.list'] = async ({ path }) => ({ entries: await recovery.list(path) });
+
+methods['recovery.restore'] = async ({ path, id }) => recovery.restore(path, id, await detectOperation(path));
+
+/**
+ * What each recorded method changes, worked out before it runs.
+ *
+ * Each returns the ref the operation will move or delete and how to describe
+ * it, or null when this call rewrites nothing (a commit that is not an amend,
+ * a push that is not forced). The ref is read again after a successful run,
+ * and the pair goes into the log with a recovery point for the old commit.
+ */
+const onCurrentBranch = (operation, label) => async ({ path }) => {
+  const branch = await recovery.currentBranch(path);
+  if (!branch) return null;
+  return { operation, label: label(branch), target: { kind: 'branch', name: branch }, ref: `refs/heads/${branch}` };
+};
+
+const RECORDED = {
+  'branch.reset': async (args) => onCurrentBranch('branch.reset', (b) => `Reset ${b} (${args.mode ?? 'mixed'})`)(args),
+  'commits.squash': onCurrentBranch('commits.squash', (b) => `Squashed commits on ${b}`),
+  'commits.drop': onCurrentBranch('commits.drop', (b) => `Dropped commits from ${b}`),
+  'commits.move': onCurrentBranch('commits.move', (b) => `Moved a commit on ${b}`),
+  'commits.rebase': onCurrentBranch('commits.rebase', (b) => `Rebased ${b}`),
+  'changes.commit': async (args) => (args.amend ? onCurrentBranch('changes.commit', (b) => `Amended the last commit on ${b}`)(args) : null),
+  'branch.delete': async ({ name }) => ({
+    operation: 'branch.delete', label: `Deleted branch ${name}`, target: { kind: 'branch', name }, ref: `refs/heads/${name}`
+  }),
+  'tag.delete': async ({ name }) => ({
+    operation: 'tag.delete', label: `Deleted tag ${name}`, target: { kind: 'tag', name }, ref: `refs/tags/${name}`
+  }),
+  'stash.drop': async ({ path, ref, sha }) => {
+    const { stdout } = await runGit(path, ['log', '-1', '--format=%gs', ref], { allowFailure: true });
+    return {
+      operation: 'stash.drop', label: `Dropped a stash${stdout.trim() ? `: ${stdout.trim()}` : ''}`,
+      target: { kind: 'stash', name: ref }, ref: sha || ref, detail: stdout.trim() || null, fixed: true
+    };
+  },
+  'repo.push': async ({ path, branch, force }) => {
+    if (!force) return null;
+    const name = branch || (await recovery.currentBranch(path));
+    if (!name) return null;
+    const { stdout } = await runGit(path, ['for-each-ref', '--format=%(upstream)', `refs/heads/${name}`], { allowFailure: true });
+    const upstream = stdout.trim();
+    if (!upstream) return null;
+    return {
+      operation: 'repo.push', label: `Force pushed ${name}`,
+      target: { kind: 'remote', name: upstream.replace(/^refs\/remotes\//, '') }, ref: upstream
+    };
+  }
+};
+
+for (const [name, plan] of Object.entries(RECORDED)) {
+  const run = methods[name];
+  methods[name] = async (args) => {
+    const change = await plan(args);
+    const before = change ? await recovery.resolveRef(args.path, change.ref) : null;
+    const result = await run(args);
+    if (change && before) {
+      // A stash is gone once dropped and a deleted ref reads as null; either
+      // way the recovery point keeps the old commit.
+      const after = change.fixed ? null : await recovery.resolveRef(args.path, change.ref);
+      await recovery.record(args.path, { ...change, before, after }).catch(() => {});
+    }
+    return result;
+  };
+}
 
 /** Single entry point, mirroring a Tauri `invoke(method, args)` call. */
 export async function invokeMethod(method, args = {}) {

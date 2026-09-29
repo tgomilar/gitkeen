@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus
+  KeyStatus, RecoveryEntry, RecoveryResult
 } from './types';
 
 export class GitRepository {
@@ -197,6 +197,16 @@ export class GitRepository {
   /** Resolve a modify/delete conflict by keeping the side that deleted the file. */
   conflictRemove(file: string): Promise<{ ok: boolean; resolved: number }> {
     return transport.call('conflicts.resolve', { path: this.path, file, remove: true });
+  }
+
+  /** The operation log, newest first. */
+  recoveryList(): Promise<{ entries: RecoveryEntry[] }> {
+    return transport.call('recovery.list', { path: this.path });
+  }
+
+  /** Put back what one logged operation changed. */
+  recoveryRestore(id: string): Promise<RecoveryResult> {
+    return transport.call('recovery.restore', { path: this.path, id });
   }
 
   /** Throw away the working-tree changes to these paths. */
