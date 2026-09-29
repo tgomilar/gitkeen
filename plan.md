@@ -659,9 +659,6 @@ Potential examples:
   Stage selected         S
   Revert                 R
 
-Exact shortcuts should be configurable because OS/editor conventions
-differ.
-
 ------------------------------------------------------------------------
 
 # 18. Safety Model
@@ -1130,8 +1127,7 @@ product value is the **interaction model around the Git DAG**.
     from the diff viewer
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
--   [~] Keyboard shortcuts: every shortcut in section 17 is built. Not
-    built: letting the user change them (section 17 asks for that).
+-   [x] Keyboard shortcuts: every shortcut in section 17 is built.
 -   [x] Large repository optimization --- the graph opens with the newest
     window and paints as soon as the log lands, only the visible rows exist,
     and "Load older commits" walks deeper one page at a time. A new page is
