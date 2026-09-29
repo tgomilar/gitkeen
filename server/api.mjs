@@ -1512,17 +1512,23 @@ export const methods = {
     const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     const head = after.trim();
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `${previousHead}..${head}`], { allowFailure: true });
-    const { stdout: merges } = await runGit(path, ['rev-list', '--count', '--merges', `${previousHead}..${head}`], { allowFailure: true });
+    // A merge commit was made when the new HEAD has two parents and the first
+    // is where the branch stood. A fast-forward over a branch that already
+    // held merges moves straight up and makes none.
+    const { stdout: parents } = await runGit(path, ['rev-list', '--parents', '-n', '1', head], { allowFailure: true });
+    const [, first, ...others] = parents.trim().split(' ');
+    const mergeCommit = previousHead !== head && first === previousHead && others.length > 0;
 
     return {
       ok: true,
       conflicted: false,
-      applied: Number(count.trim() || 0),
+      /** The commits the other branch brought, not counting the merge commit. */
+      applied: Math.max(0, Number(count.trim() || 0) - (mergeCommit ? 1 : 0)),
       previousHead,
       head,
       upToDate: previousHead === head,
       /** False when the branch simply moved up, so no merge commit was made. */
-      mergeCommit: Number(merges.trim() || 0) > 0,
+      mergeCommit,
       output: (stdout || stderr).trim()
     };
   },

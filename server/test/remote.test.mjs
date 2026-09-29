@@ -266,6 +266,37 @@ describe('merge', () => {
     });
   });
 
+  test('counts the commits that came in, not the merge commit it made', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'b.txt': 'b\n' });
+      await repo.git(['checkout', '-q', '-b', 'topic']);
+      await repo.commit('topic', { 't.txt': 't\n' });
+      await repo.git(['checkout', '-q', 'main']);
+      await repo.commit('main', { 'm.txt': 'm\n' });
+
+      const result = await methods['repo.merge']({ path: repo.path, source: 'topic' });
+      assert.equal(result.mergeCommit, true);
+      assert.equal(result.applied, 1, 'one commit came in; the merge commit is not one of them');
+    });
+  });
+
+  test('a fast-forward over a branch that holds a merge makes no merge commit', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'b.txt': 'b\n' });
+      await repo.git(['checkout', '-q', '-b', 'topic']);
+      await repo.git(['checkout', '-q', '-b', 'side']);
+      await repo.commit('side', { 's.txt': 's\n' });
+      await repo.git(['checkout', '-q', 'topic']);
+      await repo.commit('topic', { 't.txt': 't\n' });
+      await repo.git(['merge', '-q', '--no-ff', '-m', 'merge side', 'side']);
+      await repo.git(['checkout', '-q', 'main']);
+
+      const result = await methods['repo.merge']({ path: repo.path, source: 'topic' });
+      assert.equal(result.mergeCommit, false, 'main moved straight up');
+      assert.equal(result.applied, 3, 'side, topic and topic\'s own merge commit all came in');
+    });
+  });
+
   test('refuses to merge a branch into itself', async () => {
     await withRepo(async (repo) => {
       await repo.commits(2);
