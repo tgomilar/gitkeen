@@ -149,3 +149,20 @@ describe('whether there is another page', () => {
     });
   });
 });
+
+describe('a graph narrowed to one branch', () => {
+  test('lists the branch history, with recovery points still hidden', async () => {
+    await withRepo(async (repo) => {
+      await repo.commits(3);
+      await repo.git(['checkout', '-q', '-b', 'topic']);
+      await repo.commit('topic work', { 't.txt': 't\n' });
+      await repo.git(['checkout', '-q', 'main']);
+      const [, , c1] = await repo.hashes();
+      await methods['branch.reset']({ path: repo.path, target: c1, mode: 'hard' });
+
+      const { commits } = await methods['log.list']({ path: repo.path, refs: ['topic'] });
+      assert.deepEqual(commits.map((c) => c.subject), ['topic work', 'c3', 'c2', 'c1']);
+      assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitalia'))));
+    });
+  });
+});

@@ -1104,7 +1104,12 @@ export const methods = {
     // One commit past the page says whether there is another page. Asking
     // for exactly `limit` could not tell a history of exactly that length
     // from a longer one.
-    const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`];
+    // Recovery points are refs, and must not be drawn as branches. Options go
+    // before the refs and the `--` that ends them.
+    const args = [
+      'log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`,
+      `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`
+    ];
     if (skip > 0) args.push(`--skip=${skip}`);
     const scoped = Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string' && ref.trim()) : [];
     if (scoped.length > 0) {
@@ -1118,8 +1123,6 @@ export const methods = {
       // that follows it.
       args.push('--exclude=refs/stash', `--exclude=${recovery.RECOVERY_PREFIX}*`, '--all', 'HEAD');
     }
-    // Recovery points are refs, and must not be drawn as branches.
-    args.push(`--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`);
     const { stdout, code } = await runGit(path, args, { allowFailure: true });
     // An empty repository has no HEAD to log; that is not an error.
     if (code !== 0) return { commits: [], truncated: false };
