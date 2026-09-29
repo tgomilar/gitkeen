@@ -10,6 +10,7 @@
    * refuses to stage.
    */
   import { mergeStore } from '../state/merge.svelte';
+  import { repoStore } from '../state/repo.svelte';
   import { previewText } from '../merge';
   import { pluralize } from '../format';
   import type { ConflictChoice, MergeOffer } from '../git/types';
@@ -60,6 +61,14 @@
   }
 
   const sideName = (text: string, fallback: string) => (text ? text : fallback);
+
+  /**
+   * A rebase replays your commits on top of the other branch, so Git's "ours"
+   * is that branch and "theirs" is your own commit: the reverse of a merge.
+   */
+  const rebasing = $derived(repoStore.status?.operation === 'rebase');
+  const oursName = $derived(rebasing ? 'the branch you are rebasing onto' : 'the current side');
+  const theirsName = $derived(rebasing ? 'your commit being replayed' : 'the incoming side');
   const statusLabel = (offer?: MergeOffer | null) =>
     offer?.stages.ours.present && offer.stages.theirs.present ? 'both sides changed the file' : 'one side rewrote the file';
 </script>
@@ -103,8 +112,8 @@
             >Show base</button>
           {/if}
           {#if offer && !offer.binary && blocks.length > 0}
-            <button onclick={() => mergeStore.pickAll('ours')} title="Keep the current side for every conflict">All ours</button>
-            <button onclick={() => mergeStore.pickAll('theirs')} title="Keep the incoming side for every conflict">All theirs</button>
+            <button onclick={() => mergeStore.pickAll('ours')} title={`Keep ${oursName} for every conflict`}>All ours</button>
+            <button onclick={() => mergeStore.pickAll('theirs')} title={`Keep ${theirsName} for every conflict`}>All theirs</button>
           {/if}
           <button class="close" onclick={() => mergeStore.close()} title="Close (Escape)" aria-label="Close">×</button>
         </div>
@@ -154,6 +163,9 @@
               {:else}
                 The file did not exist in the branches' common ancestor, so there is no base to compare with.
               {/if}
+              {#if rebasing}
+                During a rebase, <b>ours</b> is the branch you are rebasing onto and <b>theirs</b> is your own commit being replayed.
+              {/if}
             </p>
 
             {#if mergeStore.showBase && offer.base}
@@ -198,9 +210,9 @@
                       {#if chosen(index) && section.deleted?.[chosen(index)!]}
                         <b>deletes the file</b>
                       {:else if chosen(index) === 'ours'}
-                        keeps <b>{sideName(section.labels.ours, 'the current side')}</b>
+                        keeps <b>{sideName(section.labels.ours, oursName)}</b>
                       {:else if chosen(index) === 'theirs'}
-                        keeps <b>{sideName(section.labels.theirs, 'the incoming side')}</b>
+                        keeps <b>{sideName(section.labels.theirs, theirsName)}</b>
                       {:else}
                         not resolved yet
                       {/if}
@@ -211,7 +223,7 @@
                     <div class="col ours" class:picked={chosen(index) === 'ours'}>
                       <div class="col-head">
                         <span class="tag">Ours</span>
-                        <span class="faint mono">{sideName(section.labels.ours, 'current side')}</span>
+                        <span class="faint mono">{sideName(section.labels.ours, oursName.replace(/^the /, ''))}</span>
                       </div>
                       <div class="col-body">
                         {#if section.deleted?.ours}
@@ -239,7 +251,7 @@
                     <div class="col theirs" class:picked={chosen(index) === 'theirs'}>
                       <div class="col-head">
                         <span class="tag">Theirs</span>
-                        <span class="faint mono">{sideName(section.labels.theirs, 'incoming side')}</span>
+                        <span class="faint mono">{sideName(section.labels.theirs, theirsName.replace(/^the /, ''))}</span>
                       </div>
                       <div class="col-body">
                         {#if section.deleted?.theirs}
