@@ -35,6 +35,9 @@
   --accent-text: #ffffff;
   --accent-subtle: rgba(47, 111, 208, 0.12);
 
+  /* The Git orange, used only by the logo. */
+  --brand: #f03c2e;
+
   --danger: #c0392b;
   --danger-subtle: rgba(192, 57, 43, 0.1);
   --warning: #9a6a00;
@@ -86,6 +89,8 @@
   --accent-hover: #5c9be6;
   --accent-text: #0f1114;
   --accent-subtle: rgba(74, 143, 224, 0.16);
+
+  --brand: #f4553f;
 
   --danger: #e06a5c;
   --danger-subtle: rgba(224, 106, 92, 0.14);
