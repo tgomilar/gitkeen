@@ -15,7 +15,7 @@ import type { MenuItem } from './menu';
 import { SEPARATOR } from './menu';
 import type { Branch, Commit, ForcePushInspection, ResetMode, Stash, StashFile } from './git/types';
 import type { Change } from './changes';
-import { KIND_LABEL } from './changes';
+import { KIND_LABEL, diffSideFor, canStageHunks } from './changes';
 import { diffStore } from './state/diff.svelte';
 import { rebaseStore } from './state/rebase.svelte';
 
@@ -1339,7 +1339,13 @@ export function showWorkingTreeDiff(change: Change) {
     file: change.path,
     origPath: change.file.origPath ?? null,
     hash: null,
-    source: 'Working tree against HEAD'
+    side: diffSideFor(change),
+    stageable: canStageHunks(change),
+    source: change.staged
+      ? change.unstaged
+        ? 'Partially staged'
+        : 'Staged'
+      : 'Unstaged'
   });
 }
 
@@ -1381,7 +1387,7 @@ export function changeMenuItems(change: Change): MenuItem[] {
   return [
     ...items,
     {
-      label: ticked ? 'Exclude from commit' : 'Include in commit',
+      label: ticked ? 'Unstage' : 'Stage',
       icon: ticked ? 'exclude' : 'include',
       hint: commitStore.forced ? 'a merge is in progress' : undefined,
       disabled: commitStore.forced,

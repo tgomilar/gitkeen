@@ -78,7 +78,9 @@ export class GitRepository {
 
   /**
    * The diff of one file. Leave `hash` out for the working tree against HEAD,
-   * or name a commit to see what that commit did to the file.
+   * or name a commit to see what that commit did to the file. For a working
+   * tree file, `side` picks one half of it: what is staged (`staged`) or what
+   * still waits to be (`unstaged`).
    */
   fileDiff(options: {
     file: string;
@@ -86,6 +88,7 @@ export class GitRepository {
     hash?: string | null;
     /** Names the other side outright, for a diff between two revisions. */
     base?: string | null;
+    side?: 'staged' | 'unstaged' | null;
     context?: number;
   }): Promise<FileDiff> {
     return transport.call('diff.file', { path: this.path, ...options });
@@ -129,7 +132,20 @@ export class GitRepository {
     return transport.call('commit.head', { path: this.path });
   }
 
-  /** Commit exactly these paths, leaving anything else staged where it is. */
+  /** Stage or unstage whole files, the box in the commit panel. */
+  stage(paths: string[], on: boolean): Promise<{ ok: boolean; staged: number }> {
+    return transport.call('changes.stage', { path: this.path, paths, on });
+  }
+
+  /**
+   * Stage or unstage individual hunks of one file. `hunks` come from a
+   * `fileDiff` of the matching `side`.
+   */
+  stageHunks(file: string, side: 'staged' | 'unstaged', hunks: FileDiff['hunks']): Promise<{ ok: boolean; applied: number }> {
+    return transport.call('changes.stageHunks', { path: this.path, file, side, hunks });
+  }
+
+  /** Commit the staged working tree: exactly the ticked files and hunks. */
   commit(paths: string[], message: string, amend = false): Promise<CommitResult> {
     return transport.call('changes.commit', { path: this.path, paths, message, amend });
   }

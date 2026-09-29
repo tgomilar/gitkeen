@@ -18,6 +18,57 @@
     diff ? limitHunks(diff.hunks, diffStore.shown || INITIAL_LINES) : { hunks: [], hidden: 0 }
   );
 
+  /** A working tree diff means there is an index to move between sides of. */
+  const working = $derived(request !== null && request.hash == null);
+  /** The two tabs that switch a diff between its staged and unstaged half. */
+  const tabs = $derived(!!request?.stageable && working);
+  /** Whether the viewer can stage or unstage single hunks right now. */
+  const hunkable = $derived(
+    tabs && !!diff && !diff.binary && !diff.empty && diff.hunks.length > 0 && !diffStore.loading
+  );
+
+  /** Which hunks are coming with the next stage or unstage. */
+  let selected = $state<Set<number>>(new Set());
+  let staging = $state(false);
+
+  // Every new diff starts with its hunks all chosen: the one-tick flow is
+  // "uncheck what stays behind, then stage".
+  $effect(() => {
+    const hunks = diff?.hunks ?? [];
+    selected = hunks.length > 0 ? new Set(hunks.map((h) => h.oldStart)) : new Set();
+  });
+
+  const selectedHunks = $derived(
+    (diff?.hunks ?? []).filter((h) => selected.has(h.oldStart))
+  );
+
+  function toggleHunk(oldStart: number) {
+    const next = new Set(selected);
+    if (next.has(oldStart)) next.delete(oldStart);
+    else next.add(oldStart);
+    selected = next;
+  }
+
+  async function applySelection() {
+    if (staging || selectedHunks.length === 0) return;
+    staging = true;
+    try {
+      await diffStore.stageHunks(selectedHunks, request?.side ?? 'unstaged');
+    } finally {
+      staging = false;
+    }
+  }
+
+  async function stageWhole(on: boolean) {
+    if (staging) return;
+    staging = true;
+    try {
+      await diffStore.stageWholeFile(on);
+    } finally {
+      staging = false;
+    }
+  }
+
   const STATUS_LABEL: Record<string, string> = {
     added: 'Added',
     deleted: 'Deleted',
@@ -84,6 +135,20 @@
         </div>
 
         <div class="tools">
+          {#if tabs}
+            <div class="sides" role="group" aria-label="Part of the working tree">
+              <button
+                class:on={(request.side ?? 'unstaged') === 'unstaged'}
+                onclick={() => diffStore.setSide('unstaged')}
+                aria-pressed={(request.side ?? 'unstaged') === 'unstaged'}
+              >Working tree</button>
+              <button
+                class:on={request.side === 'staged'}
+                onclick={() => diffStore.setSide('staged')}
+                aria-pressed={request.side === 'staged'}
+              >Staged</button>
+            </div>
+          {/if}
           <div class="modes" role="group" aria-label="Diff layout">
             <button
               class:on={!split}
@@ -99,6 +164,31 @@
           <button class="close" onclick={() => diffStore.close()} title="Close (Escape)" aria-label="Close">×</button>
         </div>
       </header>
+
+      {#if working && diff && !diff.binary && !diff.empty}
+        <footer class="stagebar">
+          {#if hunkable}
+            <span class="count">
+              {selectedHunks.length === limited.hunks.length && limited.hunks.length > 0
+                ? `${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`
+                : `${selectedHunks.length} of ${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`}
+            </span>
+            <button disabled={!selectedHunks.length || staging || diffStore.loading} onclick={applySelection}>
+              {request.side === 'staged' ? 'Unstage selected' : 'Stage selected'}
+            </button>
+            {#if limited.hidden > 0}
+              <span class="count faint">the rest is not drawn yet</span>
+            {/if}
+          {/if}
+          <button
+            class="whole"
+            disabled={staging}
+            onclick={() => stageWhole(request.side !== 'staged')}
+          >
+            {request.side === 'staged' ? 'Unstage file' : 'Stage file'}
+          </button>
+        </footer>
+      {/if}
 
       <div class="body">
         {#if diffStore.loading}
@@ -126,6 +216,16 @@
           <div class="diff" class:split>
             {#each limited.hunks as hunk, index (index)}
               <div class="hunk-head">
+                {#if hunkable}
+                  <label class="hunk-tick" title={request.side === 'staged' ? 'Unstage this hunk' : 'Stage this hunk'}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(hunk.oldStart)}
+                      onchange={() => toggleHunk(hunk.oldStart)}
+                      disabled={staging}
+                    />
+                  </label>
+                {/if}
                 <span class="mono">@@ −{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span>
                 {#if hunk.heading}<span class="heading">{hunk.heading}</span>{/if}
               </div>
@@ -257,12 +357,14 @@
 
   .tools { flex: none; display: flex; align-items: center; gap: 8px; }
 
+  .sides,
   .modes {
     display: flex;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     overflow: hidden;
   }
+  .sides button,
   .modes button {
     padding: 3px 10px;
     background: var(--bg-panel);
@@ -270,7 +372,9 @@
     color: var(--text-dim);
     font-size: 11.5px;
   }
+  .sides button:hover,
   .modes button:hover { background: var(--bg-hover); color: var(--text); }
+  .sides button.on,
   .modes button.on { background: var(--accent); color: var(--accent-text); }
 
   .close {
@@ -286,6 +390,29 @@
     line-height: 1;
   }
   .close:hover { background: var(--bg-hover); color: var(--text); }
+
+  .stagebar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 10px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .stagebar button {
+    padding: 3px 12px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 11.5px;
+  }
+  .stagebar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .stagebar button.whole { margin-left: auto; }
+  .stagebar button:disabled { opacity: 0.55; cursor: default; }
+  .stagebar .count { color: var(--text-dim); font-family: var(--font-mono); font-size: 11px; }
+  .stagebar .count.faint { color: var(--text-faint); }
 
   .body {
     flex: 1;
@@ -303,6 +430,7 @@
 
   .hunk-head {
     display: flex;
+    align-items: center;
     gap: 12px;
     padding: 3px 10px;
     background: var(--bg-raised);
@@ -315,6 +443,13 @@
   }
   .hunk-head:first-child { border-top: 0; }
   .heading { color: var(--text-dim); }
+
+  .hunk-tick {
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .hunk-tick input { accent-color: var(--accent); margin: 0; cursor: pointer; }
 
   .row {
     display: grid;

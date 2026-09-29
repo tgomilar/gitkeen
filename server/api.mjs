@@ -231,6 +231,31 @@ function parseFileDiff(patch) {
 }
 
 /**
+ * Rebuild one hunk as a self-contained patch Git can apply.
+ *
+ * `parseFileDiff` kept each line's content after its kind marker, so writing
+ * the marker back reproduces the original patch line for line, the no-newline
+ * marker included. The heading sits on the header line, so a hostile newline
+ * in it is stripped rather than trusted.
+ */
+function buildHunkPatch(file, hunk) {
+  const line = (n, len) => (len === 1 ? String(n) : `${n},${len}`);
+  const heading = (hunk.heading ?? '').replace(/[\r\n]/g, '');
+  const out = [
+    `diff --git a/${file} b/${file}`,
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    `@@ -${line(hunk.oldStart, hunk.oldLines)} +${line(hunk.newStart, hunk.newLines)} @@${heading ? ' ' + heading : ''}`
+  ];
+  for (const diffLine of hunk.lines ?? []) {
+    const marker = diffLine.kind === 'add' ? '+' : diffLine.kind === 'del' ? '-' : ' ';
+    out.push(marker + diffLine.text);
+    if (diffLine.noNewline) out.push('\\ No newline at end of file');
+  }
+  return out.join('\n') + '\n';
+}
+
+/**
  * Make sure a stash reference still points at the change the user chose.
  *
  * `stash@{1}` is a position, not an identity. Dropping `stash@{0}` renumbers
@@ -2178,7 +2203,7 @@ export const methods = {
    * panel would commit, so HEAD is the comparison), or name a commit to see
    * what that commit did to the file.
    */
-  async 'diff.file'({ path, file, origPath = null, hash = null, base = null, context = 3 }) {
+  async 'diff.file'({ path, file, origPath = null, hash = null, base = null, context = 3, side = null }) {
     if (!file) throw new GitError('No file was given.', { command: '', stderr: '', code: 1 });
 
     // core.quotepath escapes non-ASCII paths in the patch headers. The status
@@ -2186,6 +2211,14 @@ export const methods = {
     const common = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--find-renames'];
     let args;
     let untracked = false;
+
+    // Only working-tree diffs answer the staged/unstaged question; a diff of
+    // a commit has a fixed pair of sides. Who is untracked comes from status,
+    // which is read once for both.
+    if (!hash) {
+      const status = parseStatus(await git(path, STATUS_ARGS));
+      untracked = status.files.find((f) => f.path === file)?.state === 'untracked';
+    }
 
     if (hash && base) {
       // Both sides named outright. A stash needs this: its content
@@ -2203,10 +2236,16 @@ export const methods = {
         // For a merge, show it against its first parent: that is the change
         // the branch received, which is what the file list already counted.
         : [...common, parents[0], hash, '--', ...paths];
+    } else if (side === 'staged') {
+      // What is waiting in the index: HEAD on the left, the index on the
+      // right. An untracked file is not in the index, so this reads empty.
+      args = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--cached', '--', file];
+    } else if (side === 'unstaged' && !untracked) {
+      // What the working tree holds beyond the index, so the viewer can stage
+      // parts of it. An untracked file falls through to the against-nothing
+      // diff below, which shows the whole file as the unstaged part.
+      args = ['-c', 'core.quotepath=false', 'diff', `--unified=${context}`, '--', file];
     } else {
-      const status = parseStatus(await git(path, STATUS_ARGS));
-      const entry = status.files.find((f) => f.path === file);
-      untracked = entry?.state === 'untracked';
       args = untracked
         // An untracked file is in no tree at all, so nothing can be compared
         // with it. Diffing against an empty file shows it as wholly added.
@@ -2224,6 +2263,8 @@ export const methods = {
       path: file,
       origPath,
       hash,
+      side,
+      untracked,
       ...parsed,
       /** No hunks and not binary means a change Git records outside the text. */
       empty: !parsed.binary && parsed.hunks.length === 0
@@ -2275,80 +2316,101 @@ export const methods = {
   },
 
   /**
-   * Commit exactly the files the user ticked, the way IntelliJ IDEA does.
+   * Stage or unstage whole files, the box in the commit panel.
    *
-   * Ticking a box stages nothing. Only here does anything reach Git, and the
-   * commit carries a pathspec, so a file that was already staged but left
-   * unticked stays staged and uncommitted instead of being swept in.
+   * One tick now means one Git command. A partially staged file can only live
+   * in the index, so the tick stopped being paper: ticking adds the file's
+   * current working-tree content, unticking resets its index entry to HEAD.
+   * An untracked file enters the index the moment it is ticked and leaves it
+   * (becoming untracked again) when it is unticked.
+   */
+  async 'changes.stage'({ path, paths, on }) {
+    if (!Array.isArray(paths) || paths.length === 0) return { ok: true, staged: 0 };
+
+    if (on) {
+      await git(path, ['add', '--', ...paths]);
+    } else {
+      await git(path, ['reset', '-q', '--', ...paths]);
+    }
+    return { ok: true, staged: paths.length };
+  },
+
+  /**
+   * Stage or unstage individual hunks of one file.
    *
-   * Two cases break that rule and are handled as such:
-   *  - An untracked file cannot be named in a pathspec until Git knows it, so
-   *    those are added first.
-   *  - Git refuses a partial commit while a merge is unfinished, so during any
-   *    in-progress operation the ticked files are staged and the whole index
-   *    is committed. The panel says so before the button is pressed.
+   * The hunks come from `diff.file` with a `side` and are rebuilt here into a
+   * minimal patch handed to `git apply --cached`: an `unstaged` hunk is
+   * against the index and goes in, a `staged` hunk is against HEAD and comes
+   * out. The hunks are applied one at a time, lowest first, so staging does
+   * not move the line numbers the remaining hunks were read with.
+   */
+  async 'changes.stageHunks'({ path, file, side = 'unstaged', hunks }) {
+    if (side !== 'unstaged' && side !== 'staged') {
+      throw new GitError('A side of "staged" or "unstaged" is required.', { command: '', stderr: '', code: 1 });
+    }
+    if (!Array.isArray(hunks) || hunks.length === 0) {
+      throw new GitError('Select at least one hunk.', { command: '', stderr: '', code: 1 });
+    }
+    if (!file || !/^(?:[^/]+(?:\/|$))+$/.test(file) || file.includes('..')) {
+      throw new GitError('A relative file path is required.', { command: '', stderr: '', code: 1 });
+    }
+
+    const ordered = [...hunks].sort((a, b) => (b.oldStart ?? 0) - (a.oldStart ?? 0));
+    let dir = null;
+    try {
+      dir = await mkdtemp(join(tmpdir(), 'gitalia-hunks-'));
+      const patchFile = join(dir, 'hunk.patch');
+      for (const hunk of ordered) {
+        await writeFile(patchFile, buildHunkPatch(file, hunk), 'utf8');
+        const apply = ['apply', '--cached', '--recount', `--include=${file}`];
+        if (side === 'staged') apply.push('-R');
+        apply.push(patchFile);
+        await git(path, apply);
+      }
+      return { ok: true, applied: hunks.length };
+    } finally {
+      if (dir) await rm(dir, { recursive: true, force: true });
+    }
+  },
+
+  /**
+   * Commit the staged working tree.
+   *
+   * The tick is a stage, so "the files the user ticked" is exactly what the
+   * index holds: a whole file by `git add`, a hunk by `git apply`. The commit
+   * is therefore a plain index commit, and anything the index does not hold
+   * stays out of it, on purpose. Amending with nothing staged still works: it
+   * replaces the message of HEAD, whose tree is untouched.
    */
   async 'changes.commit'({ path, paths, message, amend = false }) {
     if (!message || !message.trim()) {
       throw new GitError('A commit message is required.', { command: '', stderr: '', code: 1 });
     }
-    if (!Array.isArray(paths) || paths.length === 0) {
+    if (!Array.isArray(paths)) {
       throw new GitError('Select at least one file to commit.', { command: '', stderr: '', code: 1 });
     }
 
     const status = parseStatus(await git(path, STATUS_ARGS));
     const operation = await detectOperation(path);
-    const wanted = new Set(paths);
-    const known = status.files.filter((f) => wanted.has(f.path));
+    const staged = status.files.filter((f) => f.index !== '.' && f.index !== '?');
 
-    const missing = paths.filter((p) => !status.files.some((f) => f.path === p));
-    if (missing.length > 0) {
+    if (staged.length === 0 && !amend) {
       throw new GitError(
-        `These files have changed since the list was read:\n  ${missing.join('\n  ')}\n\nRefresh and try again.`,
+        'Nothing is staged. Tick a file to stage it, then commit again.',
         { command: '', stderr: '', code: 1 }
       );
     }
-
-    // A rename is one row on screen but two paths to Git. A pathspec commit
-    // that named only the new one would leave the deletion of the old name
-    // staged and uncommitted, splitting the rename in two.
-    const pathspec = [];
-    for (const file of known) {
-      pathspec.push(file.path);
-      if (file.origPath) pathspec.push(file.origPath);
-    }
-
-    // `git add` cannot take that old name: it is gone from the working tree
-    // and gone from the index, because the rename is already recorded there.
-    const stageable = known.map((f) => f.path);
-
-    const untracked = known.filter((f) => f.state === 'untracked').map((f) => f.path);
-    if (untracked.length > 0) await git(path, ['add', '--', ...untracked]);
 
     const args = ['commit'];
     if (amend) args.push('--amend');
     args.push('-m', message.trim());
 
-    if (operation) {
-      // Partial commits are impossible mid-merge, so stage and commit it all.
-      await git(path, ['add', '--', ...stageable]);
-    } else {
-      args.push('--', ...pathspec);
-    }
-
-    try {
-      await git(path, args);
-    } catch (err) {
-      // Undo the staging done for untracked files, so a refused commit (a
-      // failing hook, say) leaves the working tree exactly as it was found.
-      if (untracked.length > 0 && !operation) {
-        await runGit(path, ['reset', '-q', '--', ...untracked], { allowFailure: true });
-      }
-      throw err;
-    }
+    // Nothing to undo if this fails: the commit writes no staging of its own,
+    // so a refused commit leaves the working tree exactly as it was found.
+    await git(path, args);
 
     const { stdout: created } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
-    return { ok: true, commit: created.trim(), files: known.length, partial: !operation };
+    return { ok: true, commit: created.trim(), files: staged.length, partial: !operation };
   },
 
   /**

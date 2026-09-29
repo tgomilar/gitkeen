@@ -5,7 +5,9 @@
  * details pane, so what it shows lives here rather than in either of them.
  */
 import { repoStore, describe } from './repo.svelte';
+import { toasts } from './toasts.svelte';
 import type { FileDiff } from '../git/types';
+import type { GitRepository } from '../git/repository';
 
 const MODE_KEY = 'gitalia.diff-mode';
 
@@ -18,6 +20,17 @@ export interface DiffRequest {
   hash?: string | null;
   /** Names the other side outright, when it is not the commit's parent. */
   base?: string | null;
+  /**
+   * Which half of the working tree is on show: the index against HEAD
+   * (`staged`) or the worktree against the index (`unstaged`). Both are null
+   * for a commit diff.
+   */
+  side?: 'staged' | 'unstaged' | null;
+  /**
+   * True when the file can be staged or unstaged a hunk at a time. Set by the
+   * caller, which knows whether the change is one that a hunk diff can cover.
+   */
+  stageable?: boolean;
   /** What the header says this diff belongs to, such as a short hash. */
   source: string;
 }
@@ -52,25 +65,80 @@ class DiffStore {
     if (!repo) return;
 
     this.request = request;
-    this.diff = null;
-    this.error = null;
-    this.loading = true;
-    this.shown = INITIAL_LINES;
+    this.resetRequest();
     const mine = ++this.token;
-
-    try {
-      const diff = await repo.fileDiff({
-        file: request.file,
-        origPath: request.origPath ?? null,
-        hash: request.hash ?? null,
-        base: request.base ?? null
-      });
-      if (mine === this.token) this.diff = diff;
-    } catch (err) {
-      if (mine === this.token) this.error = describe(err);
-    } finally {
-      if (mine === this.token) this.loading = false;
+    const diff = await this.fetch(repo, request, mine);
+    if (mine === this.token) {
+      this.diff = diff;
+      this.loading = false;
     }
+  }
+
+  /**
+   * Point the working tree view at the other half of a partially staged
+   * file, without closing and reopening anything.
+   */
+  async setSide(side: 'staged' | 'unstaged') {
+    if (!this.request || this.request.hash != null) return;
+    const request = { ...this.request!, side };
+    this.request = request;
+    this.resetRequest();
+
+    const repo = repoStore.repo;
+    if (!repo) return;
+    const mine = ++this.token;
+    const diff = await this.fetch(repo, request, mine);
+    if (mine === this.token) {
+      this.diff = diff;
+      this.loading = false;
+    }
+  }
+
+  /** Stage or unstage the ticked hunks, then read the result back. */
+  async stageHunks(hunks: FileDiff['hunks'], side: 'staged' | 'unstaged') {
+    const repo = repoStore.repo;
+    const request = this.request;
+    if (!repo || !request || request.hash != null) return false;
+    try {
+      this.loading = true;
+      await repo.stageHunks(request.file, side, hunks);
+    } catch (err) {
+      toasts.error(`Could not ${side === 'staged' ? 'unstage' : 'stage'} the selection`, describe(err));
+      return false;
+    } finally {
+      this.loading = false;
+    }
+
+    // The index moved, so the panel and the working tree both changed.
+    await repoStore.refresh();
+
+    // Reload the side that was edited. If that side has nothing left to show,
+    // the whole change moved to the other half, so land there instead.
+    const flip = side === 'staged' ? 'unstaged' : 'staged';
+    await this.setSide(side);
+    if (this.diff && this.diff.hunks.length === 0) {
+      await this.setSide(flip);
+    }
+    return true;
+  }
+
+  /** Stage or unstage the whole file on one click, from the viewer. */
+  async stageWholeFile(on: boolean) {
+    const repo = repoStore.repo;
+    const request = this.request;
+    if (!repo || !request || request.hash != null) return false;
+    try {
+      this.loading = true;
+      await repo.stage([request.file], on);
+    } catch (err) {
+      toasts.error(on ? 'Could not stage the file' : 'Could not unstage the file', describe(err));
+      return false;
+    } finally {
+      this.loading = false;
+    }
+    await repoStore.refresh();
+    await this.setSide(on ? 'staged' : 'unstaged');
+    return true;
   }
 
   showMore() {
@@ -83,6 +151,29 @@ class DiffStore {
     this.diff = null;
     this.error = null;
     this.loading = false;
+  }
+
+  private resetRequest() {
+    this.diff = null;
+    this.error = null;
+    this.loading = true;
+    this.shown = INITIAL_LINES;
+  }
+
+  private async fetch(repo: GitRepository, request: DiffRequest, mine: number) {
+    try {
+      const diff = await repo.fileDiff({
+        file: request.file,
+        origPath: request.origPath ?? null,
+        hash: request.hash ?? null,
+        base: request.base ?? null,
+        side: request.side ?? null
+      });
+      return mine === this.token ? diff : null;
+    } catch (err) {
+      if (mine === this.token) this.error = describe(err);
+      return null;
+    }
   }
 }
 

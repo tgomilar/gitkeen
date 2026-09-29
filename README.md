@@ -86,15 +86,19 @@ working tree that differs from the last commit, in two groups.
 Unversioned files start unticked on purpose. A build folder or an editor
 setting file should never join a commit because you failed to notice it.
 
-Ticking a box runs no Git command. It only records that the file belongs in the
-next commit. This is how IntelliJ IDEA behaves, and it means Gitalia never
-disturbs what you prepared in Git yourself. Only the Commit button writes
-anything.
+A tick is a real stage, the way `git add` and `git reset` work: what Git's own
+index holds is exactly what the panel shows as ticked. Stage a file with
+`git add` in a terminal and it appears ticked; unstage it and it loses its tick.
+A partially staged file — some of its changes in the index, the rest not — is
+shown with its tick on and its name in a mixed colour, because part of it is
+committed and part is not.
 
-When you press Commit, Gitalia commits exactly the ticked files. A file you
-prepared with `git add` but left unticked stays prepared and uncommitted. A
-renamed file is one row on screen, and Gitalia sends both the old name and the
-new name to Git, so the rename is recorded as a rename.
+When you press Commit, Gitalia commits exactly what the index holds: whole
+ticked files and, if you staged some of a file, only those hunks. A file you
+prepared with `git add` but left untouched is part of the commit; a change you
+never staged stays out of it, on purpose. A renamed file is one row on screen,
+and Gitalia sends both the old name and the new name to Git, so the rename is
+recorded as a rename.
 
 The colour of a file name tells you its state.
 
@@ -143,6 +147,14 @@ width. Press Escape to close it.
 |---|---|
 | Unified | One column. Removed lines and added lines follow each other. |
 | Side by side | Two columns. The old file on the left, the new one on the right. |
+| Working tree | A working tree file shows this tab. It is the change that waits to be staged. |
+| Staged | Its twin tab: the change already in the index. |
+| Hunk box | Next to each hunk of a working tree change. Tick the hunks you want, then **Stage selected**; do the same on the Staged tab to **Unstage selected**. |
+| Stage file / Unstage file | Stages or unstages the whole file in one click, from the viewer. |
+
+A file with part of its change in the index and part still in the working tree
+opens on its **Working tree** half. When you stage or unstage every hunk, the
+viewer follows the whole change over to the other tab by itself.
 
 Both layouts mark the words that changed inside a line, so a line where one
 name was edited does not read as a line that was rewritten. When two lines have
@@ -470,17 +482,17 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-A conflict editor and hunk-level staging come later. The rebase editor does
-not offer `edit`, which stops the rebase part way through so a commit can be
-amended. The plan document lists the order.
+A conflict editor comes later. The rebase editor does not offer `edit`, which
+stops the rebase part way through so a commit can be amended. The plan document
+lists the order.
 
-The diff viewer has no syntax colouring yet, and you cannot stage or roll back
-a single hunk from it. Those are the next steps for it.
+The diff viewer has no syntax colouring yet, and it cannot roll back a single
+hunk. Hunk staging is built; rolling back a hunk is the next step for it.
 
 Gitalia does not offer a separate staging area. It follows the IntelliJ IDEA
-model, where a tick box decides what goes into the commit. If you prepare files
-with `git add` outside Gitalia, your work is kept: those files are marked
-`staged` in the list, and Gitalia only commits them when you tick them.
+model, where a tick box decides what goes into the commit. The tick is a real
+stage: prepare files with `git add` outside Gitalia and they arrive ticked, and
+a commit writes exactly what the index holds.
 
 ## Requirements
 

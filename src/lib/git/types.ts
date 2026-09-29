@@ -353,6 +353,14 @@ export interface FileDiff {
   origPath: string | null;
   /** The commit this diff belongs to, or null for the working tree. */
   hash: string | null;
+  /**
+   * Which half of the working tree this diff compares, when it was asked
+   * for one: the index against HEAD (`staged`) or the worktree against the
+   * index (`unstaged`). Null for a whole-file or commit diff.
+   */
+  side?: 'staged' | 'unstaged' | null;
+  /** True when `path` is not yet known to Git. */
+  untracked?: boolean;
   status: DiffStatus;
   binary: boolean;
   /** True when the diff was cut short because the file is very large. */

@@ -20,8 +20,10 @@ export interface Change {
   /** Everything before the name, shown dimmed beside it. Empty at the root. */
   dir: string;
   kind: ChangeKind;
-  /** True when Git's index already holds part of this change. */
+  /** True when the index already holds part of this change. */
   staged: boolean;
+  /** True when the working tree holds more than the index does. */
+  unstaged: boolean;
 }
 
 /**
@@ -59,15 +61,40 @@ export function toChange(file: StatusFile): Change {
     name: cut === -1 ? file.path : file.path.slice(cut + 1),
     dir: cut === -1 ? '' : file.path.slice(0, cut),
     kind: changeKind(file),
-    staged: file.state !== 'untracked' && file.index !== '.' && file.index !== '?'
+    staged: file.state !== 'untracked' && file.index !== '.' && file.index !== '?',
+    unstaged: file.state === 'untracked'
+      // The whole file is the unstaged part of an untracked file.
+      ? true
+      : file.worktree !== '.' && file.worktree !== '?'
   };
+}
+
+/**
+ * Which half of the working tree to open: the part that can still be staged,
+ * or — once everything is staged — the part that can be unstaged again.
+ */
+export function diffSideFor(change: Change): 'staged' | 'unstaged' {
+  if (change.staged && !change.unstaged) return 'staged';
+  return 'unstaged';
+}
+
+/**
+ * Whether a file can be staged or unstaged a hunk at a time.
+ *
+ * A file has to differ from the index in its text for that: untracked,
+ * conflicted, renamed and deleted files are whole-file affairs.
+ */
+export function canStageHunks(change: Change): boolean {
+  return change.kind === 'modified' || change.kind === 'added';
 }
 
 /** Tooltip text: the whole story of one row in a sentence. */
 export function describeChange(change: Change): string {
   const parts = [`${KIND_LABEL[change.kind]}: ${change.path}`];
   if (change.file.origPath) parts.push(`was ${change.file.origPath}`);
-  if (change.staged) parts.push('part of this change is already staged');
+  if (change.staged && change.unstaged) parts.push('part of this change is staged, the rest waits');
+  else if (change.staged) parts.push('the whole change is staged');
+  else if (change.kind !== 'unversioned') parts.push('nothing is staged yet');
   return parts.join('\n');
 }
 

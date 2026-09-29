@@ -1,15 +1,15 @@
 /**
  * State behind the commit panel.
  *
- * The tick boxes follow IntelliJ IDEA: ticking one runs no Git command at all.
- * It only records that the file belongs in the next commit. Git's index is
- * left exactly as the user arranged it, and only the commit itself writes.
+ * The tick boxes follow IntelliJ IDEA: ticking a file stages it, the way
+ * `git add` and `git reset` do. A partially staged file can only live in the
+ * index, so the tick stopped being paper the moment the panel could stage
+ * hunks. The box is a Git command; the list it sits in is the record of
+ * what those commands left behind.
  *
- * Because a refresh rebuilds the file list from scratch, the answer cannot be
- * stored as "which paths are ticked". It is stored as the two ways a file can
- * differ from its default: a tracked change the user took out, and an
- * unversioned file the user put in. A file appearing later then arrives with
- * the right default rather than the one it happened to have last time.
+ * What is ticked is therefore read from the status: a file whose index entry
+ * differs from HEAD is ticked, and anything the index does not hold stays out
+ * of the commit.
  */
 import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
@@ -24,13 +24,19 @@ import type {
 class CommitStore {
   message = $state('');
   amend = $state(false);
-  /** The message being written before "Amend" replaced it with HEAD's. */
+  /** "Amend the previous commit" is off, and the draft is blank. */
   private draft = '';
 
-  /** Tracked changes the user took out of the commit. */
-  private excluded = $state<Set<string>>(new Set());
-  /** Unversioned files the user put into the commit. */
-  private included = $state<Set<string>>(new Set());
+  /**
+   * Files the index holds beyond HEAD. A partial commit of a rename or an
+   * untracked file stays a whole-file affair, so the tick is the whole file.
+   */
+  checked = $derived.by(() => {
+    if (this.forced) return new Set(this.all.map((c) => c.path));
+    const set = new Set<string>();
+    for (const change of this.all) if (change.staged) set.add(change.path);
+    return set;
+  });
 
   /**
    * Which AI providers the backend has a key for. Null until asked, empty
@@ -70,14 +76,6 @@ class CommitStore {
   forced = $derived(!!repoStore.status?.operation);
 
   conflicts = $derived(this.all.filter((c) => c.kind === 'conflict'));
-
-  checked = $derived.by(() => {
-    if (this.forced) return new Set(this.all.map((c) => c.path));
-    const set = new Set<string>();
-    for (const change of this.changes) if (!this.excluded.has(change.path)) set.add(change.path);
-    for (const change of this.unversioned) if (this.included.has(change.path)) set.add(change.path);
-    return set;
-  });
 
   checkedPaths = $derived(this.all.filter((c) => this.checked.has(c.path)).map((c) => c.path));
 
@@ -129,32 +127,31 @@ class CommitStore {
     return on === 0 ? 'none' : on === paths.length ? 'all' : 'some';
   }
 
-  setChecked(changes: Change[], on: boolean) {
+  /**
+   * Stage or unstage a set of files, then read the index back.
+   *
+   * Ticking now runs a real Git command, so the panel goes busy and the file
+   * list is rebuilt from the status the commands leave behind.
+   */
+  async setChecked(changes: Change[], on: boolean) {
     if (this.forced) return;
-    const excluded = new Set(this.excluded);
-    const included = new Set(this.included);
-    for (const change of changes) {
-      if (change.kind === 'unversioned') {
-        if (on) included.add(change.path);
-        else included.delete(change.path);
-      } else {
-        if (on) excluded.delete(change.path);
-        else excluded.add(change.path);
-      }
-    }
-    this.excluded = excluded;
-    this.included = included;
+    const repo = repoStore.repo;
+    if (!repo) return;
+    const paths = changes.filter((c) => c.staged !== on).map((c) => c.path);
+    if (paths.length === 0) return;
+    const result = await this.run(on ? 'Staging' : 'Unstaging', () => repo.stage(paths, on));
+    if (result) await repoStore.refresh();
     // The advice described the set that was ticked when it was asked for, so
     // changing the ticks makes it wrong rather than merely out of date.
     this.splitGroups = [];
   }
 
-  toggle(change: Change) {
-    this.setChecked([change], !this.checked.has(change.path));
+  async toggle(change: Change) {
+    await this.setChecked([change], !this.checked.has(change.path));
   }
 
-  toggleGroup(changes: Change[]) {
-    this.setChecked(changes, this.groupState(changes.map((c) => c.path)) !== 'all');
+  async toggleGroup(changes: Change[]) {
+    await this.setChecked(changes, this.groupState(changes.map((c) => c.path)) !== 'all');
   }
 
   toggleCollapsed(key: string) {
@@ -177,14 +174,12 @@ class CommitStore {
     this.splitGroups = [];
   }
 
-  /** Forget everything typed and ticked. Called when the repository changes. */
+  /** Forget everything typed. Called when the repository changes. */
   reset() {
     this.message = '';
     this.draft = '';
     this.amend = false;
     this.splitGroups = [];
-    this.excluded = new Set();
-    this.included = new Set();
     this.selected = null;
     this.head = null;
     this.headFor = null;
@@ -385,11 +380,9 @@ class CommitStore {
     this.message = '';
     this.draft = '';
     this.amend = false;
-    // Committed paths are gone, so their ticks mean nothing. Anything still
-    // in the working tree keeps the state the user gave it.
-    const done = new Set(paths);
-    this.excluded = new Set([...this.excluded].filter((p) => !done.has(p)));
-    this.included = new Set([...this.included].filter((p) => !done.has(p)));
+    // The commmitted files are gone from the status, so the index holds exactly
+    // what is left. Amending keeps it, since an amend is a new commit of the
+    // same index.
 
     // The panel's own effect reloads the amend target: HEAD has just moved.
     await repoStore.refresh();
@@ -474,12 +467,6 @@ class CommitStore {
       toasts.info('Nothing was stashed', 'Git found no change in the files you chose.');
       return false;
     }
-
-    // Stashed files are gone from the working tree, so the ticks that named
-    // them mean nothing now.
-    const done = new Set(paths);
-    this.excluded = new Set([...this.excluded].filter((p) => !done.has(p)));
-    this.included = new Set([...this.included].filter((p) => !done.has(p)));
 
     toasts.success(
       `Stashed ${paths.length} ${paths.length === 1 ? 'file' : 'files'}`,
