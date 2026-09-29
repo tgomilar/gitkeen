@@ -7,6 +7,8 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { methods } from '../api.mjs';
 import { withRepo } from './harness.mjs';
 
@@ -309,6 +311,103 @@ describe('the rebase editor: edit (stop to amend)', () => {
       assert.equal(aborted.operation, 'rebase');
       assert.equal(repo.midOperation(), false);
       assert.deepEqual(await repo.log(), ['c3', 'c2', 'c1', 'base']);
+    });
+  });
+});
+
+describe('continuing an edit stop', () => {
+  /** base, c1…c4, then a plan that stops at c2 with `edit` (and `extra` on it). */
+  async function stopAtC2(repo, extra = {}, later = {}) {
+    await repo.commit('base', { 'base.txt': 'b\n' });
+    await repo.commits(4);
+    const from = (await repo.hashes())[3];
+    const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+    const [c1, c2, c3, c4] = commits;
+    const plan = [
+      { hash: c1.hash, command: 'pick' },
+      { hash: c2.hash, command: 'edit', ...extra },
+      { hash: c3.hash, command: 'pick', ...later },
+      { hash: c4.hash, command: 'pick' }
+    ];
+    const stopped = await methods['commits.rebase']({ path: repo.path, from, plan });
+    assert.equal(stopped.stopped, true);
+    return plan;
+  }
+
+  test('a new message and file changes are both folded in', async () => {
+    await withRepo(async (repo) => {
+      const plan = await stopAtC2(repo, { message: 'c2 retitled' });
+      repo.write('c2.txt', 'changed by hand\n');
+
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c4', 'c3', 'c2 retitled', 'c1', 'base']);
+      assert.equal((await repo.git(['show', 'HEAD~2:c2.txt'])).stdout, 'changed by hand\n');
+      assert.equal(repo.midOperation(), false);
+    });
+  });
+
+  test('an untracked file nobody staged stays out of the commit', async () => {
+    await withRepo(async (repo) => {
+      const plan = await stopAtC2(repo);
+      repo.write('c2.txt', 'changed by hand\n');
+      repo.write('junk.log', 'noise\n');
+
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.finished, true);
+      assert.equal((await repo.git(['show', 'HEAD~2:c2.txt'])).stdout, 'changed by hand\n');
+      assert.equal((await repo.files()).includes('junk.log'), false, 'not committed');
+      assert.match(await repo.status(), /^\?\? junk\.log$/m, 'still there, untracked');
+    });
+  });
+
+  test('commits made at the stop are kept as they are', async () => {
+    await withRepo(async (repo) => {
+      const plan = await stopAtC2(repo, { message: 'c2 retitled' });
+      // Split the stopped commit in two by hand.
+      await repo.git(['reset', '-q', 'HEAD^']);
+      await repo.commit('split part A', { 'c2.txt': '2\n' });
+      await repo.commit('split part B', { 'extra.txt': 'x\n' });
+
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c4', 'c3', 'split part B', 'split part A', 'c1', 'base']);
+    });
+  });
+
+  test('without the plan, the one saved when the rebase started is used', async () => {
+    await withRepo(async (repo) => {
+      await stopAtC2(repo, {}, { command: 'reword', message: 'c3 renamed' });
+      // The app was reloaded: nothing on the client remembers the plan.
+      const continued = await methods['repo.continueOperation']({ path: repo.path });
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c4', 'c3 renamed', 'c2', 'c1', 'base']);
+    });
+  });
+
+  test('a stop in a linked worktree is reported as a stop', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(3);
+      const tree = join(repo.path, '..', `wt-${Date.now()}`);
+      await repo.git(['worktree', 'add', '-q', '-b', 'side', tree]);
+      try {
+        const from = (await repo.hashes())[2];
+        const { commits } = await methods['commits.rebaseSpan']({ path: tree, from });
+        const plan = commits.map((c, i) => ({ hash: c.hash, command: i === 1 ? 'edit' : 'pick' }));
+
+        const stopped = await methods['commits.rebase']({ path: tree, from, plan });
+        assert.equal(stopped.stopped, true);
+        assert.equal(stopped.stoppedAt, commits[1].hash);
+        assert.equal((await methods['repo.status']({ path: tree })).operation, 'rebase');
+
+        const continued = await methods['repo.continueOperation']({ path: tree, plan });
+        assert.equal(continued.finished, true);
+        assert.equal((await methods['repo.status']({ path: tree })).operation, null);
+      } finally {
+        await repo.git(['worktree', 'remove', '--force', tree]);
+        rmSync(tree, { recursive: true, force: true });
+      }
     });
   });
 });

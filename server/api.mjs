@@ -30,9 +30,21 @@ async function exists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
+/**
+ * The directory Git keeps this working tree's state in.
+ *
+ * Usually `<root>/.git`, but in a linked worktree `.git` is a file pointing at
+ * `.git/worktrees/<name>`, and that is where a rebase, merge or cherry-pick in
+ * progress leaves its state.
+ */
+async function gitDir(root) {
+  const { stdout, code } = await runGit(root, ['rev-parse', '--absolute-git-dir'], { allowFailure: true });
+  return code === 0 && stdout.trim() ? stdout.trim() : join(root, '.git');
+}
+
 /** Which multi-step git operation, if any, is half-finished right now. */
 async function detectOperation(root) {
-  const g = join(root, '.git');
+  const g = await gitDir(root);
   if (await exists(join(g, 'rebase-merge'))) return 'rebase';
   if (await exists(join(g, 'rebase-apply'))) return 'rebase';
   if (await exists(join(g, 'MERGE_HEAD'))) return 'merge';
@@ -857,12 +869,37 @@ async function runRebasePlan(path, base, todo) {
  * tree in the middle of the 3-way merge, and no `amend` file.
  */
 async function rebaseStopInfo(root) {
-  const g = join(root, '.git', 'rebase-merge');
-  const sha = (await exists(join(g, 'stopped-sha')))
-    ? (await readFile(join(g, 'stopped-sha'), 'utf8')).trim()
-    : null;
-  const amend = await exists(join(g, 'amend'));
-  return { sha, amend };
+  const dir = join(await gitDir(root), 'rebase-merge');
+  const read = async (name) =>
+    (await exists(join(dir, name))) ? (await readFile(join(dir, name), 'utf8')).trim() : null;
+  const sha = await read('stopped-sha');
+  // `amend` holds the commit HEAD pointed at when the rebase paused, which is
+  // how a continue can tell whether the user has since moved HEAD themselves.
+  const amendHead = await read('amend');
+  return { dir, sha, amend: amendHead !== null, amendHead };
+}
+
+/**
+ * The plan a paused rebase was started with, kept beside Git's own state.
+ *
+ * The rest of the plan (messages for a reword or squash past the stop) must
+ * survive a reload of the app. Git deletes `rebase-merge` when the rebase
+ * finishes or is abandoned, so the saved plan goes with it.
+ */
+const PLAN_FILE = 'gitalia-plan.json';
+
+async function savePlan(root, plan) {
+  const dir = join(await gitDir(root), 'rebase-merge');
+  if (await exists(dir)) await writeFile(join(dir, PLAN_FILE), JSON.stringify(plan));
+}
+
+async function savedPlan(dir) {
+  try {
+    const plan = JSON.parse(await readFile(join(dir, PLAN_FILE), 'utf8'));
+    return Array.isArray(plan) ? plan : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -898,31 +935,52 @@ async function messageRewrites(path, plan) {
  * then does the rest of the plan apply. The `amend` file is what marks that
  * kind of pause, so a pause left over from a conflict is continued untouched.
  *
+ * What goes into the amend is the index plus every change to a tracked file:
+ * Git will not continue over unstaged changes, so leaving them out would only
+ * stop the rebase again. An untracked file stays out unless it was staged,
+ * the same rule a commit follows.
+ *
+ * If HEAD is no longer the commit Git stopped at, the user has already made
+ * commits of their own at the stop (splitting it, say). Amending would rewrite
+ * the last of those, so the stop is continued as it is.
+ *
  * `plan` travels with the continue so the messages still to be written in a
  * reword or squash past the stop can be offered to the helper, exactly as they
- * were on the first pass.
+ * were on the first pass. Without one, the plan saved when the rebase started
+ * is used, so a reload of the app loses nothing.
  */
 async function continueRebase(path, plan, status) {
   const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
   const stop = await rebaseStopInfo(path);
+  if (!Array.isArray(plan) || plan.length === 0) plan = await savedPlan(stop.dir);
 
-  if (stop.amend) {
+  const { stdout: head } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+  if (stop.amend && head.trim() === stop.amendHead) {
     const stoppedRow = Array.isArray(plan)
-      ? plan.find((entry) => entry.hash === stop.sha)
+      ? plan.find((entry) => stop.sha && (entry.hash === stop.sha || entry.hash?.startsWith(stop.sha)))
       : null;
     const message = stoppedRow?.message?.trim();
-    const changed = status.files.some((f) => f.state !== 'conflicted');
-    if (message) {
-      const file = join(path, '.git', 'rebase-merge', 'gitalia-message');
-      await writeFile(file, message);
+    const changed = status.files.some((f) => f.state === 'tracked' || f.state === 'renamed');
+    if (message || changed) {
+      if (changed) await git(path, ['add', '-u']);
+      const args = ['commit', '--amend', '--allow-empty'];
+      const file = join(stop.dir, 'gitalia-message');
+      if (message) {
+        await writeFile(file, message);
+        args.push('-F', file);
+      } else {
+        args.push('--no-edit');
+      }
       try {
-        await git(path, ['commit', '--amend', '-F', file]);
+        await git(path, args);
       } finally {
         await rm(file, { force: true });
       }
-    } else if (changed) {
-      await git(path, ['add', '-A']);
-      await git(path, ['commit', '--amend', '--no-edit']);
+      // The message is written; a second continue must not write it again.
+      if (message) {
+        stoppedRow.message = undefined;
+        await savePlan(path, plan);
+      }
     }
   }
 
@@ -2017,6 +2075,7 @@ export const methods = {
     // pauses at the commit so it can be amended, and the rest applies when the
     // user continues. That is a pause, not a finished run.
     const stop = await rebaseStopInfo(path);
+    if (stop.sha !== null) await savePlan(path, plan);
 
     return {
       ok: true,
