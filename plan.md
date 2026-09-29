@@ -1124,7 +1124,9 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
 -   [x] Keyboard shortcuts
--   [ ] Large repository optimization
+-   [x] Large repository optimization --- the graph opens with the newest
+    window and paints as soon as the log lands, only the visible rows exist,
+    and "Load older commits" walks deeper one page at a time
 -   [x] Statistics report
 
 ### P2 --- Later

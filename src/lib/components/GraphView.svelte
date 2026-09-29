@@ -133,7 +133,12 @@
 
   {#if repoStore.truncated}
     <div class="truncation">
-      Showing the most recent {repoStore.commits.length.toLocaleString()} commits.
+      <span>
+        Showing the most recent {repoStore.commits.length.toLocaleString()} commits.
+      </span>
+      <button class="more" onclick={() => repoStore.loadOlder()} disabled={repoStore.loadingOlder}>
+        {repoStore.loadingOlder ? 'Reading more…' : 'Load older commits'}
+      </button>
     </div>
   {/if}
 </div>
@@ -230,9 +235,25 @@
   }
 
   .truncation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     padding: 3px 10px;
     border-top: 1px solid var(--border);
     color: var(--text-faint);
     font-size: 11px;
   }
+
+  .more {
+    flex: none;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-raised);
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .more:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+  .more:disabled { opacity: 0.5; cursor: default; }
 </style>

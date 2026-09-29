@@ -641,8 +641,14 @@ one column instead of letting it move sideways.
 
 Measured on a repository with 1307 commits and 35 branches: Git returns the log
 in about 83 milliseconds, and the layout takes about 4 milliseconds. The graph
-uses 6 columns. The list on screen is virtualised, so only the visible rows
-exist in the page.
+uses 6 columns. Only the visible rows exist in the page: the rest of the history
+is held in memory, not in the DOM.
+
+The graph draws the newest 5000 commits the moment the log arrives, without
+waiting for the slower status and branch calls. "Load older commits" at the
+bottom walks deeper in pages of 5000, each read from Git with a skip rather
+than the whole history, so a repository of any size stays usable without ever
+loading it all. A refresh returns to the newest window.
 
 ### Safety
 
@@ -665,7 +671,8 @@ aborts it, which leaves the branch where it started.
 
 1. The browser cannot open a folder chooser, so you paste a path instead. Tauri
    will provide a real folder chooser.
-2. The graph loads the newest 5000 commits. Older commits are not drawn yet.
+2. The graph starts with the newest 5000 commits. "Load older commits" adds
+   more a page at a time, and a refresh returns to the newest window.
 3. The recent list is stored in the browser, so it is lost if you clear the
    browser data.
 4. The backend runs only during development. There is no packaged application

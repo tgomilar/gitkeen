@@ -50,6 +50,8 @@ class RepoStore {
 
   opening = $state(false);
   refreshing = $state(false);
+  /** True while the next page of history is being read. */
+  loadingOlder = $state(false);
   /** Label of the Git operation currently running, or null. */
   busy = $state<string | null>(null);
   openError = $state<string | null>(null);
@@ -131,10 +133,10 @@ class RepoStore {
   }
 
   /** What to ask the log for, given the branch the graph is narrowed to. */
-  private logOptions() {
+  private logOptions(skip = 0) {
     return this.scope
-      ? { limit: LOG_LIMIT, refs: [this.scope.ref] }
-      : { limit: LOG_LIMIT, all: true };
+      ? { limit: LOG_LIMIT, refs: [this.scope.ref], skip }
+      : { limit: LOG_LIMIT, all: true, skip };
   }
 
   /**
@@ -182,16 +184,23 @@ class RepoStore {
     if (!repo) return;
     this.refreshing = true;
     try {
-      const [log, branches, status, head, remotes, stashes] = await Promise.all([
-        repo.log(this.logOptions()),
+      // The graph is the fastest thing to draw, so it is painted as soon as
+      // the log lands instead of waiting for the slower status and branch
+      // calls. Everything else fills in beneath it.
+      const log = await repo.log(this.logOptions());
+      if (repo !== this.repo) return;
+      this.commits = log.commits;
+      this.truncated = log.truncated;
+      this.pruneSelection();
+
+      const [branches, status, head, remotes, stashes] = await Promise.all([
         repo.branches(),
         repo.status(),
         repo.head(),
         repo.remotes(),
         repo.stashes()
       ]);
-      this.commits = log.commits;
-      this.truncated = log.truncated;
+      if (repo !== this.repo) return;
       this.branches = branches;
       this.status = status;
       this.head = head;
@@ -203,16 +212,39 @@ class RepoStore {
       if (this.scope && !this.refExists(this.scope)) {
         this.scope = null;
         const all = await repo.log(this.logOptions());
+        if (repo !== this.repo) return;
         this.commits = all.commits;
         this.truncated = all.truncated;
+        this.pruneSelection();
       }
-
-      // Drop selected commits that no longer exist (e.g. after a rewrite).
-      this.pruneSelection();
     } catch (err) {
       toasts.error('Could not read the repository', describe(err));
     } finally {
       this.refreshing = false;
+    }
+  }
+
+  /**
+   * Read the next page of history and append it beneath the graph.
+   *
+   * The graph window never loads the whole history: every page walks deeper
+   * with `--skip`, and the DOM holds only the visible rows. A refresh goes
+   * back to the newest window, so pages are a way to travel deep, not a
+   * cache that sticks.
+   */
+  async loadOlder() {
+    const repo = this.repo;
+    if (!repo || !this.truncated || this.loadingOlder) return;
+    this.loadingOlder = true;
+    try {
+      const log = await repo.log(this.logOptions(this.commits.length));
+      if (repo !== this.repo) return;
+      this.commits = this.commits.concat(log.commits);
+      this.truncated = log.truncated;
+    } catch (err) {
+      toasts.error('Could not read older commits', describe(err));
+    } finally {
+      this.loadingOlder = false;
     }
   }
 

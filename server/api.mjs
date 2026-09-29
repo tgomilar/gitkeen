@@ -698,11 +698,15 @@ export const methods = {
   },
 
   /**
-   * `--date-order` keeps a commit below its children without the aggressive
-   * reordering `--topo-order` does, which is what makes lanes look stable.
+   * One page of the log.
+   *
+   * `limit` caps the page and `skip` jumps past commits already shown, so the
+   * graph can be walked deeper without ever holding the whole history. Both
+   * count the same `--date-order` sequence the client is drawing from.
    */
-  async 'log.list'({ path, limit = 2000, all = true, refs = null }) {
+  async 'log.list'({ path, limit = 2000, all = true, refs = null, skip = 0 }) {
     const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit}`];
+    if (skip > 0) args.push(`--skip=${skip}`);
     const scoped = Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string' && ref.trim()) : [];
     if (scoped.length > 0) {
       // Only what is reachable from these refs, so the graph shows the history

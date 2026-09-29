@@ -35,8 +35,12 @@ export class GitRepository {
     return transport.call('head.read', { path: this.path });
   }
 
-  /** `refs` narrows the log to what those refs reach, e.g. a single branch. */
-  log(options: { limit?: number; all?: boolean; refs?: string[] } = {}): Promise<LogPage> {
+  /**
+   * One page of the log. `refs` narrows it to what those refs reach (e.g. a
+   * single branch); `skip` jumps past commits already shown, so the graph can
+   * be walked deeper without holding the whole history.
+   */
+  log(options: { limit?: number; all?: boolean; refs?: string[]; skip?: number } = {}): Promise<LogPage> {
     return transport.call('log.list', { path: this.path, ...options });
   }
 

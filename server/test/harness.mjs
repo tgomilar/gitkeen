@@ -45,8 +45,11 @@ export class Repo {
     return runGit(this.path, args, { env: ENV, allowFailure: true, ...options });
   }
 
-  /** Write a file and commit it, returning the new commit's full hash. */
-  async commit(message, files = {}) {
+  /**
+   * Write a file and commit it, returning the new commit's full hash.
+   * `extra.env` reaches the commit, e.g. to pin the dates.
+   */
+  async commit(message, files = {}, extra = {}) {
     // A commit with no files named still needs something to record.
     const entries = Object.keys(files).length > 0
       ? files
@@ -55,7 +58,7 @@ export class Repo {
       writeFileSync(join(this.path, name), content);
     }
     await this.git(['add', '-A']);
-    await this.git(['commit', '-qm', message]);
+    await this.git(['commit', '-qm', message], extra.env ? { env: extra.env } : {});
     return this.head();
   }
 
