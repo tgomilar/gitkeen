@@ -216,6 +216,7 @@ class RepoStore {
 
       const [branches, status, head, remotes, stashes] = await rest;
       if (repo !== this.repo) return;
+      const branchBefore = this.currentBranch;
       this.branches = branches;
       this.status = status;
       this.head = head;
@@ -226,8 +227,14 @@ class RepoStore {
       // us, and then the scope is meaningless: widen back to every branch.
       // The selection is pruned only after that, so a commit that is still
       // there under "all branches" stays selected.
-      if (this.scope && !this.refExists(this.scope)) {
-        this.scope = null;
+      //
+      // A switch to another branch moves the narrowing with it: the graph was
+      // narrowed to where the user was working, and staying on the old branch
+      // would hide every commit they now make.
+      const switched = branchBefore !== null && this.currentBranch !== branchBefore
+        && !(this.scope?.kind === 'local' && this.scope.ref === this.currentBranch);
+      if (this.scope && (switched || !this.refExists(this.scope))) {
+        this.scope = switched && this.currentBranch ? { ref: this.currentBranch, kind: 'local' } : null;
         const widened = ++this.logGeneration;
         const all = await repo.log(this.logOptions());
         if (repo !== this.repo || widened !== this.logGeneration) return;
