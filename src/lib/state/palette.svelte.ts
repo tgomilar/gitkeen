@@ -126,7 +126,11 @@ class PaletteStore {
     const command = this.shown[this.active];
     if (!command || command.disabled) return false;
     this.close();
-    command.run();
+    // Actions report their own failures; this catches the one that throws
+    // before it gets the chance, so nothing rejects unobserved.
+    Promise.resolve()
+      .then(() => command.run())
+      .catch((err) => toasts.error(`Could not ${command.label.replace(/…$/, '').toLowerCase()}`, String(err?.message ?? err)));
     return true;
   }
 }
@@ -262,15 +266,18 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       disabled: isCurrent,
       run: () => switchToBranch(local.name)
     });
-    add({
-      id: `merge-${local.name}`,
-      label: `Merge ${local.name} into ${branch ?? 'HEAD'}`,
-      keywords: 'merge branch',
-      icon: 'merge',
-      group: 'Branches',
-      disabled: isCurrent,
-      run: () => mergeBranch(local.name)
-    });
+    // A branch cannot be merged into itself, so the current one is not
+    // offered at all rather than shown greyed out.
+    if (!isCurrent) {
+      add({
+        id: `merge-${local.name}`,
+        label: `Merge ${local.name} into ${branch ?? 'HEAD'}`,
+        keywords: 'merge branch',
+        icon: 'merge',
+        group: 'Branches',
+        run: () => mergeBranch(local.name)
+      });
+    }
   }
   add({
     id: 'create-branch',
@@ -282,7 +289,8 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     run: () => createBranchFrom(cursor ?? undefined, cursor ? 'the selected commit' : 'HEAD')
   });
 
-  const selectedText = commits.length === 1 ? cursorCommit?.shortHash ?? '' : `${commits.length} commits`;
+  // The label already names a single commit by its hash.
+  const selectedText = commits.length === 1 ? '' : `${commits.length} commits`;
   const target =
     commits.length === 1
       ? cursorCommit?.subject ?? 'the selected commit'
@@ -307,14 +315,20 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     disabled: commits.length === 0,
     run: () => revertCommits(commits)
   });
+  // One commit squashes into its parent, so the pair is what gets checked
+  // and folded, exactly as if both had been selected.
+  const parent = commits.length === 1
+    ? repoStore.commits.find((c) => c.hash === commits[0].parents[0])
+    : undefined;
+  const squashing = commits.length === 1 ? (parent ? [commits[0], parent] : []) : commits;
   add({
     id: 'squash',
     label: commits.length === 1 ? `Squash ${cursorCommit?.shortHash} into the one below…` : `Squash ${commits.length} commits…`,
     keywords: 'fold combine merge together',
     icon: 'squash',
     group: 'History',
-    disabled: !canSquash(commits).ok,
-    run: () => squashCommits(commits)
+    disabled: !canSquash(squashing).ok,
+    run: () => squashCommits(squashing)
   });
   add({
     id: 'drop',

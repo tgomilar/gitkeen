@@ -15,6 +15,7 @@
   import RebaseEditor from './lib/components/RebaseEditor.svelte';
   import { settingsStore } from './lib/state/settings.svelte';
   import { rebaseStore } from './lib/state/rebase.svelte';
+  import { mergeStore } from './lib/state/merge.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import DiffViewer from './lib/components/DiffViewer.svelte';
@@ -195,10 +196,12 @@
       return;
     }
     // ⌘⇧P is the command palette. It cannot stack on a question the app is
-    // already waiting for, so it stays quiet while a dialog is on screen.
+    // already waiting for, or on an editor the user is in the middle of, so
+    // it stays quiet while a dialog, the rebase or merge editor, or Settings
+    // is on screen.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'p') {
       event.preventDefault();
-      if (!dialogs.current) paletteStore.show();
+      if (!dialogs.current && !rebaseStore.open && !mergeStore.open && !settingsStore.open) paletteStore.show();
       return;
     }
     // Push has a confirmation of its own, so the shortcut cannot send anything
