@@ -432,8 +432,8 @@ export interface MergeOffer {
   stages: MergeStages;
 }
 
-/** Which side of a conflict the editor is told to keep. */
-export type ConflictChoice = 'ours' | 'theirs';
+/** Which side of a conflict the editor is told to keep: one, or both in turn. */
+export type ConflictChoice = 'ours' | 'theirs' | 'both';
 
 /** A commit as the cherry-pick and revert dialogs need to describe it. */
 export interface ApplyCommit {

@@ -6,7 +6,7 @@
  * can be altered by accident, and a region left unchosen keeps Git's markers
  * rather than guessing.
  */
-import type { ConflictChoice, MergeSection, MergeTextSection } from './git/types';
+import type { ConflictChoice, MergeConflictSection, MergeSection, MergeTextSection } from './git/types';
 
 /** How a piece of text is drawn: how many lines, and a trimmed sample. */
 export interface TextPreview {
@@ -36,20 +36,40 @@ export function previewText(lines: string[], window = 4): TextPreview {
 }
 
 /**
+ * The text a choice puts in place of one conflict block.
+ *
+ * "Both" is ours followed by theirs. When ours is the end of a file with no
+ * final newline, a newline is added between the two, so the last line of
+ * ours and the first line of theirs do not run together.
+ */
+export function choiceText(section: MergeConflictSection, choice: ConflictChoice): string {
+  const ours = section.ours.join('');
+  const theirs = section.theirs.join('');
+  if (choice === 'ours') return ours;
+  if (choice === 'theirs') return theirs;
+  const joint = ours && theirs && !ours.endsWith('\n') ? '\n' : '';
+  return ours + joint + theirs;
+}
+
+/**
  * Assemble a resolved file from the sections and one choice per conflict.
  *
- * A block with no choice falls back to its original lines, markers included:
- * the server's marker check then refuses to stage it, which is the guard
- * against committing a half-resolution.
+ * Text the user typed for a block (`edits`) wins over the choice it started
+ * from. A block with neither falls back to its original lines, markers
+ * included: the server's marker check then refuses to stage it, which is the
+ * guard against committing a half-resolution.
  */
-export function mergeResult(sections: MergeSection[], choices: Record<number, ConflictChoice>): string {
+export function mergeResult(
+  sections: MergeSection[],
+  choices: Record<number, ConflictChoice>,
+  edits: Record<number, string> = {}
+): string {
   return sections
     .map((section, i) => {
       if (section.type === 'text') return section.lines.join('');
+      if (edits[i] !== undefined) return edits[i];
       const pick = choices[i];
-      if (pick === 'ours') return section.ours.join('');
-      if (pick === 'theirs') return section.theirs.join('');
-      return section.lines.join('');
+      return pick ? choiceText(section, pick) : section.lines.join('');
     })
     .join('');
 }

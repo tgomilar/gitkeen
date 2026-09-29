@@ -3,7 +3,8 @@
    * The three-way merge editor, over the whole window like the diff viewer.
    *
    * The file is shown as alternating context and conflict cards. Each card
-   * holds the two sides Git is asking the user to choose between; picking one
+   * holds three columns: ours, the result, and theirs. Keeping a side, or
+   * both, fills the result, and the result can then be edited by hand; either
    * marks the block resolved. The common ancestor is available behind a
    * toggle, and nothing is written until "Mark resolved" at the bottom: a
    * conflict with no choice yet keeps its markers, which the server then
@@ -11,7 +12,7 @@
    */
   import { mergeStore } from '../state/merge.svelte';
   import { repoStore } from '../state/repo.svelte';
-  import { previewText } from '../merge';
+  import { previewText, choiceText } from '../merge';
   import { pluralize } from '../format';
   import type { ConflictChoice, MergeOffer } from '../git/types';
 
@@ -45,6 +46,16 @@
 
   function pick(sectionIndex: number, side: ConflictChoice) {
     mergeStore.pick(sectionIndex, side);
+  }
+
+  /** What the result pane of a block shows: the typed text, or the choice's. */
+  function resultText(sectionIndex: number): string {
+    const typed = mergeStore.edits[sectionIndex];
+    if (typed !== undefined) return typed;
+    const section = offer?.sections[sectionIndex];
+    const choice = mergeStore.choices[sectionIndex];
+    if (!section || section.type !== 'conflict' || !choice) return '';
+    return choiceText(section, choice);
   }
 
   function onkeydown(event: KeyboardEvent) {
@@ -203,12 +214,18 @@
               {:else}
                 {@const ours = paneLines('ours', index)}
                 {@const theirs = paneLines('theirs', index)}
-                <div class="conflict" class:done={!!chosen(index)}>
+                {@const edited = mergeStore.edits[index] !== undefined}
+                {@const removes = !edited && (chosen(index) === 'ours' || chosen(index) === 'theirs') && !!section.deleted?.[chosen(index) as 'ours' | 'theirs']}
+                <div class="conflict" class:done={!!chosen(index) || edited}>
                   <div class="conflict-head">
                     <span class="badge">Conflict {blocks.indexOf(index) + 1}</span>
                     <span class="state">
-                      {#if chosen(index) && section.deleted?.[chosen(index)!]}
+                      {#if removes}
                         <b>deletes the file</b>
+                      {:else if edited}
+                        keeps <b>the result you wrote</b>
+                      {:else if chosen(index) === 'both'}
+                        keeps <b>both sides</b>, ours first
                       {:else if chosen(index) === 'ours'}
                         keeps <b>{sideName(section.labels.ours, oursName)}</b>
                       {:else if chosen(index) === 'theirs'}
@@ -220,7 +237,7 @@
                   </div>
 
                   <div class="cols">
-                    <div class="col ours" class:picked={chosen(index) === 'ours'}>
+                    <div class="col ours" class:picked={chosen(index) === 'ours' && !edited}>
                       <div class="col-head">
                         <span class="tag">Ours</span>
                         <span class="faint mono">{sideName(section.labels.ours, oursName.replace(/^the /, ''))}</span>
@@ -241,14 +258,48 @@
                       </div>
                       <button
                         class="pick"
-                        class:on={chosen(index) === 'ours'}
+                        class:on={chosen(index) === 'ours' && !edited}
                         onclick={() => pick(index, 'ours')}
                       >{section.deleted?.ours
-                        ? (chosen(index) === 'ours' ? '✓ Deletes the file' : 'Delete the file')
-                        : (chosen(index) === 'ours' ? '✓ Keeps ours' : 'Keep ours')}</button>
+                        ? (chosen(index) === 'ours' && !edited ? '✓ Deletes the file' : 'Delete the file')
+                        : (chosen(index) === 'ours' && !edited ? '✓ Keeps ours' : 'Keep ours')}</button>
                     </div>
 
-                    <div class="col theirs" class:picked={chosen(index) === 'theirs'}>
+                    <div class="col result" class:picked={edited || chosen(index) === 'both'}>
+                      <div class="col-head">
+                        <span class="tag">Result</span>
+                        <span class="faint">{edited ? 'edited by hand' : 'what the file will hold here'}</span>
+                      </div>
+                      <div class="col-body">
+                        {#if removes}
+                          <p class="empty-line">the file will be deleted</p>
+                        {:else}
+                          <textarea
+                            class="result-text"
+                            spellcheck="false"
+                            aria-label="Result for conflict {blocks.indexOf(index) + 1}"
+                            placeholder="Choose a side, or type the result here"
+                            rows={Math.min(24, Math.max(3, resultText(index).split('\n').length))}
+                            value={resultText(index)}
+                            oninput={(e) => mergeStore.edit(index, e.currentTarget.value)}
+                          ></textarea>
+                        {/if}
+                      </div>
+                      <div class="result-picks">
+                        <button
+                          class="pick"
+                          class:on={chosen(index) === 'both' && !edited}
+                          disabled={!!section.deleted?.ours || !!section.deleted?.theirs}
+                          title="Ours, then theirs"
+                          onclick={() => pick(index, 'both')}
+                        >{chosen(index) === 'both' && !edited ? '✓ Keeps both' : 'Keep both'}</button>
+                        {#if edited}
+                          <button class="pick" onclick={() => mergeStore.forget(index)} title="Throw away what you typed">Undo edits</button>
+                        {/if}
+                      </div>
+                    </div>
+
+                    <div class="col theirs" class:picked={chosen(index) === 'theirs' && !edited}>
                       <div class="col-head">
                         <span class="tag">Theirs</span>
                         <span class="faint mono">{sideName(section.labels.theirs, theirsName.replace(/^the /, ''))}</span>
@@ -269,11 +320,11 @@
                       </div>
                       <button
                         class="pick"
-                        class:on={chosen(index) === 'theirs'}
+                        class:on={chosen(index) === 'theirs' && !edited}
                         onclick={() => pick(index, 'theirs')}
                       >{section.deleted?.theirs
-                        ? (chosen(index) === 'theirs' ? '✓ Deletes the file' : 'Delete the file')
-                        : (chosen(index) === 'theirs' ? '✓ Keeps theirs' : 'Keep theirs')}</button>
+                        ? (chosen(index) === 'theirs' && !edited ? '✓ Deletes the file' : 'Delete the file')
+                        : (chosen(index) === 'theirs' && !edited ? '✓ Keeps theirs' : 'Keep theirs')}</button>
                     </div>
                   </div>
                 </div>
@@ -533,9 +584,29 @@
 
   .cols {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0;
   }
+
+  .result-text {
+    display: block;
+    width: 100%;
+    min-height: 100%;
+    padding: 4px 10px;
+    background: var(--bg-panel);
+    border: 0;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: inherit;
+    line-height: inherit;
+    resize: vertical;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+  .result-text:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
+  .result-picks { display: flex; }
+  .result-picks .pick { flex: 1; }
+  .result-picks .pick + .pick { border-left: 1px solid var(--border); }
   .col { display: flex; flex-direction: column; min-width: 0; }
   .col + .col { border-left: 1px solid var(--border); }
   .col.picked { background: color-mix(in srgb, var(--accent) 4%, transparent); }

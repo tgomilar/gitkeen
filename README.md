@@ -26,7 +26,7 @@ branches, commit your work, and change the history you already have.
 | Cherry-pick | Copy one or more commits onto the current branch. |
 | Revert | Undo a commit with a new commit that reverses it. |
 | Reset | Move the current branch to another commit, in one of three modes. |
-| Conflicts | Resolve them in the merge editor, choose a side per conflict, then continue or abandon the operation. |
+| Conflicts | Resolve them in the merge editor: keep one side, keep both, or edit the result, then continue or abandon the operation. |
 | Stash | Set work aside without committing it, and take it back later. |
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish a branch, and create it on the remote if it is new. Force push replaces the remote branch, after showing what it would remove. |
@@ -231,8 +231,11 @@ or revert that stops on a conflict stays open, and the status bar's **Resolve…
 button, or right clicking the file and choosing **Resolve in Merge Editor…**,
 opens the merge editor.
 
-The editor walks the file from top to bottom. Around each `<<<<<<<` block it
-shows the two sides, with a **Keep ours** and a **Keep theirs** button:
+The editor walks the file from top to bottom. Each `<<<<<<<` block is shown
+in three columns: **Ours** on the left, **Theirs** on the right, and the
+**Result** between them. **Keep ours**, **Keep theirs** or **Keep both** (ours
+first, then theirs) fills the result. You can then edit the result by hand,
+and **Undo edits** goes back to the side you chose. The two sides are:
 
 | Side | In a merge, cherry-pick or revert | In a rebase |
 |---|---|---|
@@ -527,9 +530,9 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-The merge editor resolves a conflict by choosing, per block, which side wins.
-It does not yet let you hand-edit the merged result inside Gitalia itself, and
-binary conflicts still go through an external editor.
+The merge editor edits the result one conflict block at a time. The text
+outside the conflicts cannot be edited there, and binary conflicts still go
+through an external editor.
 
 The diff viewer has no syntax colouring yet, and it cannot roll back a single
 hunk. Staging a hunk or a single line is built, and rolling back a hunk is the

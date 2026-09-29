@@ -22,6 +22,8 @@ class MergeStore {
 
   /** Which side each conflict block keeps, keyed by section index. */
   choices = $state<Record<number, ConflictChoice>>({});
+  /** Result text the user typed for a block, which wins over its choice. */
+  edits = $state<Record<number, string>>({});
   /** Whether the common ancestor is shown as a read-only reference. */
   showBase = $state(false);
 
@@ -32,15 +34,16 @@ class MergeStore {
     (this.offer?.sections ?? []).flatMap((section, i) => (section.type === 'conflict' ? [i] : []))
   );
 
-  /** How many conflict blocks have not been given a side yet. */
-  unresolved = $derived(this.blocks.filter((i) => !this.choices[i]).length);
+  /** How many conflict blocks have neither a side chosen nor a typed result. */
+  unresolved = $derived(this.blocks.filter((i) => !this.choices[i] && this.edits[i] === undefined).length);
 
   /** True when the choice made keeps the side that deleted the file. */
   deletes = $derived.by(() => {
     const sections = this.offer?.sections ?? [];
     return sections.some((section, i) => {
       const pick = this.choices[i];
-      return section.type === 'conflict' && !!pick && !!section.deleted?.[pick];
+      return section.type === 'conflict' && this.edits[i] === undefined
+        && (pick === 'ours' || pick === 'theirs') && !!section.deleted?.[pick];
     });
   });
 
@@ -54,6 +57,7 @@ class MergeStore {
     this.offer = null;
     this.error = null;
     this.choices = {};
+    this.edits = {};
     this.showBase = false;
     this.loading = true;
     try {
@@ -65,14 +69,30 @@ class MergeStore {
     }
   }
 
+  /** Choose a side for one block. Anything typed for it gives way. */
   pick(index: number, side: ConflictChoice) {
     this.choices = { ...this.choices, [index]: side };
+    this.forget(index);
   }
 
   pickAll(side: ConflictChoice) {
     const next = { ...this.choices };
     for (const index of this.blocks) next[index] = side;
     this.choices = next;
+    this.edits = {};
+  }
+
+  /** Take what the user typed as the result for one block. */
+  edit(index: number, text: string) {
+    this.edits = { ...this.edits, [index]: text };
+  }
+
+  /** Drop the typed result, back to what the chosen side gives. */
+  forget(index: number) {
+    if (this.edits[index] === undefined) return;
+    const next = { ...this.edits };
+    delete next[index];
+    this.edits = next;
   }
 
   /**
@@ -89,7 +109,7 @@ class MergeStore {
     try {
       this.busy = true;
       if (this.deletes) await repo.conflictRemove(offer.path);
-      else await repo.conflictResolve(offer.path, mergeResult(offer.sections, this.choices));
+      else await repo.conflictResolve(offer.path, mergeResult(offer.sections, this.choices, this.edits));
     } catch (err) {
       toasts.error('Could not save the merged file', describe(err));
       return false;
@@ -112,6 +132,7 @@ class MergeStore {
     this.offer = null;
     this.error = null;
     this.choices = {};
+    this.edits = {};
     this.showBase = false;
   }
 }

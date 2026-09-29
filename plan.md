@@ -1140,12 +1140,12 @@ product value is the **interaction model around the Git DAG**.
 
 ### P2 --- Later
 
--   [~] Conflict resolution editor --- walks a conflicted file top to bottom;
-    ours vs. theirs per block, base behind a toggle, markers kept for blocks
-    with no choice so nothing half-finished can be staged. A modify/delete
-    conflict can be resolved by deleting the file. Not built: the OURS /
-    RESULT / THEIRS layout of section 6 with an editable result, and keeping
-    both sides of a block.
+-   [x] Conflict resolution editor --- walks a conflicted file top to bottom
+    with OURS / RESULT / THEIRS per block. Keep ours, keep theirs or keep
+    both fills the result, which can then be edited by hand. The base is
+    behind a toggle, and blocks with no choice keep their markers so nothing
+    half-finished can be staged. A modify/delete conflict can be resolved by
+    deleting the file.
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration
