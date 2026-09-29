@@ -1151,7 +1151,8 @@ product value is the **interaction model around the Git DAG**.
     history a moment later
 -   [x] Branch and commit comparison (section 7): the commits only on each
     side, and the files that differ since the split or tip to tip
--   [ ] Worktrees
+-   [x] Worktrees --- listed in the Branches panel, made from a branch or for
+    a new one, opened, removed and pruned
 -   [ ] GitHub integration
 -   [ ] GitLab integration
 -   [x] AI assistance --- commit subjects, with a suggested split when the

@@ -41,6 +41,7 @@ branches, commit your work, and change the history you already have.
 | Blame | See which commit last changed each line of a file, and follow a line back in time. |
 | Bisect | Find the commit that broke something by testing a few commits in between. |
 | Compare | See the commits and files that differ between two branches or commits. |
+| Worktrees | Check out another branch in a folder of its own, and switch between the folders. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -551,6 +552,25 @@ to read its diff between the two sides. Press **⇄** to swap the sides.
 
 Two histories with no commit in common can only be compared tip to tip.
 
+## Worktrees: two branches side by side
+
+A worktree is another folder of the same repository with a different branch
+checked out. You can work on a fix in one folder while a feature stays open in
+another, without stashing or switching.
+
+1. Right click a branch and choose **Open in a new worktree…**, or choose
+   **New worktree…** in the command palette to start a new branch.
+2. Gitalia offers a folder beside the repository, named after it and the
+   branch. Change it if you want.
+3. Choose **Open it** to switch Gitalia to the new folder.
+
+The **Worktrees** list at the bottom of the Branches panel shows every folder
+and the branch it has checked out. Double click one to open it. Right click to
+copy its path or remove it. Removing deletes the folder but keeps the branch
+and its commits. Git refuses to remove a folder with uncommitted changes
+unless you choose to throw them away. A branch can be checked out in only one
+folder at a time, so its menu offers **Open its worktree** instead.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -734,6 +754,7 @@ Your own repositories are never touched.
 | `server/test/blame.test.mjs` | Which commit last changed each line of a file. |
 | `server/test/bisect.test.mjs` | Finding the first bad commit with bisect. |
 | `server/test/compare.test.mjs` | Comparing two branches or commits. |
+| `server/test/worktree.test.mjs` | Adding, listing, removing and pruning worktrees. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

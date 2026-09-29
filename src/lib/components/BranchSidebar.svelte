@@ -6,8 +6,18 @@
   import { repoStore } from '../state/repo.svelte';
   import { buildBranchTree } from '../branchTree';
   import {
-    branchMenuItems, switchToBranch, checkoutRemoteBranch, createBranchFrom, createTag
+    branchMenuItems, switchToBranch, checkoutRemoteBranch, createBranchFrom, createTag,
+    worktreeMenuItems, newWorktree
   } from '../actions';
+  import { worktreeStore } from '../state/worktrees.svelte';
+
+  // A branch made, deleted or checked out may have changed a worktree.
+  $effect(() => {
+    void repoStore.branches;
+    worktreeStore.load();
+  });
+
+  const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
   import type { Branch } from '../git/types';
   import type { MenuItem } from '../menu';
 
@@ -205,6 +215,40 @@
         {/if}
       </section>
     {/each}
+
+    <!-- Worktrees: other folders of this repository, each with its own branch. -->
+    <section>
+      <button class="section-head" onclick={() => toggleSection('worktrees')}
+              oncontextmenu={(e) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY, items: [
+                { label: 'New worktree…', icon: 'branch-plus', action: () => newWorktree() },
+                { label: 'Forget deleted worktrees', icon: 'delete', action: () => worktreeStore.prune() }
+              ] }; }}
+              aria-expanded={!sectionsClosed.has('worktrees')}>
+        <span class="chevron" class:open={!sectionsClosed.has('worktrees')} aria-hidden="true">›</span>
+        <Icon name="folder" size={12} />
+        <span class="section-title">WORKTREES</span>
+        <span class="section-count">{worktreeStore.list.length}</span>
+      </button>
+      {#if !sectionsClosed.has('worktrees')}
+        {#each worktreeStore.list as tree (tree.path)}
+          <button
+            class="node worktree"
+            class:current={tree.current}
+            class:gone={tree.prunable}
+            title="{tree.path}{tree.prunable ? '\n\nIts folder is gone.' : tree.current ? '\n\nOpen now.' : '\n\nDouble-click to open it.'}"
+            ondblclick={() => !tree.current && !tree.prunable && worktreeStore.open(tree)}
+            oncontextmenu={(e) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY, items: worktreeMenuItems(tree) }; }}
+          >
+            <span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
+            <span class="name">{folderName(tree.path)}</span>
+            <span class="wt-branch">{tree.branch ?? (tree.head ? `detached ${tree.head.slice(0, 7)}` : '')}</span>
+          </button>
+        {/each}
+        {#if worktreeStore.list.length <= 1}
+          <button class="none add" onclick={() => newWorktree()}>New worktree…</button>
+        {/if}
+      {/if}
+    </section>
   </div>
 
   <p class="hint">Click a branch to see its commits. Double-click to switch.</p>
@@ -215,6 +259,14 @@
 {/if}
 
 <style>
+  .node.worktree { padding-left: 20px; }
+  .node.worktree .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .node.worktree.current .name { font-weight: 600; }
+  .node.worktree.gone { opacity: 0.5; text-decoration: line-through; }
+  .wt-branch { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; color: var(--text-faint); font-size: 11px; }
+  .none.add { display: block; width: 100%; background: none; border: 0; text-align: left; cursor: pointer; }
+  .none.add:hover { color: var(--accent); }
+
   .sidebar {
     display: flex;
     flex-direction: column;

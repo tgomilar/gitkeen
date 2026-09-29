@@ -881,3 +881,20 @@ export interface CompareResult {
   onlyInBase: { commits: Commit[]; truncated: boolean };
   files: CommitFileStat[];
 }
+
+/** One working tree of the repository. */
+export interface Worktree {
+  path: string;
+  head: string | null;
+  /** The branch checked out there, or null when HEAD is detached. */
+  branch: string | null;
+  detached: boolean;
+  bare: boolean;
+  locked: boolean;
+  /** True when its folder is gone and Git can forget it. */
+  prunable: boolean;
+  /** The first one, which holds the repository itself. */
+  main: boolean;
+  /** The one Gitalia has open. */
+  current: boolean;
+}

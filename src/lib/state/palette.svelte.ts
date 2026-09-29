@@ -31,7 +31,8 @@ import {
   canSquash,
   defaultRemote,
   blameFile,
-  startBisect
+  startBisect,
+  newWorktree
 } from '../actions';
 import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
@@ -437,6 +438,14 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       run: () => startBisect(cursorCommit!)
     });
   }
+  add({
+    id: 'worktree-new',
+    label: 'New worktree…',
+    keywords: 'worktree folder branch side by side parallel',
+    icon: 'branch-plus',
+    group: 'Branches',
+    run: () => newWorktree()
+  });
   add({
     id: 'blame',
     label: 'Blame a file…',

@@ -11,6 +11,8 @@ import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
 import { blameStore } from './state/blame.svelte';
 import { bisectStore } from './state/bisect.svelte';
 import { compareStore } from './state/compare.svelte';
+import { worktreeStore } from './state/worktrees.svelte';
+import type { Worktree } from './git/types';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -782,6 +784,19 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       action: () => mergeBranch(branch.name)
     },
     ...(branch.isHead ? [] : [compareWithCurrent(`refs/heads/${branch.name}`, branch.name)]),
+    ...(branch.isHead
+      ? []
+      : worktreeStore.elsewhere.has(branch.name)
+        ? [{
+            label: 'Open its worktree',
+            icon: 'folder' as const,
+            hint: 'checked out in another folder',
+            action: () => {
+              const tree = worktreeStore.list.find((t) => t.branch === branch.name);
+              if (tree) worktreeStore.open(tree);
+            }
+          }]
+        : [{ label: 'Open in a new worktree…', icon: 'folder' as const, action: () => newWorktree(branch.name) }]),
     SEPARATOR,
     ...push,
     SEPARATOR,
@@ -1908,4 +1923,92 @@ function compareWithCurrent(ref: string, label: string): MenuItem {
     hint: 'commits and files that differ',
     action: () => compareStore.show(current ? `refs/heads/${current}` : 'HEAD', ref, { base: current ?? 'HEAD', target: label })
   };
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Worktrees
+ * ------------------------------------------------------------------ */
+
+/** A folder beside the repository, named after it and the branch. */
+function worktreeFolder(branch: string) {
+  const repo = repoStore.info?.name ?? 'repo';
+  return `../${repo}-${branch.replace(/[^\w.-]+/g, '-')}`;
+}
+
+/**
+ * Make a worktree: for an existing branch when one is named, otherwise for a
+ * new branch that starts at the selected commit, or HEAD.
+ */
+export async function newWorktree(existing?: string) {
+  let branch = existing;
+  if (!branch) {
+    const name = await prompt({
+      title: 'New worktree',
+      message: `A new branch, checked out in a folder of its own. It starts at ${repoStore.cursor ? 'the selected commit' : 'HEAD'}.`,
+      input: { label: 'Branch name', value: '', placeholder: 'feature/my-change', validate: validateBranchName },
+      confirmLabel: 'Next'
+    });
+    if (!name) return;
+    branch = name;
+  }
+  const dir = await prompt({
+    title: `Worktree for ${branch}`,
+    message: 'The folder to check the branch out in. A relative path starts from the folder that holds this repository.',
+    input: {
+      label: 'Folder',
+      value: worktreeFolder(branch),
+      validate: (value) => (value.trim() ? null : 'Name a folder.')
+    },
+    confirmLabel: 'Make worktree'
+  });
+  if (!dir) return;
+  const made = await worktreeStore.add(dir.trim(), branch, !existing, existing ? null : repoStore.cursor);
+  if (made) {
+    const open = await confirm({
+      title: 'Open the new worktree?',
+      message: `${branch} is checked out in ${made}. Gitalia can switch to it now, or you can open it later from the Worktrees list.`,
+      confirmLabel: 'Open it',
+      cancelLabel: 'Stay here'
+    });
+    if (open) await repoStore.open(made);
+  }
+}
+
+async function removeWorktree(tree: Worktree) {
+  const name = tree.branch ?? `detached at ${tree.head?.slice(0, 7)}`;
+  const choice = await confirmOr({
+    title: `Remove the worktree for ${name}?`,
+    message: 'Its folder is deleted. The branch and its commits stay in the repository.',
+    facts: [{ label: 'Folder', value: tree.path }],
+    tone: 'warning',
+    confirmLabel: 'Remove',
+    extra: { label: 'Remove, and throw away uncommitted changes', value: 'force', tone: 'danger' }
+  });
+  if (choice === 'confirm') await worktreeStore.remove(tree, false);
+  else if (choice === 'force') await worktreeStore.remove(tree, true);
+}
+
+/** Context menu for a worktree in the Branches panel. */
+export function worktreeMenuItems(tree: Worktree): MenuItem[] {
+  return [
+    {
+      label: tree.current ? 'Open (it is open now)' : 'Open in Gitalia',
+      icon: 'switch',
+      disabled: tree.current || tree.prunable,
+      action: () => worktreeStore.open(tree)
+    },
+    { label: 'Copy folder path', icon: 'copy', action: () => copy(tree.path, 'folder path') },
+    SEPARATOR,
+    ...(tree.prunable
+      ? [{ label: 'Forget it (its folder is gone)', icon: 'delete' as const, action: () => worktreeStore.prune() }]
+      : [{
+          label: 'Remove…',
+          icon: 'delete' as const,
+          danger: true,
+          hint: tree.main ? 'the main worktree' : tree.current ? 'open now' : undefined,
+          disabled: tree.main || tree.current,
+          action: () => removeWorktree(tree)
+        }])
+  ];
 }

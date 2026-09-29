@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree
 } from './types';
 
 export class GitRepository {
@@ -207,6 +207,22 @@ export class GitRepository {
   /** Which commit last changed each line of a file, at `rev` or in the working tree. */
   blame(file: string, rev: string | null = null): Promise<BlameResult> {
     return transport.call('blame.file', { path: this.path, file, rev });
+  }
+
+  worktrees(): Promise<{ worktrees: Worktree[] }> {
+    return transport.call('worktree.list', { path: this.path });
+  }
+
+  addWorktree(dir: string, branch: string, create: boolean, from: string | null = null): Promise<{ ok: boolean; path: string; worktrees: Worktree[] }> {
+    return transport.call('worktree.add', { path: this.path, dir, branch, create, from });
+  }
+
+  removeWorktree(dir: string, force = false): Promise<{ ok: boolean; worktrees: Worktree[] }> {
+    return transport.call('worktree.remove', { path: this.path, dir, force });
+  }
+
+  pruneWorktrees(): Promise<{ ok: boolean; worktrees: Worktree[] }> {
+    return transport.call('worktree.prune', { path: this.path });
   }
 
   /** Commits on each side and the files that differ, since the split or tip to tip. */

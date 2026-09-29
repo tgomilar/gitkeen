@@ -3412,6 +3412,115 @@ export const methods = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Worktrees
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every working tree of this repository: the main one, and each extra one
+ * made with `git worktree add`. Each has its own checkout (a branch, or a
+ * detached commit), and a branch can be checked out in only one at a time.
+ */
+async function listWorktrees(path) {
+  const { stdout } = await runGit(path, ['worktree', 'list', '--porcelain', '-z'], { allowFailure: true });
+  const here = await realpath(path).catch(() => path);
+  const trees = [];
+  let current = null;
+  for (const field of stdout.split('\0')) {
+    if (field === '') {
+      if (current) trees.push(current);
+      current = null;
+      continue;
+    }
+    const space = field.indexOf(' ');
+    const key = space === -1 ? field : field.slice(0, space);
+    const value = space === -1 ? '' : field.slice(space + 1);
+    if (key === 'worktree') {
+      current = { path: value, head: null, branch: null, detached: false, bare: false, locked: false, prunable: false, main: trees.length === 0, current: false };
+      current.current = (await realpath(value).catch(() => value)) === here;
+    } else if (!current) {
+      continue;
+    } else if (key === 'HEAD') current.head = value;
+    else if (key === 'branch') current.branch = value.replace(/^refs\/heads\//, '');
+    else if (key === 'detached') current.detached = true;
+    else if (key === 'bare') current.bare = true;
+    else if (key === 'locked') current.locked = true;
+    else if (key === 'prunable') current.prunable = true;
+  }
+  if (current) trees.push(current);
+  return trees;
+}
+
+methods['worktree.list'] = async ({ path }) => ({ worktrees: await listWorktrees(path) });
+
+/**
+ * Make a new working tree in `dir`, with a branch checked out in it.
+ *
+ * With `create`, a new branch of that name starts at `from` (HEAD when not
+ * given). Otherwise the existing branch is checked out there, which Git
+ * refuses when another worktree already has it. A relative `dir` is taken
+ * from the folder that holds this repository, so `../name` sits beside it.
+ */
+methods['worktree.add'] = async ({ path, dir, branch, create = false, from = null }) => {
+  if (typeof dir !== 'string' || !dir.trim() || dir.includes('\0')) {
+    throw new GitError('Name a folder for the new worktree.', { command: '', stderr: '', code: 1 });
+  }
+  const target = resolve(path, dir.trim());
+  if (await exists(target)) {
+    throw new GitError(`${target} already exists. Choose a folder that does not exist yet.`, { command: '', stderr: '', code: 1 });
+  }
+  const name = commitish(branch, 'the branch');
+  let args;
+  if (create) {
+    const { code } = await runGit(path, ['check-ref-format', '--branch', name], { allowFailure: true });
+    if (code !== 0) throw new GitError(`${name} is not a valid branch name.`, { command: '', stderr: '', code: 1 });
+    args = ['worktree', 'add', '-b', name, '--', target, from ? commitish(from, 'the starting commit') : 'HEAD'];
+  } else {
+    args = ['worktree', 'add', '--', target, name];
+  }
+  const { code, stderr } = await runGit(path, args, { allowFailure: true });
+  if (code !== 0) {
+    throw new GitError(stderr.trim() || 'Git could not make the worktree.', { command: `git ${args.join(' ')}`, stderr, code });
+  }
+  return { ok: true, path: target, worktrees: await listWorktrees(path) };
+};
+
+/**
+ * Delete a working tree's folder and forget it.
+ *
+ * Git refuses when the folder holds changes not committed yet, unless
+ * `force` is set. The main worktree, and the one Gitalia has open, are never
+ * removed from here.
+ */
+methods['worktree.remove'] = async ({ path, dir, force = false }) => {
+  const trees = await listWorktrees(path);
+  // Git lists real paths, and the folder may have been named through a link
+  // (on macOS, /var is one for /private/var).
+  const real = async (p) => realpath(p).catch(() => resolve(p));
+  const wanted = typeof dir === 'string' ? await real(dir) : null;
+  let tree = null;
+  for (const t of trees) if (t.path === dir || (await real(t.path)) === wanted) tree = t;
+  if (!tree) throw new GitError(`${dir} is not a worktree of this repository.`, { command: '', stderr: '', code: 1 });
+  if (tree.main) throw new GitError('The main worktree holds the repository itself, so it cannot be removed.', { command: '', stderr: '', code: 1 });
+  if (tree.current) throw new GitError('Gitalia has this worktree open. Open another one first.', { command: '', stderr: '', code: 1 });
+  const args = ['worktree', 'remove', ...(force ? ['--force'] : []), '--', tree.path];
+  const { code, stderr } = await runGit(path, args, { allowFailure: true });
+  if (code !== 0) {
+    const dirty = /modified or untracked files|contains modified/i.test(stderr);
+    throw new GitError(
+      dirty ? `${tree.path} has changes that are not committed. Commit or stash them there first, or remove it anyway to throw them away.` : (stderr.trim() || 'Git could not remove the worktree.'),
+      { command: `git ${args.join(' ')}`, stderr, code }
+    );
+  }
+  return { ok: true, worktrees: await listWorktrees(path) };
+};
+
+/** Forget worktrees whose folders were deleted by hand. */
+methods['worktree.prune'] = async ({ path }) => {
+  await git(path, ['worktree', 'prune']);
+  return { ok: true, worktrees: await listWorktrees(path) };
+};
+
+/* ------------------------------------------------------------------ *
  * Comparing two branches or commits
  * ------------------------------------------------------------------ */
 
