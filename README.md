@@ -282,6 +282,7 @@ Each row takes one command:
 |---|---|
 | Pick | Keep the commit as it is. |
 | Reword | Keep the changes, write a new message. An Edit message button appears. |
+| Edit | Stop the rebase here so the commit can be amended, then carry on. |
 | Squash | Fold into the commit above, keeping both messages. |
 | Fixup | Fold into the commit above, throwing this message away. |
 | Drop | Remove the commit and the change it made. |
@@ -289,6 +290,13 @@ Each row takes one command:
 The arrows on each row move it earlier or later. A dropped row stays in place,
 greyed and struck through, so the list never jumps under the pointer while you
 are working in it. A folded row is indented under the one it joins.
+
+An **Edit** row does exactly what the name says. The run stops at that commit,
+the status bar reports the rebase as paused, and you amend it however you want:
+edit its files in your own editor, or write a new message for it here first.
+**Continue** in the status bar folds that into the commit and applies the rest
+of the plan, pausing again at the next Edit row if there is one. **Abandon**
+puts the branch back as it was before the rebase started.
 
 Nothing runs until you press **Start Rebase**. Until then the plan is only a
 plan, and Cancel costs nothing. **Reset** puts every row back as it arrived.

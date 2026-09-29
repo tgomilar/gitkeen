@@ -9,7 +9,7 @@ import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs'
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
-import { access, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -670,6 +670,98 @@ async function runRebasePlan(path, base, todo) {
     }
     throw err;
   }
+}
+
+/**
+ * Where, if anywhere, an interactive rebase has paused, and why.
+ *
+ * Git leaves `stopped-sha` whenever the rebase stops part-way, whether to
+ * amend an `edit` or because a commit would not apply. The `amend` file is
+ * what tells the two apart: Git writes it only for a pause that is meant to
+ * end with `git commit --amend`. A conflict stops the rebase with the working
+ * tree in the middle of the 3-way merge, and no `amend` file.
+ */
+async function rebaseStopInfo(root) {
+  const g = join(root, '.git', 'rebase-merge');
+  const sha = (await exists(join(g, 'stopped-sha')))
+    ? (await readFile(join(g, 'stopped-sha'), 'utf8')).trim()
+    : null;
+  const amend = await exists(join(g, 'amend'));
+  return { sha, amend };
+}
+
+/**
+ * The messages a rebase will write, each matched by the message the commit
+ * has right now.
+ *
+ * Git gives the message editor no way to tell which commit it is for, so the
+ * only thing identifying it is the message already in the file. A reword
+ * expects the commit's current message and replaces it; a squash expects the
+ * message of the commit it folds into, which is the pick holding a message.
+ */
+async function messageRewrites(path, plan) {
+  const rewords = [];
+  for (const entry of plan) {
+    if (entry.command === 'reword' && entry.message) {
+      const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', entry.hash], { allowFailure: true });
+      rewords.push({ from: existing.trim(), to: entry.message.trim() });
+    }
+  }
+  const squashTarget = plan.find((e) => e.command === 'pick' && e.message);
+  if (squashTarget) {
+    const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', squashTarget.hash], { allowFailure: true });
+    rewords.push({ from: existing.trim(), to: squashTarget.message.trim() });
+  }
+  return rewords;
+}
+
+/**
+ * Continue a rebase that paused at an `edit`, or once a conflict is resolved.
+ *
+ * An `edit` stop wants the commit amended with whatever the user changed since
+ * the stop, plus a message they may have written for it in the plan, and only
+ * then does the rest of the plan apply. The `amend` file is what marks that
+ * kind of pause, so a pause left over from a conflict is continued untouched.
+ *
+ * `plan` travels with the continue so the messages still to be written in a
+ * reword or squash past the stop can be offered to the helper, exactly as they
+ * were on the first pass.
+ */
+async function continueRebase(path, plan, status) {
+  const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+  const stop = await rebaseStopInfo(path);
+
+  if (stop.amend) {
+    const stoppedRow = Array.isArray(plan)
+      ? plan.find((entry) => entry.hash === stop.sha)
+      : null;
+    const message = stoppedRow?.message?.trim();
+    const changed = status.files.some((f) => f.state !== 'conflicted');
+    if (message) {
+      const file = join(path, '.git', 'rebase-merge', 'gitalia-message');
+      await writeFile(file, message);
+      try {
+        await git(path, ['commit', '--amend', '-F', file]);
+      } finally {
+        await rm(file, { force: true });
+      }
+    } else if (changed) {
+      await git(path, ['add', '-A']);
+      await git(path, ['commit', '--amend', '--no-edit']);
+    }
+  }
+
+  let env = { GIT_EDITOR: 'true' };
+  if (Array.isArray(plan) && plan.length > 0) {
+    const rewords = await messageRewrites(path, plan);
+    if (rewords.length > 0) {
+      env = { GIT_EDITOR: `${editor} message`, GITALIA_REWORDS: JSON.stringify(rewords) };
+    }
+  }
+
+  await git(path, ['rebase', '--continue'], { env });
+  const next = await rebaseStopInfo(path);
+  return { ok: true, operation: 'rebase', finished: next.sha === null, stoppedAt: next.sha };
 }
 
 export const methods = {
@@ -1719,22 +1811,7 @@ export const methods = {
 
     const todo = plan.map((entry) => `${entry.command} ${entry.hash}`).join('\n');
 
-    // A reworded commit is matched by the message it has now, because that is
-    // all Git gives the editor to go on.
-    const rewords = [];
-    for (const entry of plan) {
-      if (entry.command !== 'reword' || !entry.message) continue;
-      const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', entry.hash], { allowFailure: true });
-      rewords.push({ from: existing.trim(), to: entry.message.trim() });
-    }
-
-    // A squash asks for a message too, and Git offers the combined one. The
-    // plan's message for the commit being folded into wins.
-    const squashTarget = plan.find((e) => e.command === 'pick' && e.message);
-    if (squashTarget) {
-      const { stdout: existing } = await runGit(path, ['show', '-s', '--format=%B', squashTarget.hash], { allowFailure: true });
-      rewords.push({ from: existing.trim(), to: squashTarget.message.trim() });
-    }
+    const rewords = await messageRewrites(path, plan);
 
     const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
     const env = {
@@ -1761,6 +1838,11 @@ export const methods = {
     const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `${base}..HEAD`], { allowFailure: true });
 
+    // An `edit` in the plan stops the rebase instead of finishing it: Git
+    // pauses at the commit so it can be amended, and the rest applies when the
+    // user continues. That is a pause, not a finished run.
+    const stop = await rebaseStopInfo(path);
+
     return {
       ok: true,
       previousHead: head,
@@ -1768,7 +1850,9 @@ export const methods = {
       commits: Number(count.trim() || 0),
       dropped: plan.filter((e) => e.command === 'drop').length,
       combined: plan.filter((e) => e.command === 'squash' || e.command === 'fixup').length,
-      reworded: plan.filter((e) => e.command === 'reword').length
+      reworded: plan.filter((e) => e.command === 'reword').length,
+      stopped: stop.sha !== null,
+      stoppedAt: stop.sha
     };
   },
 
@@ -2172,12 +2256,14 @@ export const methods = {
    * Carry on once the conflicts are resolved.
    *
    * A merge has no continue of its own: resolving it and committing is what
-   * finishes it. `GIT_EDITOR=true` keeps Git from trying to open an editor
-   * for the message it already has.
+   * finishes it. `GIT_EDITOR=true` keeps Git from trying to open an editor for
+   * the message it already has. A rebase pauses at an `edit` too, and that
+   * kind of pause brings the rest of the plan with it, so the messages Git
+   * still needs can be written by the same helper as the first pass.
    */
-  async 'repo.continueOperation'({ path }) {
+  async 'repo.continueOperation'({ path, plan }) {
     const operation = await detectOperation(path);
-    if (!operation) return { ok: true, operation: null };
+    if (!operation) return { ok: true, operation: null, finished: true };
 
     const status = parseStatus(await git(path, STATUS_ARGS));
     const unresolved = status.files.filter((f) => f.state === 'conflicted');
@@ -2188,8 +2274,9 @@ export const methods = {
       );
     }
 
+    if (operation === 'rebase') return continueRebase(path, plan, status);
+
     const command = {
-      rebase: ['rebase', '--continue'],
       merge: ['commit', '--no-edit'],
       'cherry-pick': ['cherry-pick', '--continue'],
       revert: ['revert', '--continue'],

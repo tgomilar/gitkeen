@@ -298,9 +298,14 @@ export class GitRepository {
     return transport.call('repo.abortOperation', { path: this.path });
   }
 
-  /** Carry on with one, once its conflicts are resolved. */
-  continueOperation(): Promise<OperationResult> {
-    return transport.call('repo.continueOperation', { path: this.path });
+  /**
+   * Carry on with one, once its conflicts are resolved.
+   *
+   * The plan comes with the continue when the operation is a rebase that
+   * paused at an `edit`, so the messages still to be written are remembered.
+   */
+  continueOperation(plan?: RebasePlanEntry[]): Promise<OperationResult> {
+    return transport.call('repo.continueOperation', { path: this.path, plan });
   }
 
   /** Everything the squash dialog needs to know. Hashes come newest first. */

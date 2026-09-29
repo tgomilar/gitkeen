@@ -1663,7 +1663,20 @@ export async function abortOperation() {
     confirmLabel: `Abandon the ${operation}`
   });
   if (!ok) return;
+  rebaseStore.stop = null;
   await repoStore.abortOperation();
+}
+
+/**
+ * Carry on with the half-finished operation.
+ *
+ * A rebase that paused at an `edit` keeps its plan in the editor, so carrying
+ * on means going back through that plan with the messages it carried. The
+ * other operations need no plan to continue.
+ */
+export async function continueOperation() {
+  if (repoStore.status?.operation === 'rebase' && rebaseStore.stop) return rebaseStore.continue();
+  return repoStore.continueOperation();
 }
 
 

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
+  import { rebaseStore } from '../state/rebase.svelte';
   import { pluralize } from '../format';
-  import { abortOperation } from '../actions';
+  import { abortOperation, continueOperation } from '../actions';
 
   const status = $derived(repoStore.status);
 
@@ -31,13 +32,18 @@
     <!-- A stopped operation is the one state a user can get stranded in, so
          the way out of it lives here rather than behind a menu. -->
     <span class="item warn">{operationLabel[status.operation] ?? status.operation}</span>
+    {#if status.operation === 'rebase' && rebaseStore.stop}
+      <span class="item dim" title="The stopped commit is amended with whatever the working tree holds, plus any message you wrote for it in the plan.">stops to amend</span>
+    {/if}
     <button
       class="act"
-      onclick={() => repoStore.continueOperation()}
+      onclick={continueOperation}
       disabled={!!repoStore.busy || conflicts > 0}
       title={conflicts > 0
         ? `Resolve ${pluralize(conflicts, 'conflicted file')} first`
-        : `Carry on with the ${status.operation}`}
+        : status.operation === 'rebase' && rebaseStore.stop
+          ? 'Amend the stopped commit (files or message), then carry on with the plan'
+          : `Carry on with the ${status.operation}`}
     >Continue</button>
     <button
       class="act danger"

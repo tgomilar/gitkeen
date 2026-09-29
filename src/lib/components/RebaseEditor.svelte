@@ -16,6 +16,7 @@
   const COMMANDS: { value: RebaseCommand; label: string; help: string }[] = [
     { value: 'pick', label: 'Pick', help: 'Keep the commit as it is.' },
     { value: 'reword', label: 'Reword', help: 'Keep the changes, write a new message.' },
+    { value: 'edit', label: 'Edit', help: 'Stop here, amend the commit, then carry on with the rest.' },
     { value: 'squash', label: 'Squash', help: 'Fold into the commit above, keeping both messages.' },
     { value: 'fixup', label: 'Fixup', help: 'Fold into the commit above, discarding this message.' },
     { value: 'drop', label: 'Drop', help: 'Remove the commit and the change it made.' }
@@ -49,7 +50,8 @@
 
   <p class="message">
     Applied from the top down, oldest first. Every commit here is rewritten and
-    gets a new hash.
+    gets a new hash. An Edit row stops the run so that commit can be amended
+    before the rest apply.
   </p>
 
   {#if rebaseStore.published.length > 0}
@@ -61,7 +63,7 @@
 
   <ol class="rows">
     {#each rows as row, i (row.hash)}
-      <li class="row" class:dropped={row.command === 'drop'} class:folded={row.command === 'squash' || row.command === 'fixup'}>
+      <li class="row" class:dropped={row.command === 'drop'} class:folded={row.command === 'squash' || row.command === 'fixup'} class:pause={row.command === 'edit'}>
         <div class="order">
           <button
             class="step"
@@ -114,7 +116,7 @@
           {/if}
         </div>
 
-        {#if row.command === 'reword'}
+        {#if row.command === 'reword' || row.command === 'edit'}
           <button
             class="edit"
             onclick={() => (rebaseStore.editing = rebaseStore.editing === row.hash ? null : row.hash)}
@@ -227,6 +229,9 @@
 
   /* A folded row is indented, showing it belongs to the one above it. */
   .row.folded { padding-left: 18px; }
+
+  /* An edited row is where the run pauses, so it is marked as such. */
+  .row.pause { box-shadow: inset 3px 0 0 var(--accent); }
 
   .order { display: flex; flex-direction: column; gap: 1px; }
 

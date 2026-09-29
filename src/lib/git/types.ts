@@ -445,7 +445,7 @@ export interface MoveResult {
 }
 
 /** What an interactive rebase can do with one commit. */
-export type RebaseCommand = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
+export type RebaseCommand = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop' | 'edit';
 
 /** One commit in the span an interactive rebase would cover. */
 export interface RebaseCommit {
@@ -480,6 +480,10 @@ export interface RebaseResult {
   dropped: number;
   combined: number;
   reworded: number;
+  /** True when an `edit` stopped the rebase part-way to be amended. */
+  stopped: boolean;
+  /** The commit the run paused at, when it paused. */
+  stoppedAt: string | null;
 }
 
 export type ResetMode = 'soft' | 'mixed' | 'hard';
@@ -512,6 +516,8 @@ export interface OperationResult {
   ok: boolean;
   operation: OperationState;
   finished?: boolean;
+  /** Where the operation paused again, for a rebase that stopped to amend. */
+  stoppedAt?: string | null;
 }
 
 /**

@@ -173,3 +173,142 @@ describe('the rebase editor', () => {
     });
   });
 });
+
+describe('the rebase editor: edit (stop to amend)', () => {
+  test('an edit in the plan stops the rebase at that commit', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(4);
+      const from = (await repo.hashes())[3];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const [c1, c2] = commits;
+
+      const result = await methods['commits.rebase']({
+        path: repo.path,
+        from,
+        plan: [
+          { hash: c1.hash, command: 'pick' },
+          { hash: c2.hash, command: 'edit' },
+          { hash: commits[2].hash, command: 'pick' },
+          { hash: commits[3].hash, command: 'pick' }
+        ]
+      });
+
+      assert.equal(result.stopped, true, 'an edit is a pause, not a finish');
+      assert.equal(result.stoppedAt, c2.hash);
+      assert.equal(repo.midOperation(), true, 'the rebase is still running');
+      assert.equal((await repo.log())[0], 'c2', 'the branch pauses at the edited commit');
+    });
+  });
+
+  test('continue folds working-tree changes in, and rewrites what follows', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(4);
+      const from = (await repo.hashes())[3];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const [c1, c2, c3, c4] = commits;
+      const plan = [
+        { hash: c1.hash, command: 'pick' },
+        { hash: c2.hash, command: 'edit' },
+        { hash: c3.hash, command: 'reword', message: 'c3 renamed' },
+        { hash: c4.hash, command: 'pick' }
+      ];
+
+      const stopped = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(stopped.stopped, true);
+
+      // The user edits a file while the rebase is paused; nothing is staged.
+      repo.write('c2.txt', 'changed by hand\n');
+
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.ok, true);
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c4', 'c3 renamed', 'c2', 'c1', 'base']);
+      const { stdout } = await repo.git(['show', 'HEAD:c2.txt']);
+      assert.equal(stdout, 'changed by hand\n', 'the change joined the stopped commit');
+    });
+  });
+
+  test('a message written for the edit retitles the stopped commit on continue', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(3);
+      const from = (await repo.hashes())[2];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const [c1, c2] = commits;
+      const plan = [
+        { hash: c1.hash, command: 'pick' },
+        { hash: c2.hash, command: 'edit', message: 'c2 retitled' },
+        { hash: commits[2].hash, command: 'pick' }
+      ];
+
+      await methods['commits.rebase']({ path: repo.path, from, plan });
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c3', 'c2 retitled', 'c1', 'base']);
+    });
+  });
+
+  test('an edit that is the last line finishes on continue', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(3);
+      const from = (await repo.hashes())[2];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const plan = commits.map((c, i) => ({ hash: c.hash, command: (i === 2 ? 'edit' : 'pick') }));
+
+      const stopped = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(stopped.stopped, true);
+
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.finished, true);
+      assert.deepEqual(await repo.log(), ['c3', 'c2', 'c1', 'base']);
+      assert.equal(repo.midOperation(), false);
+    });
+  });
+
+  test('two edits in one plan stop twice, then finish', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(4);
+      const from = (await repo.hashes())[3];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const plan = commits.map((c, i) => ({ hash: c.hash, command: (i === 1 || i === 3 ? 'edit' : 'pick') }));
+
+      const first = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(first.stoppedAt, commits[1].hash);
+
+      const second = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(second.ok, true);
+      assert.equal(second.finished, false, 'the second edit stops it again');
+      assert.equal(second.stoppedAt, commits[3].hash);
+
+      const third = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(third.finished, true);
+      assert.deepEqual(await repo.log(), ['c4', 'c3', 'c2', 'c1', 'base']);
+    });
+  });
+
+  test('aborting during an edit stop leaves the branch alone', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'base.txt': 'b\n' });
+      await repo.commits(3);
+      const from = (await repo.hashes())[2];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const plan = [
+        { hash: commits[0].hash, command: 'pick' },
+        { hash: commits[1].hash, command: 'edit' },
+        { hash: commits[2].hash, command: 'pick' }
+      ];
+
+      const stopped = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(stopped.stopped, true);
+
+      const aborted = await methods['repo.abortOperation']({ path: repo.path });
+      assert.equal(aborted.operation, 'rebase');
+      assert.equal(repo.midOperation(), false);
+      assert.deepEqual(await repo.log(), ['c3', 'c2', 'c1', 'base']);
+    });
+  });
+});

@@ -404,18 +404,27 @@ class RepoStore {
   }
 
   /**
-   * Run an interactive rebase. Returns true when the branch actually moved.
-   *
-   * The editor needs to know whether to close, and a refused plan leaves it
-   * open with the user's work in it rather than throwing it away.
+   * Run an interactive rebase. Returns what happened to it, so the editor
+   * knows whether to close and whether the branch only paused part-way.
    */
-  async rebase(from: string, plan: RebasePlanEntry[]): Promise<boolean> {
+  async rebase(from: string, plan: RebasePlanEntry[]): Promise<{ ok: boolean; stopped: boolean; stoppedAt: string | null }> {
     const repo = this.repo;
-    if (!repo) return false;
+    if (!repo) return { ok: false, stopped: false, stoppedAt: null };
     this.busy = 'Rebasing';
     try {
       const result = await repo.rebase(from, plan);
       await this.refresh();
+
+      // An `edit` in the plan stops the rebase so the commit at that point
+      // can be amended. That is not a finished run: the branch is mid-flight,
+      // and the status bar's Continue takes over from here.
+      if (result.stopped) {
+        toasts.info(
+          'Rebase paused',
+          `It stopped at ${result.stoppedAt?.slice(0, 7) ?? 'a commit'} so that commit can be amended. Make the change, then Continue in the status bar.`
+        );
+        return { ok: true, stopped: true, stoppedAt: result.stoppedAt };
+      }
 
       const parts: string[] = [];
       if (result.dropped > 0) parts.push(`${pluralize(result.dropped, 'commit')} dropped`);
@@ -426,11 +435,39 @@ class RepoStore {
         `Rebased ${this.currentBranch ?? 'HEAD'}`,
         `${parts.length > 0 ? parts.join(', ') + '. ' : ''}The branch was at ${result.previousHead.slice(0, 7)} before.`
       );
-      return true;
+      return { ok: true, stopped: false, stoppedAt: null };
     } catch (err) {
       toasts.error('The rebase did not run', describe(err));
       await this.refresh();
-      return false;
+      return { ok: false, stopped: false, stoppedAt: null };
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /**
+   * Continue a rebase that paused at an `edit`, carrying the rest of the plan.
+   * Where it ended up tells the editor when to let the plan go.
+   */
+  async continueRebase(plan: RebasePlanEntry[]): Promise<{ ok: boolean; finished: boolean; stoppedAt: string | null }> {
+    const repo = this.repo;
+    if (!repo) return { ok: false, finished: false, stoppedAt: null };
+    this.busy = 'Continuing the rebase';
+    try {
+      const result = await repo.continueOperation(plan);
+      await this.refresh();
+      if (result.finished === true) {
+        toasts.success('Rebase finished', 'The rest of the plan was applied to the branch.');
+      } else if (result.stoppedAt) {
+        toasts.info('Rebase paused again', `It stopped at ${result.stoppedAt.slice(0, 7)} to amend. Continue again when it is ready.`);
+      } else {
+        toasts.success('The rebase moved on', null);
+      }
+      return { ok: true, finished: result.finished === true, stoppedAt: result.stoppedAt ?? null };
+    } catch (err) {
+      toasts.error('The rebase did not continue', describe(err));
+      await this.refresh();
+      return { ok: false, finished: false, stoppedAt: null };
     } finally {
       this.busy = null;
     }

@@ -33,6 +33,13 @@ class RebaseStore {
   /** The row whose message is being edited, or null. */
   editing = $state<string | null>(null);
 
+  /**
+   * A rebase that stopped at an `edit`, waiting to be amended and continued.
+   * The rows are kept as the run knew them, because continue needs the plan
+   * again to write the messages still to come.
+   */
+  stop = $state<{ rows: RebaseRow[]; stoppedAt: string | null } | null>(null);
+
   /** The commit the span starts at, kept so the run can name it again. */
   private from: string | null = null;
 
@@ -88,6 +95,7 @@ class RebaseStore {
       this.branch = span.branch ?? null;
       this.published = span.published ?? [];
       this.editing = null;
+      this.stop = null;
       this.open = true;
     } catch (err) {
       toasts.error('Could not read the commits', describe(err));
@@ -105,8 +113,9 @@ class RebaseStore {
 
   setCommand(hash: string, command: RebaseCommand) {
     this.rows = this.rows.map((r) => (r.hash === hash ? { ...r, command } : r));
-    // A row that is no longer reworded has no business keeping a new message.
-    if (command !== 'reword') {
+    // A row that no longer rewords or restarts as an `edit` has no business
+    // keeping a new message.
+    if (command !== 'reword' && command !== 'edit') {
       this.rows = this.rows.map((r) => (r.hash === hash && command !== 'pick' ? { ...r, message: null } : r));
     }
   }
@@ -143,8 +152,40 @@ class RebaseStore {
     }));
     this.busy = true;
     try {
-      const ok = await repoStore.rebase(this.from, plan);
-      if (ok) this.close();
+      const result = await repoStore.rebase(this.from, plan);
+      if (result.ok && result.stopped) {
+        // The dialog closed on a pause, not on a finished run. The plan is
+        // kept so Continue in the status bar can carry it on.
+        this.stop = { rows: this.rows.map((r) => ({ ...r })), stoppedAt: result.stoppedAt };
+        this.open = false;
+      } else if (result.ok) {
+        this.close();
+      }
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** Continue a rebase that stopped at an `edit`. */
+  async continue() {
+    const stop = this.stop;
+    if (!stop) return;
+    if (repoStore.status?.operation !== 'rebase') {
+      // Abandoned or finished behind our back: nothing is left to carry on.
+      this.stop = null;
+      return;
+    }
+    const plan = stop.rows.map((r) => ({
+      hash: r.hash,
+      command: r.command,
+      message: r.message ?? undefined
+    }));
+    this.busy = true;
+    try {
+      const result = await repoStore.continueRebase(plan);
+      if (!result.ok) return;
+      if (result.finished) this.stop = null;
+      else this.stop = { rows: stop.rows, stoppedAt: result.stoppedAt };
     } finally {
       this.busy = false;
     }
