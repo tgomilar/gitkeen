@@ -12,7 +12,7 @@
    */
   import Icon from './Icon.svelte';
   import TriCheckbox from './TriCheckbox.svelte';
-  import { fileIcon, describeChange, KIND_LABEL } from '../changes';
+  import { fileIcon, describeChange } from '../changes';
   import type { Change } from '../changes';
 
   interface Props {
@@ -41,11 +41,14 @@
       onopen();
     }
   }
+
+  /** Part of the file is in the index and part is not. */
+  const partial = $derived(checked && change.staged && change.unstaged);
 </script>
 
 <div class="row {change.kind}" class:selected style="padding-left: {indent}px">
   <TriCheckbox
-    checkState={checked ? 'all' : 'none'}
+    checkState={checked ? (partial ? 'some' : 'all') : 'none'}
     {disabled}
     label="Include {change.path} in the commit"
     onchange={ontoggle}
@@ -69,10 +72,10 @@
     {/if}
     {#if change.kind === 'conflict'}
       <span class="flag">conflict</span>
-    {:else if change.staged}
-      <!-- Ticking a box never stages, so a file already in the index is worth
-           pointing out: the user put it there by other means. -->
-      <span class="flag staged" title="Already staged. {KIND_LABEL[change.kind]}.">staged</span>
+    {:else if partial}
+      <!-- Some hunks are in the index and the rest wait, so the commit would
+           take only part of this file. -->
+      <span class="flag staged" title="Partly staged: the commit takes only the staged hunks. Tick again to stage the rest.">partly staged</span>
     {/if}
   </button>
 </div>

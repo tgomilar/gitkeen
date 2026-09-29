@@ -42,7 +42,7 @@
     checked={isChecked(change.path)}
     selected={selected === change.path}
     {disabled}
-    ontoggle={() => ontoggleCheck([change], !isChecked(change.path))}
+    ontoggle={() => ontoggleCheck([change], (change.staged && change.unstaged) || !isChecked(change.path))}
     onselect={() => onselect(change)}
     onopen={() => onopen(change)}
     onmenu={(e) => onmenu(change, e)}

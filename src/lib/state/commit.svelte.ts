@@ -137,7 +137,9 @@ class CommitStore {
     if (this.forced) return;
     const repo = repoStore.repo;
     if (!repo) return;
-    const paths = changes.filter((c) => c.staged !== on).map((c) => c.path);
+    // Ticking takes in anything with a change still outside the index, a
+    // partly staged file included; unticking takes out anything staged.
+    const paths = changes.filter((c) => (on ? !c.staged || c.unstaged : c.staged)).map((c) => c.path);
     if (paths.length === 0) return;
     const result = await this.run(on ? 'Staging' : 'Unstaging', () => repo.stage(paths, on));
     if (result) await repoStore.refresh();
@@ -146,8 +148,13 @@ class CommitStore {
     this.splitGroups = [];
   }
 
+  /**
+   * Tick or untick one file. A partly staged file shows a mixed box, and a
+   * mixed box ticks fully first: the rest of the file joins the index.
+   */
   async toggle(change: Change) {
-    await this.setChecked([change], !this.checked.has(change.path));
+    const partial = change.staged && change.unstaged;
+    await this.setChecked([change], partial || !this.checked.has(change.path));
   }
 
   async toggleGroup(changes: Change[]) {
