@@ -1060,6 +1060,50 @@ async function continueRebase(path, plan, status) {
   return { ok: true, operation: 'rebase', finished: next.sha === null, stoppedAt: next.sha, conflicted: false };
 }
 
+const BLAME_LINE_CAP = 20000;
+
+/**
+ * Read `git blame --porcelain`.
+ *
+ * Each line starts with a header naming its commit and line numbers. The
+ * first time a commit appears, lines describing it follow (author, time,
+ * summary, previous); then the file line itself, after a tab.
+ */
+function parseBlame(stdout) {
+  const commits = {};
+  const lines = [];
+  let current = null;
+  let truncated = false;
+  for (const raw of stdout.split('\n')) {
+    if (current === null) {
+      const head = /^([0-9a-f]{40}) (\d+) (\d+)/.exec(raw);
+      if (!head) continue;
+      current = { hash: head[1], origLine: Number(head[2]), line: Number(head[3]) };
+      if (!commits[current.hash]) commits[current.hash] = { author: '', email: '', time: 0, summary: '', previous: null };
+      continue;
+    }
+    if (raw.startsWith('\t')) {
+      if (lines.length < BLAME_LINE_CAP) lines.push({ ...current, text: raw.slice(1) });
+      else truncated = true;
+      current = null;
+      continue;
+    }
+    const space = raw.indexOf(' ');
+    const key = space === -1 ? raw : raw.slice(0, space);
+    const value = space === -1 ? '' : raw.slice(space + 1);
+    const info = commits[current.hash];
+    if (key === 'author') info.author = value;
+    else if (key === 'author-mail') info.email = value.replace(/^<|>$/g, '');
+    else if (key === 'author-time') info.time = Number(value) * 1000;
+    else if (key === 'summary') info.summary = value;
+    else if (key === 'previous') {
+      const cut = value.indexOf(' ');
+      info.previous = { hash: value.slice(0, cut), file: value.slice(cut + 1) };
+    }
+  }
+  return { lines, commits, truncated };
+}
+
 /**
  * Split a search box query into Git log filters.
  *
@@ -1121,6 +1165,31 @@ export const methods = {
       rebaseStop = stop.amend ? 'edit' : stop.sha ? 'conflict' : null;
     }
     return { ...status, operation, rebaseStop };
+  },
+
+  /**
+   * Who last changed each line of a file, and in which commit.
+   *
+   * `rev` names the commit to read the file at; without it the working tree
+   * is read, and lines not committed yet carry the all-zero hash. Each commit
+   * is described once, and each line points at its commit, so a long file of
+   * few commits stays small. `previous` is where the line was before that
+   * commit, which is what "Before this" in the viewer opens next.
+   */
+  async 'blame.file'({ path, file, rev = null }) {
+    if (!file || typeof file !== 'string' || file.startsWith('-') || file.includes('\0')) {
+      throw new GitError('A file inside the repository is required.', { command: '', stderr: '', code: 1 });
+    }
+    workPath(path, file);
+    if (rev !== null && (typeof rev !== 'string' || !/^[\w./^~@{}-]+$/.test(rev) || rev.startsWith('-'))) {
+      throw new GitError('That is not a commit Gitalia can read.', { command: '', stderr: '', code: 1 });
+    }
+    const args = ['blame', '--porcelain', ...(rev ? [rev] : []), '--', file];
+    const { stdout, stderr, code } = await runGit(path, args, { allowFailure: true });
+    if (code !== 0) {
+      throw new GitError(stderr.trim() || `Git could not blame ${file}.`, { command: `git ${args.join(' ')}`, stderr, code });
+    }
+    return { file, rev, ...parseBlame(stdout) };
   },
 
   /**

@@ -38,6 +38,7 @@ branches, commit your work, and change the history you already have.
 | Drop | Remove commits from the branch entirely. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Search the whole history by message, author, file, date, hash* or branch name. |
+| Blame | See which commit last changed each line of a file, and follow a line back in time. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -494,6 +495,23 @@ A hash, or the start of one, finds that commit. When the graph is narrowed to
 a branch, the search stays inside that branch. Git returns at most 1000
 matches, and the header above the graph says when there were more.
 
+## Blame: who changed each line
+
+Blame shows, for every line of a file, the commit that last changed it. Open it
+in one of three ways:
+
+1. In the diff viewer, press **Blame**. You see the file as it is in that
+   commit, or in the working tree.
+2. In the commit panel, right click a changed file and choose **Blame**.
+3. In the command palette, choose **Blame a file…** and type its path.
+
+Lines from the same commit form one block. The first line of a block shows
+the commit's hash, author and date, and the second line shows its subject.
+Lines you have not committed yet say so. Click a hash to select that commit in
+the graph and read its details. **Before this** opens the file as it was just
+before that commit, so you can follow a line back through each change to it.
+**Back** returns to the newer version. Blame follows a file across a rename.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -674,6 +692,7 @@ Your own repositories are never touched.
 | `server/test/conflicts.test.mjs` | Reading a conflicted file for the merge editor, and writing a resolution. |
 | `server/test/log.test.mjs` | Reading the history a page at a time. |
 | `server/test/recovery.test.mjs` | The operation log, and restoring what an operation changed. |
+| `server/test/blame.test.mjs` | Which commit last changed each line of a file. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

@@ -1156,7 +1156,8 @@ product value is the **interaction model around the Git DAG**.
     change holds unrelated work. Anthropic, OpenAI, LM Studio or Ollama.
 -   [ ] Git LFS
 -   [ ] Submodules
--   [ ] Blame
+-   [x] Blame --- per line, grouped by commit, with "Before this" to follow a
+    line back through its history
 -   [ ] Bisect
 -   [ ] Advanced analytics
 

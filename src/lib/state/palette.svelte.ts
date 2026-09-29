@@ -29,7 +29,8 @@ import {
   resetToCommit,
   stashChanges,
   canSquash,
-  defaultRemote
+  defaultRemote,
+  blameFile
 } from '../actions';
 
 /** What the app has to let commands drive, provided by the shell. */
@@ -406,6 +407,14 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     icon: 'stats',
     group: 'View',
     run: () => b.setDock('stats')
+  });
+  add({
+    id: 'blame',
+    label: 'Blame a file…',
+    keywords: 'annotate who changed line history author',
+    icon: 'commit',
+    group: 'History',
+    run: () => blameFile()
   });
   add({
     id: 'undo-log',

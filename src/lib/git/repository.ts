@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult
 } from './types';
 
 export class GitRepository {
@@ -202,6 +202,11 @@ export class GitRepository {
   /** Resolve a modify/delete conflict by keeping the side that deleted the file. */
   conflictRemove(file: string): Promise<{ ok: boolean; resolved: number }> {
     return transport.call('conflicts.resolve', { path: this.path, file, remove: true });
+  }
+
+  /** Which commit last changed each line of a file, at `rev` or in the working tree. */
+  blame(file: string, rev: string | null = null): Promise<BlameResult> {
+    return transport.call('blame.file', { path: this.path, file, rev });
   }
 
   /** The operation log, newest first. */

@@ -8,6 +8,7 @@
 import { repoStore, describe } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
 import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
+import { blameStore } from './state/blame.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -1386,6 +1387,9 @@ export function changeMenuItems(change: Change): MenuItem[] {
   const ticked = commitStore.isChecked(change.path);
   const items: MenuItem[] = [
     { label: 'Show Diff', icon: 'diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
+    ...(change.kind === 'modified' || change.kind === 'renamed'
+      ? [{ label: 'Blame', icon: 'commit' as const, hint: 'who changed each line', action: () => blameStore.show(change.path) }]
+      : []),
     SEPARATOR
   ];
 
@@ -1818,4 +1822,21 @@ export function stashMenuItems(stash: Stash): MenuItem[] {
     { label: 'Copy name', icon: 'copy', action: () => copy(stash.message || stash.ref, 'name') },
     { label: 'Copy stash reference', icon: 'copy', action: () => copy(stash.ref, stash.ref) }
   ];
+}
+
+
+/** Ask for a file, then show who last changed each of its lines. */
+export async function blameFile() {
+  const file = await prompt({
+    title: 'Blame a file',
+    message: 'Shows which commit last changed each line of the file, as it is in the working tree.',
+    input: {
+      label: 'File path, relative to the repository',
+      value: blameStore.request?.file ?? '',
+      placeholder: 'src/app.ts',
+      validate: (value) => (value.trim() ? null : 'Type the path of a file.')
+    },
+    confirmLabel: 'Blame'
+  });
+  if (file) await blameStore.show(file.trim());
 }

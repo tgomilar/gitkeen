@@ -10,6 +10,7 @@
   import { pairLines, rowSegments, unifiedSegments, limitHunks } from '../diff';
   import type { DiffHunk, DiffLine } from '../git/types';
   import TriCheckbox from './TriCheckbox.svelte';
+  import { blameStore } from '../state/blame.svelte';
 
   const request = $derived(diffStore.request);
   const diff = $derived(diffStore.diff);
@@ -158,6 +159,8 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
+    // The blame viewer opens over this one and owns the keyboard while open.
+    if (blameStore.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -240,6 +243,11 @@
               aria-pressed={split}
             >Side by side</button>
           </div>
+          <button
+            class="blame"
+            onclick={() => blameStore.show(request.file, request.hash ?? null)}
+            title="Who last changed each line of this file"
+          >Blame</button>
           <button class="close" onclick={() => diffStore.close()} title="Close (Escape)" aria-label="Close">×</button>
         </div>
       </header>
@@ -384,6 +392,16 @@
 {/if}
 
 <style>
+  .blame {
+    padding: 3px 10px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: 11.5px;
+  }
+  .blame:hover { color: var(--text); }
+
   .scrim {
     position: fixed;
     inset: 0;

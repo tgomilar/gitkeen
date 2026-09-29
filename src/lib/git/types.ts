@@ -816,3 +816,32 @@ export interface RecoveryResult {
   /** True when it had been deleted and was made again. */
   recreated: boolean;
 }
+
+/** One line of a blamed file, and the commit that last changed it. */
+export interface BlameLine {
+  hash: string;
+  /** The line's number in that commit's version of the file. */
+  origLine: number;
+  /** The line's number in the file as shown. */
+  line: number;
+  text: string;
+}
+
+export interface BlameCommit {
+  author: string;
+  email: string;
+  time: number;
+  summary: string;
+  /** Where these lines were before this commit, for going further back. */
+  previous: { hash: string; file: string } | null;
+}
+
+export interface BlameResult {
+  file: string;
+  /** The commit the file was read at, or null for the working tree. */
+  rev: string | null;
+  lines: BlameLine[];
+  commits: Record<string, BlameCommit>;
+  /** True when the file was too long to show every line. */
+  truncated: boolean;
+}
