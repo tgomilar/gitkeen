@@ -652,12 +652,19 @@ function emptyReport(limit) {
   };
 }
 
-/** Turn the parsed log into every number the report shows. */
+/**
+ * Turn the parsed log into every number the report shows.
+ *
+ * The log is read one commit past the limit, so that one extra commit is
+ * what says the history goes further than the report.
+ */
 function buildReport(commits, limit) {
+  const truncated = commits.length > limit;
+  if (truncated) commits = commits.slice(0, limit);
   if (commits.length === 0) return emptyReport(limit);
 
   const report = emptyReport(limit);
-  report.truncated = commits.length >= limit;
+  report.truncated = truncated;
 
   const authors = new Map();
   const days = new Map();
@@ -1055,7 +1062,10 @@ export const methods = {
    * count the same `--date-order` sequence the client is drawing from.
    */
   async 'log.list'({ path, limit = 2000, all = true, refs = null, skip = 0 }) {
-    const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit}`];
+    // One commit past the page says whether there is another page. Asking
+    // for exactly `limit` could not tell a history of exactly that length
+    // from a longer one.
+    const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`];
     if (skip > 0) args.push(`--skip=${skip}`);
     const scoped = Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string' && ref.trim()) : [];
     if (scoped.length > 0) {
@@ -1073,7 +1083,7 @@ export const methods = {
     // An empty repository has no HEAD to log; that is not an error.
     if (code !== 0) return { commits: [], truncated: false };
     const commits = parseLog(stdout);
-    return { commits, truncated: commits.length >= limit };
+    return { commits: commits.slice(0, limit), truncated: commits.length > limit };
   },
 
   async 'branches.list'({ path }) {
@@ -2140,7 +2150,7 @@ export const methods = {
     const args = [
       '-c', 'core.quotepath=false',
       'log', `--pretty=format:${STATS_FORMAT}`, '--numstat', '-z',
-      '--date-order', `--max-count=${limit}`
+      '--date-order', `--max-count=${limit + 1}`
     ];
     // A merge contributes no lines, and that is deliberate.
     //

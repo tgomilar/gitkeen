@@ -52,6 +52,11 @@ class RepoStore {
   refreshing = $state(false);
   /** True while the next page of history is being read. */
   loadingOlder = $state(false);
+  /**
+   * Bumped whenever the graph starts over from its newest page. A page of
+   * older history read before that no longer follows on from what is shown.
+   */
+  private logGeneration = 0;
   /** Label of the Git operation currently running, or null. */
   busy = $state<string | null>(null);
   openError = $state<string | null>(null);
@@ -120,6 +125,7 @@ class RepoStore {
   close() {
     this.repo = null;
     this.info = null;
+    this.logGeneration++;
     this.commits = [];
     this.branches = { local: [], remote: [], tags: [] };
     this.status = null;
@@ -160,7 +166,9 @@ class RepoStore {
     if (!repo) return;
     this.refreshing = true;
     try {
+      const generation = ++this.logGeneration;
       const log = await repo.log(this.logOptions());
+      if (repo !== this.repo || generation !== this.logGeneration) return;
       this.commits = log.commits;
       this.truncated = log.truncated;
       this.pruneSelection();
@@ -186,20 +194,27 @@ class RepoStore {
     try {
       // The graph is the fastest thing to draw, so it is painted as soon as
       // the log lands instead of waiting for the slower status and branch
-      // calls. Everything else fills in beneath it.
-      const log = await repo.log(this.logOptions());
-      if (repo !== this.repo) return;
-      this.commits = log.commits;
-      this.truncated = log.truncated;
-      this.pruneSelection();
-
-      const [branches, status, head, remotes, stashes] = await Promise.all([
+      // calls. Those still start at the same time, so the refresh as a whole
+      // takes no longer than before.
+      const generation = ++this.logGeneration;
+      const rest = Promise.all([
         repo.branches(),
         repo.status(),
         repo.head(),
         repo.remotes(),
         repo.stashes()
       ]);
+      // Nothing may reject unobserved while the log is awaited.
+      rest.catch(() => {});
+      const log = await repo.log(this.logOptions());
+      if (repo !== this.repo) return;
+      const current = generation === this.logGeneration;
+      if (current) {
+        this.commits = log.commits;
+        this.truncated = log.truncated;
+      }
+
+      const [branches, status, head, remotes, stashes] = await rest;
       if (repo !== this.repo) return;
       this.branches = branches;
       this.status = status;
@@ -209,12 +224,17 @@ class RepoStore {
 
       // A branch the graph was narrowed to can be deleted or renamed under
       // us, and then the scope is meaningless: widen back to every branch.
+      // The selection is pruned only after that, so a commit that is still
+      // there under "all branches" stays selected.
       if (this.scope && !this.refExists(this.scope)) {
         this.scope = null;
+        const widened = ++this.logGeneration;
         const all = await repo.log(this.logOptions());
-        if (repo !== this.repo) return;
+        if (repo !== this.repo || widened !== this.logGeneration) return;
         this.commits = all.commits;
         this.truncated = all.truncated;
+        this.pruneSelection();
+      } else if (current) {
         this.pruneSelection();
       }
     } catch (err) {
@@ -236,10 +256,15 @@ class RepoStore {
     const repo = this.repo;
     if (!repo || !this.truncated || this.loadingOlder) return;
     this.loadingOlder = true;
+    const generation = this.logGeneration;
     try {
       const log = await repo.log(this.logOptions(this.commits.length));
-      if (repo !== this.repo) return;
-      this.commits = this.commits.concat(log.commits);
+      // A refresh or a scope change landed meanwhile: this page followed on
+      // from a graph that is gone, and appending it would leave a gap or
+      // repeat commits.
+      if (repo !== this.repo || generation !== this.logGeneration) return;
+      const seen = new Set(this.commits.map((c) => c.hash));
+      this.commits = this.commits.concat(log.commits.filter((c) => !seen.has(c.hash)));
       this.truncated = log.truncated;
     } catch (err) {
       toasts.error('Could not read older commits', describe(err));

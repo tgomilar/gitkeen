@@ -130,3 +130,22 @@ describe('paged log reading', () => {
     });
   });
 });
+describe('whether there is another page', () => {
+  test('a history exactly one page long has no next page', async () => {
+    await withRepo(async (repo) => {
+      await repo.commits(5);
+      const page = await methods['log.list']({ path: repo.path, limit: 5 });
+      assert.equal(page.commits.length, 5);
+      assert.equal(page.truncated, false);
+    });
+  });
+
+  test('one commit more makes a next page, and the page stays at the limit', async () => {
+    await withRepo(async (repo) => {
+      await repo.commits(6);
+      const page = await methods['log.list']({ path: repo.path, limit: 5 });
+      assert.equal(page.commits.length, 5);
+      assert.equal(page.truncated, true);
+    });
+  });
+});
