@@ -418,14 +418,6 @@ async function resolveConflicts(path, paths) {
 }
 
 /**
- * Rebuild one hunk as a self-contained patch Git can apply.
- *
- * `parseFileDiff` kept each line's content after its kind marker, so writing
- * the marker back reproduces the original patch line for line, the no-newline
- * marker included. The heading sits on the header line, so a hostile newline
- * in it is stripped rather than trusted.
- */
-/**
  * A path as Git writes it in a patch header.
  *
  * A name holding a tab, a quote, a backslash or another control character is
@@ -444,7 +436,24 @@ function patchPath(prefix, file) {
   return `"${quoted}"`;
 }
 
-function buildHunkPatch(file, hunk) {
+/**
+ * Rebuild one hunk as a self-contained patch Git can apply.
+ *
+ * `parseFileDiff` kept each line's content after its kind marker, so writing
+ * the marker back reproduces the original patch line for line, the no-newline
+ * marker included. The heading sits on the header line, so a hostile newline
+ * in it is stripped rather than trusted.
+ *
+ * A line marked `skip` is left out of the stage (or unstage). Staging applies
+ * the patch to the index: a skipped addition is dropped, and a skipped
+ * removal becomes context, because the index still holds that line.
+ * Unstaging applies the patch in reverse, so the roles swap: a skipped
+ * addition stays in the index as context, and a skipped removal is dropped.
+ * `--recount` then corrects the line counts in the `@@` header.
+ *
+ * Returns null when every change in the hunk is skipped.
+ */
+function buildHunkPatch(file, hunk, side = 'unstaged') {
   const line = (n, len) => (len === 1 ? String(n) : `${n},${len}`);
   const heading = (hunk.heading ?? '').replace(/[\r\n]/g, '');
   const a = patchPath('a/', file), b = patchPath('b/', file);
@@ -454,17 +463,24 @@ function buildHunkPatch(file, hunk) {
     `+++ ${b}`,
     `@@ -${line(hunk.oldStart, hunk.oldLines)} +${line(hunk.newStart, hunk.newLines)} @@${heading ? ' ' + heading : ''}`
   ];
+  let changes = 0;
   for (const diffLine of hunk.lines ?? []) {
     // One patch line per diff line. A newline inside one would start a line
     // of its own, and could name another file for the patch to touch.
     if (typeof diffLine.text !== 'string' || diffLine.text.includes('\n')) {
       throw new GitError('A hunk line is malformed.', { command: '', stderr: '', code: 1 });
     }
-    const marker = diffLine.kind === 'add' ? '+' : diffLine.kind === 'del' ? '-' : ' ';
-    out.push(marker + diffLine.text);
+    let kind = diffLine.kind === 'add' || diffLine.kind === 'del' ? diffLine.kind : 'context';
+    if (kind !== 'context' && diffLine.skip) {
+      const keptAsContext = side === 'staged' ? 'add' : 'del';
+      if (kind !== keptAsContext) continue;
+      kind = 'context';
+    }
+    if (kind !== 'context') changes++;
+    out.push((kind === 'add' ? '+' : kind === 'del' ? '-' : ' ') + diffLine.text);
     if (diffLine.noNewline) out.push('\\ No newline at end of file');
   }
-  return out.join('\n') + '\n';
+  return changes > 0 ? out.join('\n') + '\n' : null;
 }
 
 /**
@@ -2731,7 +2747,8 @@ export const methods = {
     // A staged hunk starting at line 0 of nothing is the file being created.
     // Taking it out of the index means the file leaves the index; applying it
     // in reverse would instead stage an empty file.
-    if (side === 'staged' && hunks.some((h) => h.oldStart === 0 && h.oldLines === 0)) {
+    const partial = hunks.some((h) => (h.lines ?? []).some((l) => l.skip));
+    if (side === 'staged' && !partial && hunks.some((h) => h.oldStart === 0 && h.oldLines === 0)) {
       await git(path, ['reset', '-q', '--', file]);
       return { ok: true, applied: hunks.length };
     }
@@ -2741,8 +2758,12 @@ export const methods = {
     try {
       dir = await mkdtemp(join(tmpdir(), 'gitalia-hunks-'));
       const patchFile = join(dir, 'hunk.patch');
-      for (const hunk of ordered) {
-        await writeFile(patchFile, buildHunkPatch(file, hunk), 'utf8');
+      const patches = ordered.map((hunk) => buildHunkPatch(file, hunk, side)).filter((p) => p !== null);
+      if (patches.length === 0) {
+        throw new GitError('Select at least one changed line.', { command: '', stderr: '', code: 1 });
+      }
+      for (const patch of patches) {
+        await writeFile(patchFile, patch, 'utf8');
         const apply = ['apply', '--cached', '--recount'];
         if (side === 'staged') apply.push('-R');
         apply.push(patchFile);

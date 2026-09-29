@@ -334,6 +334,8 @@ export interface DiffLine {
   text: string;
   /** Git's "\ No newline at end of file" applies to this line. */
   noNewline?: boolean;
+  /** Set by the diff viewer on a changed line the user left out of a stage. */
+  skip?: boolean;
 }
 
 export interface DiffHunk {

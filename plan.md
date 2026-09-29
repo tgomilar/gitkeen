@@ -1125,8 +1125,8 @@ product value is the **interaction model around the Git DAG**.
     ours or theirs per conflict, with the common ancestor behind a toggle.
     A rebase that stops on a conflict when it starts is still abandoned
     automatically; only a conflict met while continuing reaches the editor.
--   [~] Partial staging --- whole files by ticking, hunks from the diff viewer.
-    Not built: staging single lines.
+-   [x] Partial staging --- whole files by ticking, hunks and single lines
+    from the diff viewer
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
 -   [~] Keyboard shortcuts: every shortcut in section 17 is built. Not

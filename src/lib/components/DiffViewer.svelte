@@ -8,7 +8,8 @@
    */
   import { diffStore, INITIAL_LINES } from '../state/diff.svelte';
   import { pairLines, rowSegments, unifiedSegments, limitHunks } from '../diff';
-  import type { DiffHunk } from '../git/types';
+  import type { DiffHunk, DiffLine } from '../git/types';
+  import TriCheckbox from './TriCheckbox.svelte';
 
   const request = $derived(diffStore.request);
   const diff = $derived(diffStore.diff);
@@ -29,6 +30,11 @@
 
   /** Which hunks are coming with the next stage or unstage. */
   let selected = $state<Set<number>>(new Set());
+  /**
+   * Changed lines left out of a chosen hunk, by the hunk's `oldStart` and
+   * the line's index in it. A hunk not listed here comes whole.
+   */
+  let skipped = $state<Map<number, Set<number>>>(new Map());
   let staging = $state(false);
 
   // Every new diff starts with its hunks all chosen: the one-tick flow is
@@ -36,20 +42,82 @@
   $effect(() => {
     const hunks = diff?.hunks ?? [];
     selected = hunks.length > 0 ? new Set(hunks.map((h) => h.oldStart)) : new Set();
+    skipped = new Map();
   });
 
   // Only hunks that are drawn can be chosen: one the user has not seen must
-  // not ride along with "Stage selected".
+  // not ride along with "Stage selected". A line left out travels as `skip`,
+  // and the server keeps it out of the index change.
   const selectedHunks = $derived(
-    limited.hunks.filter((h) => selected.has(h.oldStart))
+    limited.hunks
+      .filter((h) => selected.has(h.oldStart))
+      .map((h) => {
+        const out = skipped.get(h.oldStart);
+        return out && out.size > 0
+          ? { ...h, lines: h.lines.map((l, i) => (out.has(i) ? { ...l, skip: true } : l)) }
+          : h;
+      })
   );
 
+  /** Whether a hunk comes whole, in part, or not at all. */
+  function hunkState(hunk: DiffHunk): 'all' | 'some' | 'none' {
+    if (!selected.has(hunk.oldStart)) return 'none';
+    return (skipped.get(hunk.oldStart)?.size ?? 0) > 0 ? 'some' : 'all';
+  }
+
   function toggleHunk(oldStart: number) {
+    const hunk = limited.hunks.find((h) => h.oldStart === oldStart);
     const next = new Set(selected);
-    if (next.has(oldStart)) next.delete(oldStart);
+    // A hunk taken in part becomes whole first, like any mixed tick box.
+    if (hunk && hunkState(hunk) === 'all') next.delete(oldStart);
     else next.add(oldStart);
     selected = next;
+    const lines = new Map(skipped);
+    lines.delete(oldStart);
+    skipped = lines;
   }
+
+  const changedIndexes = (hunk: DiffHunk) =>
+    hunk.lines.flatMap((l, i) => (l.kind === 'context' ? [] : [i]));
+
+  /** True when this changed line comes with the next stage or unstage. */
+  function lineIn(hunk: DiffHunk, line: DiffLine) {
+    return selected.has(hunk.oldStart) && !skipped.get(hunk.oldStart)?.has(hunk.lines.indexOf(line));
+  }
+
+  /** Include or leave out one changed line. */
+  function toggleLine(hunk: DiffHunk, line: DiffLine) {
+    const i = hunk.lines.indexOf(line);
+    if (i === -1 || line.kind === 'context') return;
+    const next = new Map(skipped);
+    const nextSelected = new Set(selected);
+    let out: Set<number>;
+    if (!selected.has(hunk.oldStart)) {
+      // Picking a line of an unchosen hunk takes that line alone.
+      out = new Set(changedIndexes(hunk).filter((n) => n !== i));
+      nextSelected.add(hunk.oldStart);
+    } else {
+      out = new Set(skipped.get(hunk.oldStart) ?? []);
+      if (out.has(i)) out.delete(i);
+      else out.add(i);
+    }
+    if (out.size === changedIndexes(hunk).length) {
+      // Every line left out: the hunk is not chosen at all.
+      nextSelected.delete(hunk.oldStart);
+      next.delete(hunk.oldStart);
+    } else {
+      next.set(hunk.oldStart, out);
+    }
+    selected = nextSelected;
+    skipped = next;
+  }
+
+  /** Lines can be picked one at a time where hunks can. */
+  const pickable = $derived(hunkable && working);
+  const lineTitle = (hunk: DiffHunk, line: DiffLine) =>
+    lineIn(hunk, line)
+      ? `Leave this line out of ${request?.side === 'staged' ? 'the unstage' : 'the stage'}`
+      : `Include this line in ${request?.side === 'staged' ? 'the unstage' : 'the stage'}`;
 
   async function applySelection() {
     if (staging || selectedHunks.length === 0) return;
@@ -182,7 +250,9 @@
             <span class="count">
               {selectedHunks.length === limited.hunks.length && limited.hunks.length > 0
                 ? `${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`
-                : `${selectedHunks.length} of ${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`}
+                : `${selectedHunks.length} of ${limited.hunks.length} ${limited.hunks.length === 1 ? 'hunk' : 'hunks'}`}{selectedHunks.some((h) => h.lines.some((l) => l.skip))
+                ? ', some lines left out'
+                : ''}
             </span>
             <button disabled={!selectedHunks.length || staging || diffStore.loading} onclick={applySelection} title="S">
               {request.side === 'staged' ? 'Unstage selected' : 'Stage selected'}
@@ -228,14 +298,14 @@
             {#each limited.hunks as hunk, index (index)}
               <div class="hunk-head">
                 {#if hunkable}
-                  <label class="hunk-tick" title={request.side === 'staged' ? 'Unstage this hunk' : 'Stage this hunk'}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(hunk.oldStart)}
-                      onchange={() => toggleHunk(hunk.oldStart)}
+                  <span class="hunk-tick" title={request.side === 'staged' ? 'Unstage this hunk' : 'Stage this hunk'}>
+                    <TriCheckbox
+                      checkState={hunkState(hunk)}
+                      label={request.side === 'staged' ? 'Unstage this hunk' : 'Stage this hunk'}
                       disabled={staging}
+                      onchange={() => toggleHunk(hunk.oldStart)}
                     />
-                  </label>
+                  </span>
                 {/if}
                 <span class="mono">@@ −{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span>
                 {#if hunk.heading}<span class="heading">{hunk.heading}</span>{/if}
@@ -244,15 +314,29 @@
               {#if split}
                 {#each rowsOf(hunk) as { row, segments }, n (n)}
                   <div class="row">
-                    <span class="num">{row.left?.oldNumber ?? ''}</span>
-                    <span class="side {row.left ? row.left.kind : 'blank'}">
+                    {#if pickable && row.left && row.left.kind !== 'context'}
+                      {@const line = row.left}
+                      <button class="num pick" class:out={!lineIn(hunk, line)} title={lineTitle(hunk, line)}
+                        onclick={() => toggleLine(hunk, line)}>{line.oldNumber ?? ''}</button>
+                    {:else}
+                      <span class="num">{row.left?.oldNumber ?? ''}</span>
+                    {/if}
+                    <span class="side {row.left ? row.left.kind : 'blank'}"
+                      class:out={pickable && !!row.left && row.left.kind !== 'context' && !lineIn(hunk, row.left)}>
                       {#if segments.left}
                         {#each segments.left as segment}<span
                           class:word={segment.changed}>{segment.text}</span>{/each}
                       {:else if row.left}{row.left.text}{/if}
                     </span>
-                    <span class="num">{row.right?.newNumber ?? ''}</span>
-                    <span class="side {row.right ? row.right.kind : 'blank'}">
+                    {#if pickable && row.right && row.right.kind !== 'context'}
+                      {@const line = row.right}
+                      <button class="num pick" class:out={!lineIn(hunk, line)} title={lineTitle(hunk, line)}
+                        onclick={() => toggleLine(hunk, line)}>{line.newNumber ?? ''}</button>
+                    {:else}
+                      <span class="num">{row.right?.newNumber ?? ''}</span>
+                    {/if}
+                    <span class="side {row.right ? row.right.kind : 'blank'}"
+                      class:out={pickable && !!row.right && row.right.kind !== 'context' && !lineIn(hunk, row.right)}>
                       {#if segments.right}
                         {#each segments.right as segment}<span
                           class:word={segment.changed}>{segment.text}</span>{/each}
@@ -263,9 +347,14 @@
               {:else}
                 {#each linesOf(hunk) as { line, segments }, n (n)}
                   <div class="row">
-                    <span class="num">{line.oldNumber ?? ''}</span>
+                    {#if pickable && line.kind !== 'context'}
+                      <button class="num pick" class:out={!lineIn(hunk, line)} title={lineTitle(hunk, line)}
+                        onclick={() => toggleLine(hunk, line)}>{line.oldNumber ?? ''}</button>
+                    {:else}
+                      <span class="num">{line.oldNumber ?? ''}</span>
+                    {/if}
                     <span class="num">{line.newNumber ?? ''}</span>
-                    <span class="side {line.kind}">
+                    <span class="side {line.kind}" class:out={pickable && line.kind !== 'context' && !lineIn(hunk, line)}>
                       <span class="marker" aria-hidden="true"
                         >{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '}</span
                       >{#if segments}{#each segments as segment}<span
@@ -460,7 +549,19 @@
     place-items: center;
     flex: none;
   }
-  .hunk-tick input { accent-color: var(--accent); margin: 0; cursor: pointer; }
+  /* A changed line's number doubles as its pick: click it to leave the line
+     out of the stage, or to bring it back. */
+  button.num.pick {
+    border: 0;
+    border-left: 3px solid var(--accent);
+    font: inherit;
+    color: inherit;
+    text-align: right;
+    cursor: pointer;
+  }
+  button.num.pick:hover { background: var(--accent-subtle); }
+  button.num.pick.out { border-left-color: transparent; color: var(--text-faint); }
+  .side.out { opacity: 0.45; text-decoration: line-through; }
 
   .row {
     display: grid;

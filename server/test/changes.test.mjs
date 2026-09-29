@@ -239,3 +239,91 @@ describe('unticking a staged rename', () => {
     });
   });
 });
+
+describe('staging single lines', () => {
+  /** The hunks of one side, with every changed line except `keep` marked skipped. */
+  async function only(repo, file, side, keep) {
+    const { hunks } = await methods['diff.file']({ path: repo.path, file, side });
+    for (const hunk of hunks) {
+      for (const line of hunk.lines) {
+        if (line.kind !== 'context' && !keep(line)) line.skip = true;
+      }
+    }
+    return hunks;
+  }
+  const index = async (repo, file) => (await repo.git(['show', `:${file}`])).stdout;
+
+  test('one added line of two', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nb\n' });
+      repo.write('f.txt', 'a\nnew 1\nnew 2\nb\n');
+      const hunks = await only(repo, 'f.txt', 'unstaged', (l) => l.text === 'new 2');
+      await methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks });
+      assert.equal(await index(repo, 'f.txt'), 'a\nnew 2\nb\n');
+      assert.equal(await repo.status(), 'MM f.txt', 'the other line still waits in the working tree');
+    });
+  });
+
+  test('a removed line on its own', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nold 1\nold 2\nb\n' });
+      repo.write('f.txt', 'a\nb\n');
+      const hunks = await only(repo, 'f.txt', 'unstaged', (l) => l.text === 'old 1');
+      await methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks });
+      assert.equal(await index(repo, 'f.txt'), 'a\nold 2\nb\n');
+    });
+  });
+
+  test('the new half of a replaced line keeps the old one too', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nold\nb\n' });
+      repo.write('f.txt', 'a\nnew\nb\n');
+      const hunks = await only(repo, 'f.txt', 'unstaged', (l) => l.kind === 'add');
+      await methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks });
+      assert.equal(await index(repo, 'f.txt'), 'a\nold\nnew\nb\n');
+    });
+  });
+
+  test('unstaging one line leaves the rest of the hunk staged', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nold\nb\n' });
+      repo.write('f.txt', 'a\nnew 1\nnew 2\nb\n');
+      await repo.git(['add', 'f.txt']);
+      const hunks = await only(repo, 'f.txt', 'staged', (l) => l.text === 'new 1');
+      await methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'staged', hunks });
+      assert.equal(await index(repo, 'f.txt'), 'a\nnew 2\nb\n', 'new 1 left the index; the rest of the staged change is untouched');
+    });
+  });
+
+  test('part of a new file is unstaged, and the file stays in the index', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'a.txt': 'a\n' });
+      repo.write('new.txt', 'one\ntwo\nthree\n');
+      await repo.git(['add', 'new.txt']);
+      const hunks = await only(repo, 'new.txt', 'staged', (l) => l.text === 'two');
+      await methods['changes.stageHunks']({ path: repo.path, file: 'new.txt', side: 'staged', hunks });
+      assert.equal(await index(repo, 'new.txt'), 'one\nthree\n');
+    });
+  });
+
+  test('a line at the end of a file with no final newline', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nb' });
+      repo.write('f.txt', 'a\nb\nc\nd');
+      const hunks = await only(repo, 'f.txt', 'unstaged', (l) => l.text === 'c' || (l.kind === 'del' && l.text === 'b') || (l.kind === 'add' && l.text === 'b'));
+      await methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks });
+      assert.equal(await index(repo, 'f.txt'), 'a\nb\nc\n');
+    });
+  });
+
+  test('a selection with no changed line in it is refused', async () => {
+    await withRepo(async (repo) => {
+      await tenLines(repo);
+      const hunks = await only(repo, 'f.txt', 'unstaged', () => false);
+      await assert.rejects(
+        () => methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks }),
+        /at least one changed line/
+      );
+    });
+  });
+});

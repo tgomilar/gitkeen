@@ -149,7 +149,8 @@ width. Press Escape to close it.
 | Side by side | Two columns. The old file on the left, the new one on the right. |
 | Working tree | A working tree file shows this tab. It is the change that waits to be staged. |
 | Staged | Its twin tab: the change already in the index. |
-| Hunk box | Next to each hunk of a working tree change. Tick the hunks you want, then **Stage selected**; do the same on the Staged tab to **Unstage selected**. |
+| Hunk box | Next to each hunk of a working tree change. Tick the hunks you want, then **Stage selected**. Do the same on the Staged tab to **Unstage selected**. |
+| Line number of a changed line | Click it to leave that one line out of the stage, or to bring it back. A line left out is faded and crossed out, and its hunk box shows a dash. |
 | Stage file / Unstage file | Stages or unstages the whole file in one click, from the viewer. |
 
 A file with part of its change in the index and part still in the working tree
@@ -531,10 +532,8 @@ It does not yet let you hand-edit the merged result inside Gitalia itself, and
 binary conflicts still go through an external editor.
 
 The diff viewer has no syntax colouring yet, and it cannot roll back a single
-hunk. Hunk staging is built; rolling back a hunk is the next step for it.
-
-Staging a single line is not built yet. You can stage a whole file or a hunk,
-but not part of a hunk.
+hunk. Staging a hunk or a single line is built, and rolling back a hunk is the
+next step.
 
 ## Requirements
 
