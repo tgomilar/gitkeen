@@ -38,8 +38,10 @@
     selected = hunks.length > 0 ? new Set(hunks.map((h) => h.oldStart)) : new Set();
   });
 
+  // Only hunks that are drawn can be chosen: one the user has not seen must
+  // not ride along with "Stage selected".
   const selectedHunks = $derived(
-    (diff?.hunks ?? []).filter((h) => selected.has(h.oldStart))
+    limited.hunks.filter((h) => selected.has(h.oldStart))
   );
 
   function toggleHunk(oldStart: number) {

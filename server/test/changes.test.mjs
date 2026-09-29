@@ -186,3 +186,56 @@ describe('what hunk staging refuses', () => {
     });
   });
 });
+describe('hunks of awkward files', () => {
+  for (const name of ['[x].txt', 'tab\there.txt', 'quote"d.txt', 'back\\slash.txt']) {
+    test(`stages a hunk of ${JSON.stringify(name)}`, async () => {
+      await withRepo(async (repo) => {
+        await repo.commit('base', { [name]: 'one\ntwo\n' });
+        repo.write(name, 'one\nTWO\n');
+        const { hunks } = await methods['diff.file']({ path: repo.path, file: name, side: 'unstaged' });
+        await methods['changes.stageHunks']({ path: repo.path, file: name, side: 'unstaged', hunks });
+        const { stdout } = await repo.git(['diff', '--cached', '--name-only', '-z']);
+        assert.equal(stdout, `${name}\0`, 'the hunk reached the index');
+      });
+    });
+  }
+
+  test('unstaging the hunk of a new file takes the file out of the index', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'a.txt': 'a\n' });
+      repo.write('new.txt', 'hello\nworld\n');
+      await repo.git(['add', 'new.txt']);
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'new.txt', side: 'staged' });
+      await methods['changes.stageHunks']({ path: repo.path, file: 'new.txt', side: 'staged', hunks });
+      assert.match(await repo.status(), /^\?\? new\.txt$/m, 'untracked again, not an empty staged file');
+    });
+  });
+
+  test('a hunk line carrying a newline is refused, so it cannot name another file', async () => {
+    await withRepo(async (repo) => {
+      await tenLines(repo);
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      const forged = structuredClone(hunks[0]);
+      forged.lines[0].text += '\ndiff --git a/other b/other';
+      await assert.rejects(
+        () => methods['changes.stageHunks']({ path: repo.path, file: 'f.txt', side: 'unstaged', hunks: [forged] }),
+        /malformed/
+      );
+      assert.equal((await repo.git(['diff', '--cached', '--name-only'])).stdout, '');
+    });
+  });
+});
+
+describe('unticking a staged rename', () => {
+  test('takes both halves out of the index', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'old.txt': 'same content, long enough to be a rename\n' });
+      await repo.git(['mv', 'old.txt', 'new.txt']);
+      await methods['changes.stage']({ path: repo.path, paths: ['new.txt'], on: false });
+      const files = await repo.files();
+      assert.ok(files.includes('old.txt'), 'the old name is back in the index');
+      assert.ok(!files.includes('new.txt'), 'the new name is not staged');
+      assert.equal((await repo.git(['diff', '--cached', '--name-only'])).stdout, '', 'nothing staged, no deletion');
+    });
+  });
+});

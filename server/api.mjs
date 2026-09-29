@@ -425,16 +425,41 @@ async function resolveConflicts(path, paths) {
  * marker included. The heading sits on the header line, so a hostile newline
  * in it is stripped rather than trusted.
  */
+/**
+ * A path as Git writes it in a patch header.
+ *
+ * A name holding a tab, a quote, a backslash or another control character is
+ * written in C-style quotes, or `git apply` reads a different name and the
+ * hunk lands nowhere.
+ */
+function patchPath(prefix, file) {
+  const name = prefix + file;
+  if (!/[\x00-\x1f"\\\x7f]/.test(name)) return name;
+  const escapes = { '\t': '\\t', '\n': '\\n', '\r': '\\r', '"': '\\"', '\\': '\\\\' };
+  const quoted = [...name].map((c) =>
+    escapes[c] ?? (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f
+      ? '\\' + c.charCodeAt(0).toString(8).padStart(3, '0')
+      : c)
+  ).join('');
+  return `"${quoted}"`;
+}
+
 function buildHunkPatch(file, hunk) {
   const line = (n, len) => (len === 1 ? String(n) : `${n},${len}`);
   const heading = (hunk.heading ?? '').replace(/[\r\n]/g, '');
+  const a = patchPath('a/', file), b = patchPath('b/', file);
   const out = [
-    `diff --git a/${file} b/${file}`,
-    `--- a/${file}`,
-    `+++ b/${file}`,
+    `diff --git ${a} ${b}`,
+    `--- ${a}`,
+    `+++ ${b}`,
     `@@ -${line(hunk.oldStart, hunk.oldLines)} +${line(hunk.newStart, hunk.newLines)} @@${heading ? ' ' + heading : ''}`
   ];
   for (const diffLine of hunk.lines ?? []) {
+    // One patch line per diff line. A newline inside one would start a line
+    // of its own, and could name another file for the patch to touch.
+    if (typeof diffLine.text !== 'string' || diffLine.text.includes('\n')) {
+      throw new GitError('A hunk line is malformed.', { command: '', stderr: '', code: 1 });
+    }
     const marker = diffLine.kind === 'add' ? '+' : diffLine.kind === 'del' ? '-' : ' ';
     out.push(marker + diffLine.text);
     if (diffLine.noNewline) out.push('\\ No newline at end of file');
@@ -2655,7 +2680,14 @@ export const methods = {
     if (on) {
       await git(path, ['add', '--', ...paths]);
     } else {
-      await git(path, ['reset', '-q', '--', ...paths]);
+      // A staged rename is two index entries. Resetting only the new name
+      // would leave the old one staged as a deletion.
+      const status = parseStatus(await git(path, STATUS_ARGS));
+      const wanted = new Set(paths);
+      const origins = status.files
+        .filter((f) => f.state === 'renamed' && f.origPath && wanted.has(f.path))
+        .map((f) => f.origPath);
+      await git(path, ['reset', '-q', '--', ...paths, ...origins]);
     }
     return { ok: true, staged: paths.length };
   },
@@ -2666,8 +2698,8 @@ export const methods = {
    * The hunks come from `diff.file` with a `side` and are rebuilt here into a
    * minimal patch handed to `git apply --cached`: an `unstaged` hunk is
    * against the index and goes in, a `staged` hunk is against HEAD and comes
-   * out. The hunks are applied one at a time, lowest first, so staging does
-   * not move the line numbers the remaining hunks were read with.
+   * out. The hunks are applied one at a time, highest first, so staging one
+   * does not move the line numbers the hunks above it were read with.
    */
   async 'changes.stageHunks'({ path, file, side = 'unstaged', hunks }) {
     if (side !== 'unstaged' && side !== 'staged') {
@@ -2680,6 +2712,14 @@ export const methods = {
       throw new GitError('A relative file path is required.', { command: '', stderr: '', code: 1 });
     }
 
+    // A staged hunk starting at line 0 of nothing is the file being created.
+    // Taking it out of the index means the file leaves the index; applying it
+    // in reverse would instead stage an empty file.
+    if (side === 'staged' && hunks.some((h) => h.oldStart === 0 && h.oldLines === 0)) {
+      await git(path, ['reset', '-q', '--', file]);
+      return { ok: true, applied: hunks.length };
+    }
+
     const ordered = [...hunks].sort((a, b) => (b.oldStart ?? 0) - (a.oldStart ?? 0));
     let dir = null;
     try {
@@ -2687,7 +2727,7 @@ export const methods = {
       const patchFile = join(dir, 'hunk.patch');
       for (const hunk of ordered) {
         await writeFile(patchFile, buildHunkPatch(file, hunk), 'utf8');
-        const apply = ['apply', '--cached', '--recount', `--include=${file}`];
+        const apply = ['apply', '--cached', '--recount'];
         if (side === 'staged') apply.push('-R');
         apply.push(patchFile);
         await git(path, apply);
