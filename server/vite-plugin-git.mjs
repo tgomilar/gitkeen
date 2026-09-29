@@ -15,6 +15,26 @@ function readBody(req) {
   });
 }
 
+/**
+ * The app and the API are served from the same origin during development, so
+ * any browser POST here must come from the page that origin hosts. Browsers
+ * put an `Origin` header on cross-origin requests: one that does not match
+ * the host the request reached is some other page trying to drive this
+ * backend (it can even smuggle a JSON body in as text/plain, which is why the
+ * content type alone cannot be trusted). Clients that send no header, like
+ * curl, use the API directly and are unaffected.
+ */
+function isSameOrigin(req) {
+  const origin = req.headers.origin;
+  if (origin === undefined) return true;
+  if (origin === 'null') return false;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
 export function gitApiPlugin() {
   return {
     name: 'gitalia-git-api',
@@ -24,6 +44,11 @@ export function gitApiPlugin() {
         if (req.method !== 'POST') {
           res.statusCode = 405;
           res.end(JSON.stringify({ error: { message: 'Use POST' } }));
+          return;
+        }
+        if (!isSameOrigin(req)) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: { message: 'Cross-origin request rejected.' } }));
           return;
         }
         let method = '(none)';
