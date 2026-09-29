@@ -1120,7 +1120,9 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Reorder --- move a commit one place at a time, up or down
 -   [x] Stash
 -   [x] Merge --- from the branch menus, fast-forward when it can
--   [x] Conflict detection --- detected and marked resolved; no editor yet
+-   [x] Conflict detection --- detected, marked resolved, and resolved in the
+    merge editor, which walks the file block by block letting the user pick
+    ours or theirs per conflict, with the common ancestor behind a toggle
 -   [x] Partial staging --- whole files by ticking, hunks from the diff viewer
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
@@ -1132,7 +1134,9 @@ product value is the **interaction model around the Git DAG**.
 
 ### P2 --- Later
 
--   [ ] Conflict resolution editor
+-   [x] Conflict resolution editor --- walks a conflicted file top to bottom;
+    ours vs. theirs per block, base behind a toggle, markers kept for blocks
+    with no choice so nothing half-finished can be staged
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration

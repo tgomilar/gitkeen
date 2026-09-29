@@ -18,6 +18,7 @@
   import Toasts from './lib/components/Toasts.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import DiffViewer from './lib/components/DiffViewer.svelte';
+  import MergeEditor from './lib/components/MergeEditor.svelte';
   import { tick } from 'svelte';
   import { repoStore } from './lib/state/repo.svelte';
   import { commitStore } from './lib/state/commit.svelte';
@@ -326,6 +327,7 @@
 {/if}
 
 <DiffViewer />
+<MergeEditor />
 <Dialog />
 <CommandPalette />
 {#if rebaseStore.open}<RebaseEditor />{/if}

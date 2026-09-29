@@ -10,7 +10,7 @@ import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
 import { access, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
-import { basename, join, dirname } from 'node:path';
+import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
@@ -228,6 +228,147 @@ function parseFileDiff(patch) {
   }
 
   return { status, binary, truncated, added, removed, hunks };
+}
+
+/**
+ * Split text into lines that keep their own terminator, so a set of slices
+ * can later be joined back into exactly the original bytes.
+ *
+ * Every element ends with `\n` except the last, which carries the rest of the
+ * file without any terminator when the file does not end with a newline.
+ */
+function splitKeptLines(text) {
+  const lines = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') {
+      lines.push(text.slice(start, i + 1));
+      start = i + 1;
+    }
+  }
+  if (start < text.length) lines.push(text.slice(start));
+  return lines;
+}
+
+/**
+ * Cut a conflicted file into its regions.
+ *
+ * Code before a `<<<<<<<` marker, then each conflict in turn. Git wrote the
+ * alignment when it built the working-tree file, so the markers are trusted
+ * rather than a third merge being reimplemented. A `|||||||` base block under
+ * `merge.conflictstyle=diff3` is skipped, because its content is not one of
+ * the two sides being chosen between.
+ */
+function parseConflictFile(text) {
+  const lines = splitKeptLines(text);
+  const sections = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (!/^<<<<<<</.test(lines[i])) {
+      const start = i;
+      while (i < lines.length && !/^<<<<<<</.test(lines[i])) i++;
+      sections.push({ type: 'text', lines: lines.slice(start, i) });
+      continue;
+    }
+
+    const start = i;
+    const ours = [], theirs = [];
+    const labels = { ours: lines[i].slice(7).trim(), theirs: '' };
+    i++;
+    let inTheirs = false;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^>>>>>>>/.test(line)) { labels.theirs = line.slice(7).trim(); i++; break; }
+      if (/^\|\|\|\|\|\|\|/.test(line)) {
+        // The `|||||||` diff3 block runs to its own `=======`, and the
+        // following `=======` marks the start of the theirs half.
+        i++;
+        while (i < lines.length && !/^=======/.test(lines[i]) && !/^>>>>>>>/.test(lines[i])) i++;
+        continue;
+      }
+      if (/^=======/.test(line)) { inTheirs = true; i++; continue; }
+      (inTheirs ? theirs : ours).push(line);
+      i++;
+    }
+    sections.push({ type: 'conflict', lines: lines.slice(start, i), ours, theirs, labels });
+  }
+  return { lines, sections };
+}
+
+/**
+ * The three index stages a conflict is recorded into, in one read.
+ *
+ * Stage 1 is the common ancestor, stage 2 the side standing in the current
+ * branch ("ours"), stage 3 the side being brought in ("theirs"). Each stage
+ * is either absent (an add/add or modify/delete makes one of them empty),
+ * binary, or text content. Ours and theirs are also inside the working-tree
+ * file's markers, so only the base, the one side a two-pane view cannot show
+ * on its own, is fetched in full.
+ */
+async function readUnmerged(path, file) {
+  const out = { base: null, ours: null, theirs: null };
+  const kinds = [null, 'base', 'ours', 'theirs'];
+  const { stdout } = await runGit(path, ['ls-files', '-u', '-z', '--', file], { allowFailure: true });
+  for (const record of stdout.split('\0')) {
+    if (!record) continue;
+    const tab = record.indexOf('\t');
+    if (tab === -1) continue;
+    const fields = record.slice(0, tab).split(' ');
+    const stage = Number(fields[2]);
+    if (stage < 1 || stage > 3) continue;
+    const { stdout: blob, code } = await runGit(path, ['cat-file', 'blob', fields[1]], { allowFailure: true });
+    const stageInfo = out[kinds[stage]] = { present: true, binary: code !== 0 || blob.includes('\0'), lines: 0 };
+    if (!stageInfo.binary) {
+      stageInfo.lines = splitKeptLines(blob).length;
+      out[kinds[stage]].content = blob;
+    }
+  }
+  return out;
+}
+
+/** The path inside the working tree a file name points at, or nothing escapes. */
+function workPath(path, file) {
+  if (!file || typeof file !== 'string') throw new GitError('No file was given.', { command: '', stderr: '', code: 1 });
+  if (file.includes('\0') || file.startsWith('/') || file.includes('\n') || /(^|\/)\.\.(\/|$)/.test(file)) {
+    throw new GitError(`Unsafe file path: ${file}`, { command: '', stderr: '', code: 1 });
+  }
+  const target = resolve(path, file);
+  if (target !== path && !target.startsWith(`${path}${process.platform === 'win32' ? '\\' : '/'}`)) {
+    throw new GitError(`Unsafe file path: ${file}`, { command: '', stderr: '', code: 1 });
+  }
+  return target;
+}
+
+/**
+ * Mark conflicted files as dealt with, so an operation can continue.
+ *
+ * Adding a file to the index is what tells Git its conflict is resolved. The
+ * marker check is the guard against a file half-fixed in a text editor: a
+ * `<<<<<<<` line staged by accident would become history, and this refuses to
+ * let that happen.
+ */
+async function resolveConflicts(path, paths) {
+  const status = parseStatus(await git(path, STATUS_ARGS));
+  const wanted = new Set(paths);
+  const conflicted = status.files.filter((f) => wanted.has(f.path) && f.state === 'conflicted');
+  if (conflicted.length === 0) return { ok: true, resolved: 0 };
+
+  const markers = [];
+  for (const file of conflicted) {
+    // A file still holding Git's markers is almost certainly not resolved.
+    const { stdout } = await runGit(path, ['grep', '-c', '-e', '^<<<<<<< ', '--', file.path], { allowFailure: true });
+    if (stdout.trim()) markers.push(file.path);
+  }
+  if (markers.length > 0) {
+    throw new GitError(
+      `These files still contain conflict markers:\n  ${markers.join('\n  ')}\n\nEdit them so the markers are gone, then mark them resolved again. If a file is meant to contain that text, stage it with "git add" instead.`,
+      { command: '', stderr: '', code: 1 }
+    );
+  }
+
+  await git(path, ['add', '--', ...conflicted.map((f) => f.path)]);
+  return { ok: true, resolved: conflicted.length };
 }
 
 /**
@@ -2632,28 +2773,96 @@ export const methods = {
    */
   async 'changes.markResolved'({ path, paths }) {
     if (!Array.isArray(paths) || paths.length === 0) return { ok: true, resolved: 0 };
+    return resolveConflicts(path, paths);
+  },
 
+  /**
+   * What the merge editor needs about a conflicted file, in one read.
+   *
+   * The working tree already holds Git's best merge: the code either side
+   * wrote, cut into `<<<<<<<` blocks. That is parsed into sections, and stage
+   * 1 is read so the common ancestor can be shown as a third, read-only side.
+   */
+  async 'conflicts.read'({ path, file }) {
+    const target = workPath(path, file);
     const status = parseStatus(await git(path, STATUS_ARGS));
-    const wanted = new Set(paths);
-    const conflicted = status.files.filter((f) => wanted.has(f.path) && f.state === 'conflicted');
-    if (conflicted.length === 0) return { ok: true, resolved: 0 };
-
-    const markers = [];
-    for (const file of conflicted) {
-      // A file still holding Git's markers is almost certainly not resolved,
-      // and staging it would commit "<<<<<<<" into the history.
-      const { stdout } = await runGit(path, ['grep', '-c', '-e', '^<<<<<<< ', '--', file.path], { allowFailure: true });
-      if (stdout.trim()) markers.push(file.path);
-    }
-    if (markers.length > 0) {
-      throw new GitError(
-        `These files still contain conflict markers:\n  ${markers.join('\n  ')}\n\nEdit them so the markers are gone, then mark them resolved again. If a file is meant to contain that text, stage it with "git add" instead.`,
-        { command: '', stderr: '', code: 1 }
-      );
+    if (!status.files.some((f) => f.path === file && f.state === 'conflicted')) {
+      throw new GitError(`${file} has no conflict to resolve.`, { command: '', stderr: '', code: 1 });
     }
 
-    await git(path, ['add', '--', ...conflicted.map((f) => f.path)]);
-    return { ok: true, resolved: conflicted.length };
+    const unmerged = await readUnmerged(path, file);
+    const stages = { base: {}, ours: {}, theirs: {} };
+    for (const key of ['base', 'ours', 'theirs']) {
+      const stage = unmerged[key];
+      stages[key] = { present: !!stage, binary: !!(stage && stage.binary), lines: stage ? stage.lines : 0 };
+    }
+
+    const buffer = await readFile(target);
+    if (buffer.includes(0)) {
+      return { path: file, binary: true, truncated: false, lines: 0, sections: [], base: null, stages };
+    }
+
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch {
+      return { path: file, binary: true, truncated: false, lines: 0, sections: [], base: null, stages };
+    }
+
+    const { lines, sections } = parseConflictFile(text);
+
+    // A modify/delete conflict leaves no markers in the working tree: Git
+    // keeps the surviving side's content and lets `git add` decide it. The
+    // two sides live only in the index, so offer the whole file as one choice
+    // between them.
+    if (!sections.some((s) => s.type === 'conflict')) {
+      const oursLines = unmerged.ours && !unmerged.ours.binary ? splitKeptLines(unmerged.ours.content) : [];
+      const theirsLines = unmerged.theirs && !unmerged.theirs.binary ? splitKeptLines(unmerged.theirs.content) : [];
+      if (oursLines.length > 0 || theirsLines.length > 0) {
+        sections.push({
+          type: 'conflict',
+          lines,
+          ours: oursLines,
+          theirs: theirsLines,
+          labels: { ours: '', theirs: '' }
+        });
+      }
+    }
+
+    // The base is capped: it is a reference, and a generated file's ancestor
+    // can be enormous without anyone reading most of it.
+    let base = null, truncated = false;
+    if (unmerged.base && !unmerged.base.binary) {
+      const baseLines = splitKeptLines(unmerged.base.content);
+      if (baseLines.length > 5000) truncated = true;
+      base = truncated ? baseLines.slice(0, 5000) : baseLines;
+    }
+
+    return { path: file, binary: false, truncated, lines: lines.length, sections, base, stages };
+  },
+
+  /**
+   * Write a merged file back into the working tree and mark it resolved.
+   *
+   * Only writing is safe here: what the result should be is the user's call,
+   * and staging happens only after the marker check, which keeps a half-chosen
+   * file out of the index.
+   */
+  async 'conflicts.resolve'({ path, file, content }) {
+    const target = workPath(path, file);
+    if (typeof content !== 'string') {
+      throw new GitError('No merged content was given.', { command: '', stderr: '', code: 1 });
+    }
+    if (content.includes('\0')) {
+      throw new GitError('The merged content is not text.', { command: '', stderr: '', code: 1 });
+    }
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    if (!status.files.some((f) => f.path === file && f.state === 'conflicted')) {
+      throw new GitError(`${file} is no longer in conflict.`, { command: '', stderr: '', code: 1 });
+    }
+
+    await writeFile(target, content);
+    return resolveConflicts(path, [file]);
   },
 
   /**

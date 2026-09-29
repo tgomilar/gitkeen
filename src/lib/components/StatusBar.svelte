@@ -2,7 +2,7 @@
   import { repoStore } from '../state/repo.svelte';
   import { rebaseStore } from '../state/rebase.svelte';
   import { pluralize } from '../format';
-  import { abortOperation, continueOperation } from '../actions';
+  import { abortOperation, continueOperation, resolveNextConflict } from '../actions';
 
   const status = $derived(repoStore.status);
 
@@ -55,6 +55,12 @@
 
   {#if conflicts > 0}
     <span class="item bad">{pluralize(conflicts, 'conflict')}</span>
+    <button
+      class="act"
+      onclick={resolveNextConflict}
+      disabled={!!repoStore.busy}
+      title="Open the first conflicted file in the merge editor"
+    >Resolve…</button>
   {/if}
 
   <span class="spacer"></span>

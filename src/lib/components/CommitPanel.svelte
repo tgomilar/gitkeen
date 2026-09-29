@@ -15,7 +15,7 @@
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
   import {
-    commitChanges, commitAndPush, rollbackChanges, changeMenuItems, showWorkingTreeDiff,
+    commitChanges, commitAndPush, rollbackChanges, changeMenuItems, openChange,
     stashChanges, stashMenuItems
   } from '../actions';
   import { buildChangeTree } from '../changes';
@@ -204,7 +204,7 @@
                 ontoggleNode={(key) => commitStore.toggleCollapsed(key)}
                 ontoggleCheck={(items, on) => commitStore.setChecked(items, on)}
                 onselect={(c) => (commitStore.selected = c.path)}
-                onopen={showWorkingTreeDiff}
+                onopen={openChange}
                 onmenu={openMenu}
               />
             {/each}
@@ -219,7 +219,7 @@
                 disabled={commitStore.forced}
                 ontoggle={() => commitStore.toggle(change)}
                 onselect={() => (commitStore.selected = change.path)}
-                onopen={() => showWorkingTreeDiff(change)}
+                onopen={() => openChange(change)}
                 onmenu={(e) => openMenu(change, e)}
               />
             {/each}

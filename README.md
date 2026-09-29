@@ -27,7 +27,7 @@ work, and change the history you already have.
 | Cherry-pick | Copy one or more commits onto the current branch. |
 | Revert | Undo a commit with a new commit that reverses it. |
 | Reset | Move the current branch to another commit, in one of three modes. |
-| Conflicts | Mark files resolved, then continue or abandon the operation. |
+| Conflicts | Resolve them in the merge editor, choose a side per conflict, then continue or abandon the operation. |
 | Stash | Set work aside without committing it, and take it back later. |
 | Roll back | Throw away your changes to chosen files. |
 | Push | Publish a branch, and create it on the remote if it is new. Force push replaces the remote branch, after showing what it would remove. |
@@ -225,13 +225,23 @@ out.
 | Continue | Carries on. It stays switched off until no file has a conflict left. |
 | Abandon | Puts the branch back as it was before the operation started. |
 
-Open the commit panel to see the conflicted files. Edit each one so Git's
-markers are gone, then right click it and choose **Mark as Resolved**. Gitalia
-refuses to mark a file that still contains markers, so a line such as
-`<<<<<<<` cannot reach your history by accident.
+Open the commit panel to see the conflicted files. A merge, pull, cherry-pick
+or revert that stops on a conflict stays open, and the status bar's **Resolve…**
+button, or right clicking the file and choosing **Resolve in Merge Editor…**,
+opens the three-way merge editor.
 
-There is no conflict editor in Gitalia yet. The plan puts a three way merge
-view in the next phase.
+The editor walks the file from top to bottom. Around each `<<<<<<<` block it
+shows the two sides — **Ours**, the current branch, and **Theirs**, the
+incoming one — with **Keep ours** and **Keep theirs** buttons, and a **Show
+base** toggle revealing the common ancestor the two sides both changed. A
+block with no choice keeps Git's markers. **Mark resolved** writes the file
+and tells Git the conflict is dealt with, and the operation's **Continue** then
+lights up in the status bar.
+
+Gitalia refuses to mark a file that still contains markers, so a line such as
+`<<<<<<<` cannot reach your history by accident. A binary file, or one you
+would rather fix by hand, can still be resolved outside Gitalia and then
+marked resolved from the commit panel.
 
 ## Bringing in what others have pushed
 
@@ -490,9 +500,9 @@ it rather than the 25 the screen shows.
 
 ## What is not built yet
 
-A conflict editor comes later. The rebase editor does not offer `edit`, which
-stops the rebase part way through so a commit can be amended. The plan document
-lists the order.
+The merge editor resolves a conflict by choosing, per block, which side wins.
+It does not yet let you hand-edit the merged result inside Gitalia itself, and
+binary conflicts still go through an external editor.
 
 The diff viewer has no syntax colouring yet, and it cannot roll back a single
 hunk. Hunk staging is built; rolling back a hunk is the next step for it.

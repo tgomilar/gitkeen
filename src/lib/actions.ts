@@ -17,6 +17,7 @@ import type { Branch, Commit, ForcePushInspection, ResetMode, Stash, StashFile }
 import type { Change } from './changes';
 import { KIND_LABEL, diffSideFor, canStageHunks } from './changes';
 import { diffStore } from './state/diff.svelte';
+import { mergeStore } from './state/merge.svelte';
 import { rebaseStore } from './state/rebase.svelte';
 
 /** Git's empty tree, the only thing a file with no history can be compared with. */
@@ -1349,6 +1350,24 @@ export function showWorkingTreeDiff(change: Change) {
   });
 }
 
+/**
+ * Open a file as it is meant to be read: a conflicted file lands in the
+ * merge editor, where the choice per conflict has to be made; everything else
+ * lands in the diff viewer.
+ */
+export function openChange(change: Change) {
+  commitStore.selected = change.path;
+  if (change.kind === 'conflict') mergeStore.show(change.path, 'Merge conflict');
+  else showWorkingTreeDiff(change);
+}
+
+/** The first conflicted path, for the status bar's way into the editor. */
+export function resolveNextConflict() {
+  const conflicted = (repoStore.status?.files ?? []).filter((f) => f.state === 'conflicted');
+  if (conflicted.length === 0) return;
+  mergeStore.show(conflicted[0].path, 'Merge conflict');
+}
+
 /** Show what one commit did to one file. */
 export function showCommitDiff(
   commit: { hash: string; shortHash: string; subject: string },
@@ -1374,6 +1393,12 @@ export function changeMenuItems(change: Change): MenuItem[] {
   // the only thing standing between a stopped operation and continuing it.
   if (change.kind === 'conflict') {
     items.push(
+      {
+        label: 'Resolve in Merge Editor…',
+        icon: 'merge',
+        hint: 'choose a side per conflict',
+        action: () => mergeStore.show(change.path, 'Merge conflict')
+      },
       {
         label: 'Mark as Resolved',
         icon: 'check',

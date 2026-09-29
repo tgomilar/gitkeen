@@ -372,6 +372,62 @@ export interface FileDiff {
   hunks: DiffHunk[];
 }
 
+/**
+ * One region of a conflicted file, as the merge editor draws it.
+ *
+ * Each element is a raw line that keeps its own newline, so joining a set of
+ * slices reproduces the original bytes exactly. `text` regions are the code
+ * both sides left alone; `conflict` regions hold the two contenders.
+ */
+export interface MergeTextSection {
+  type: 'text';
+  lines: string[];
+}
+
+export interface MergeConflictSection {
+  type: 'conflict';
+  /** The whole block as Git wrote it, markers included. */
+  lines: string[];
+  /** The lines on the current branch's side, before the `=======`. */
+  ours: string[];
+  /** The lines the incoming side brought, after the `=======`. */
+  theirs: string[];
+  /** What Git put after the `<<<<<<<` and `>>>>>>>` markers. */
+  labels: { ours: string; theirs: string };
+}
+
+export type MergeSection = MergeTextSection | MergeConflictSection;
+
+export interface MergeStage {
+  /** True when one of the index's three stages held this side. */
+  present: boolean;
+  binary: boolean;
+  lines: number;
+}
+
+export interface MergeStages {
+  base: MergeStage;
+  ours: MergeStage;
+  theirs: MergeStage;
+}
+
+/** What the merge editor is told about a conflicted file, in one read. */
+export interface MergeOffer {
+  path: string;
+  binary: boolean;
+  /** True when a section of the file was cut, so the whole is not shown. */
+  truncated?: boolean;
+  /** How many lines the working-tree file has, markers included. */
+  lines: number;
+  sections: MergeSection[];
+  /** The common ancestor's lines, or null when there is no base to show. */
+  base: string[] | null;
+  stages: MergeStages;
+}
+
+/** Which side of a conflict the editor is told to keep. */
+export type ConflictChoice = 'ours' | 'theirs';
+
 /** A commit as the cherry-pick and revert dialogs need to describe it. */
 export interface ApplyCommit {
   hash: string;

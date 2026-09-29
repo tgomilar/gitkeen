@@ -8,7 +8,7 @@ import { transport } from './transport';
 import type {
   ApplyInspection, ApplyResult, BranchSet, BranchInspection, CommitDetails, CommitMessage,
   CommitResult, DropResult, FileDiff, GitStatus, HeadCommit, HeadInfo, LogPage, MoveResult,
-  OperationResult, RebasePlanEntry, RebaseResult, RebaseSpan, RewriteInspection,
+  MergeOffer, OperationResult, RebasePlanEntry, RebaseResult, RebaseSpan, RewriteInspection,
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
@@ -182,6 +182,16 @@ export class GitRepository {
   /** Mark conflicted files as dealt with, so an operation can continue. */
   markResolved(paths: string[]): Promise<{ ok: boolean; resolved: number }> {
     return transport.call('changes.markResolved', { path: this.path, paths });
+  }
+
+  /** What the merge editor needs about a conflicted file, in one read. */
+  conflictRead(file: string): Promise<MergeOffer> {
+    return transport.call('conflicts.read', { path: this.path, file });
+  }
+
+  /** Write a merged file back and mark it resolved, in one step. */
+  conflictResolve(file: string, content: string): Promise<{ ok: boolean; resolved: number }> {
+    return transport.call('conflicts.resolve', { path: this.path, file, content });
   }
 
   /** Throw away the working-tree changes to these paths. */
