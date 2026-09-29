@@ -96,6 +96,11 @@
         </span>
         <button class="scope-clear" onclick={() => repoStore.setScope(null)}>All branches</button>
       {/if}
+      {#if repoStore.filter.trim()}
+        <span class="found">
+          {repoStore.visibleRows.length.toLocaleString()} found{repoStore.searchResults?.truncated ? ' (the first 1,000 from Git)' : ''}{repoStore.searching ? ', searching all history…' : ''}
+        </span>
+      {/if}
     </div>
     <div class="col-author">Author</div>
     <div class="col-date">Date</div>
@@ -185,6 +190,14 @@
   }
 
   /* Names the branch the list is narrowed to, with the way back out. */
+  .found {
+    color: var(--text-faint);
+    font-size: 10.5px;
+    text-transform: none;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
   .scope {
     flex: none;
     max-width: 40%;

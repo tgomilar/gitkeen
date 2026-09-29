@@ -40,6 +40,11 @@ export class GitRepository {
    * single branch); `skip` jumps past commits already shown, so the graph can
    * be walked deeper without holding the whole history.
    */
+  /** Search the whole history: message words and author:, path:, since:, until:. */
+  search(query: string, refs?: string[]): Promise<LogPage> {
+    return transport.call('log.search', { path: this.path, query, refs: refs ?? null });
+  }
+
   log(options: { limit?: number; all?: boolean; refs?: string[]; skip?: number } = {}): Promise<LogPage> {
     return transport.call('log.list', { path: this.path, ...options });
   }

@@ -11,6 +11,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { methods } from '../api.mjs';
 import { Repo, withRepo } from './harness.mjs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Same instant for every commit, so ordering leans on the tie-break. */
 const AT = { GIT_AUTHOR_DATE: '@1500000000', GIT_COMMITTER_DATE: '@1500000000' };
@@ -163,6 +165,64 @@ describe('a graph narrowed to one branch', () => {
       const { commits } = await methods['log.list']({ path: repo.path, refs: ['topic'] });
       assert.deepEqual(commits.map((c) => c.subject), ['topic work', 'c3', 'c2', 'c1']);
       assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitalia'))));
+    });
+  });
+});
+
+describe('searching the whole history', () => {
+  async function history(repo) {
+    const ann = { GIT_AUTHOR_NAME: 'Ann', GIT_AUTHOR_EMAIL: 'ann@x', GIT_AUTHOR_DATE: '@1600000000', GIT_COMMITTER_DATE: '@1600000000' };
+    const bob = { GIT_AUTHOR_NAME: 'Bob', GIT_AUTHOR_EMAIL: 'bob@x', GIT_AUTHOR_DATE: '@1700000000', GIT_COMMITTER_DATE: '@1700000000' };
+    mkdirSync(join(repo.path, 'src'));
+    await repo.commit('fix the login page', { 'src/login.js': '1' }, { env: ann });
+    await repo.commit('add a README', { 'README.md': '1' }, { env: bob });
+    await repo.commit('Fix the Login redirect', { 'src/login.js': '2' }, { env: bob });
+  }
+  const subjects = async (repo, query) =>
+    (await methods['log.search']({ path: repo.path, query })).commits.map((c) => c.subject);
+
+  test('every word must be in the message, whatever its case', async () => {
+    await withRepo(async (repo) => {
+      await history(repo);
+      assert.deepEqual(await subjects(repo, 'login fix'), ['Fix the Login redirect', 'fix the login page']);
+      assert.deepEqual(await subjects(repo, 'login redirect'), ['Fix the Login redirect']);
+    });
+  });
+
+  test('author, path and date qualifiers', async () => {
+    await withRepo(async (repo) => {
+      await history(repo);
+      assert.deepEqual(await subjects(repo, 'author:ann'), ['fix the login page']);
+      assert.deepEqual(await subjects(repo, 'path:src/login.js author:bob'), ['Fix the Login redirect']);
+      assert.deepEqual(await subjects(repo, 'since:2022-01-01'), ['Fix the Login redirect', 'add a README']);
+      assert.deepEqual(await subjects(repo, 'until:2021-01-01'), ['fix the login page']);
+      assert.deepEqual(await subjects(repo, 'path:"README.md"'), ['add a README']);
+    });
+  });
+
+  test('a hash finds its commit', async () => {
+    await withRepo(async (repo) => {
+      await history(repo);
+      const [, readme] = await repo.hashes();
+      assert.deepEqual(await subjects(repo, readme.slice(0, 7)), ['add a README']);
+    });
+  });
+
+  test('a value that looks like an option stays a value', async () => {
+    await withRepo(async (repo) => {
+      await history(repo);
+      const out = join(repo.path, 'leaked.txt');
+      assert.deepEqual(await subjects(repo, `author:--output=${out} --output=${out}`), []);
+      assert.equal(existsSync(out), false, 'nothing was written');
+    });
+  });
+
+  test('commits kept only by a recovery point are not found', async () => {
+    await withRepo(async (repo) => {
+      await history(repo);
+      const [, , first] = await repo.hashes();
+      await methods['branch.reset']({ path: repo.path, target: first, mode: 'hard' });
+      assert.deepEqual(await subjects(repo, 'login'), ['fix the login page']);
     });
   });
 });

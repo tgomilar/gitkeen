@@ -83,18 +83,73 @@ class RepoStore {
 
   selectedSet = $derived(new Set(this.selection));
 
-  /** Rows surviving the search box, with their original graph row index. */
+  /**
+   * What Git found for the search box across the whole history, and the
+   * query it answers. Null until the search for the current text is back.
+   */
+  searchResults = $state.raw<{ query: string; commits: Commit[]; truncated: boolean } | null>(null);
+  searching = $state(false);
+  private searchGeneration = 0;
+
+  /** Commits found by the search that the graph has not loaded, by hash. */
+  private searchExtra = $derived(
+    new Map((this.searchResults?.commits ?? []).filter((c) => !this.layout.index.has(c.hash)).map((c) => [c.hash, c]))
+  );
+
+  /**
+   * Rows surviving the search box.
+   *
+   * The loaded rows are filtered straight away, as the user types. When
+   * Git's search of the whole history comes back, its matches join them:
+   * a loaded one keeps its graph row, and an older one is shown as a commit
+   * with no lanes, since its place in the graph is not loaded.
+   */
   visibleRows = $derived.by(() => {
     const q = this.filter.trim().toLowerCase();
     const rows = this.layout.rows;
     if (!q) return rows;
-    return rows.filter((r) =>
+    const found = this.searchResults?.query === this.filter.trim() ? this.searchResults.commits : [];
+    const hits = new Set(found.map((c) => c.hash));
+    const shown = rows.filter((r) =>
+      hits.has(r.commit.hash) ||
       r.commit.subject.toLowerCase().includes(q) ||
       r.commit.author.toLowerCase().includes(q) ||
       r.commit.hash.startsWith(q) ||
       r.commit.refs.some((ref) => ref.name.toLowerCase().includes(q))
     );
+    const older = found
+      .filter((c) => !this.layout.index.has(c.hash))
+      .map((commit) => ({ commit, lane: 0, passes: [], incoming: [], outgoing: [] }));
+    return older.length > 0 ? shown.concat(older) : shown;
   });
+
+  /**
+   * Search the whole history for the text in the search box.
+   *
+   * Called a moment after the user stops typing. Only the newest search
+   * counts: an answer that arrives after the text changed again is dropped.
+   */
+  async search(text: string) {
+    const repo = this.repo;
+    const query = text.trim();
+    const generation = ++this.searchGeneration;
+    if (!repo || !query) {
+      this.searchResults = null;
+      this.searching = false;
+      return;
+    }
+    this.searching = true;
+    try {
+      const refs = this.scope ? [this.scope.ref] : undefined;
+      const result = await repo.search(query, refs);
+      if (generation !== this.searchGeneration || repo !== this.repo) return;
+      this.searchResults = { query, commits: result.commits, truncated: result.truncated };
+    } catch (err) {
+      if (generation === this.searchGeneration) toasts.error('Could not search the history', describe(err));
+    } finally {
+      if (generation === this.searchGeneration) this.searching = false;
+    }
+  }
 
   currentBranch = $derived(this.head?.branch ?? null);
 
@@ -106,7 +161,7 @@ class RepoStore {
 
   commitByHash(hash: string): Commit | undefined {
     const i = this.layout.index.get(hash);
-    return i === undefined ? undefined : this.commits[i];
+    return i === undefined ? this.searchExtra.get(hash) : this.commits[i];
   }
 
   async open(path: string) {

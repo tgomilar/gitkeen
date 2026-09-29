@@ -37,7 +37,7 @@ branches, commit your work, and change the history you already have.
 | Rebase | Edit a run of commits in one go: reorder, reword, squash, fixup, drop, and stop at a commit to amend it. |
 | Drop | Remove commits from the branch entirely. |
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
-| Search | Filter the graph by message, author, hash* or branch name. |
+| Search | Search the whole history by message, author, file, date, hash* or branch name. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -470,6 +470,29 @@ Two details worth knowing:
 
 Stashes do not appear in the graph. Git stores each one as a commit, but they
 are not part of your history, so showing them would only be confusing.
+
+## Searching the history
+
+Type in the search box above the graph, or press Command or Control with K.
+The commits already loaded are filtered at once. A moment after you stop
+typing, Gitalia also asks Git to search the whole history, so older commits
+are found too. An older commit appears at the end of the list without its
+graph lines, because that part of the graph is not loaded. You can still
+select it and read its details.
+
+Each word must appear in the commit message, in any case. Put a phrase in
+quotes to find those words together. These qualifiers narrow the search:
+
+| Qualifier | Example | Finds commits |
+|---|---|---|
+| `author:` | `author:ann` | by an author whose name or email contains the text |
+| `path:` | `path:src/app.ts` | that changed this file, or a file in this folder |
+| `since:` | `since:2024-01-01` or `since:"2 weeks ago"` | made on or after this date |
+| `until:` | `until:2024-06-30` | made on or before this date |
+
+A hash, or the start of one, finds that commit. When the graph is narrowed to
+a branch, the search stays inside that branch. Git returns at most 1000
+matches, and the header above the graph says when there were more.
 
 ## Undoing an operation
 

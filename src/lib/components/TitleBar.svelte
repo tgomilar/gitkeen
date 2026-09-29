@@ -86,6 +86,13 @@
       ]
     };
   }
+
+  // Git's search of the whole history, a moment after the typing stops.
+  $effect(() => {
+    const text = repoStore.filter;
+    const timer = setTimeout(() => repoStore.search(text), 300);
+    return () => clearTimeout(timer);
+  });
 </script>
 
 <header class="bar">
@@ -158,6 +165,7 @@
       bind:this={search}
       bind:value={repoStore.filter}
       placeholder="Search commits"
+      title={'Words in the message, a hash or a branch name. Narrow it with author:ann, path:src/app.ts, since:2024-01-01 or until:"2 weeks ago".'}
       spellcheck="false"
       autocomplete="off"
       aria-label="Search commits"

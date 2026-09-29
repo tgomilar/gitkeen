@@ -1146,6 +1146,9 @@ product value is the **interaction model around the Git DAG**.
     behind a toggle, and blocks with no choice keep their markers so nothing
     half-finished can be staged. A modify/delete conflict can be resolved by
     deleting the file.
+-   [x] Commit search with author, date and path filtering (section 7):
+    the loaded commits filter as you type, and Git searches the whole
+    history a moment later
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration

@@ -1060,6 +1060,36 @@ async function continueRebase(path, plan, status) {
   return { ok: true, operation: 'rebase', finished: next.sha === null, stoppedAt: next.sha, conflicted: false };
 }
 
+/**
+ * Split a search box query into Git log filters.
+ *
+ * `author:ann path:src since:"2 weeks ago" fix login` gives an author, a
+ * path, a date and two words the message must contain. A value with spaces
+ * is quoted. An unknown qualifier is searched for as an ordinary word.
+ */
+function parseSearch(query) {
+  const out = { words: [], author: [], paths: [], since: null, until: null };
+  const unquote = (v) => v.replace(/^"(.*)"$/, '$1');
+  for (const match of String(query).matchAll(/(\w+):("[^"]*"|\S+)|"([^"]*)"|(\S+)/g)) {
+    const [, key, value, quoted, word] = match;
+    if (key) {
+      const v = unquote(value).trim();
+      if (!v) continue;
+      const name = key.toLowerCase();
+      if (name === 'author') out.author.push(v);
+      else if (name === 'path' || name === 'file') out.paths.push(v);
+      else if (name === 'since' || name === 'after') out.since = v;
+      else if (name === 'until' || name === 'before') out.until = v;
+      else out.words.push(`${key}:${v}`);
+    } else if (quoted !== undefined) {
+      if (quoted.trim()) out.words.push(quoted.trim());
+    } else if (word) {
+      out.words.push(word);
+    }
+  }
+  return out;
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -1091,6 +1121,49 @@ export const methods = {
       rebaseStop = stop.amend ? 'edit' : stop.sha ? 'conflict' : null;
     }
     return { ...status, operation, rebaseStop };
+  },
+
+  /**
+   * Search the whole history, not only the commits the graph has loaded.
+   *
+   * The query is words and qualifiers: `author:`, `path:`, `since:` and
+   * `until:` (also `after:` and `before:`), each taking a value that may be
+   * quoted. The other words must all appear in the commit message, whatever
+   * their case. A word that is a commit hash, or the start of one, also finds
+   * that commit. Every value reaches Git as part of an option or after `--`,
+   * so none can be read as an option of its own.
+   */
+  async 'log.search'({ path, query = '', refs = null, limit = 1000 }) {
+    const parsed = parseSearch(query);
+    const args = [
+      'log', `--pretty=format:${LOG_FORMAT}`, '--date-order', `--max-count=${limit + 1}`,
+      `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, '--regexp-ignore-case', '--fixed-strings', '--all-match'
+    ];
+    for (const author of parsed.author) args.push(`--author=${author}`);
+    for (const word of parsed.words) args.push(`--grep=${word}`);
+    if (parsed.since) args.push(`--since=${parsed.since}`);
+    if (parsed.until) args.push(`--until=${parsed.until}`);
+    const scoped = Array.isArray(refs) ? refs.filter((ref) => typeof ref === 'string' && ref.trim()) : [];
+    if (scoped.length > 0) args.push(...scoped);
+    else args.push('--exclude=refs/stash', `--exclude=${recovery.RECOVERY_PREFIX}*`, '--all', 'HEAD');
+    args.push('--', ...parsed.paths);
+
+    const nothing = parsed.words.length + parsed.author.length + parsed.paths.length === 0 && !parsed.since && !parsed.until;
+    if (nothing) return { commits: [], truncated: false, query: parsed };
+
+    const { stdout, code } = await runGit(path, args, { allowFailure: true });
+    let commits = code === 0 ? parseLog(stdout) : [];
+
+    // One lone word may be a hash rather than message text.
+    if (parsed.words.length === 1 && /^[0-9a-f]{4,40}$/i.test(parsed.words[0]) && !parsed.author.length && !parsed.paths.length) {
+      const { stdout: found, code: ok } = await runGit(
+        path, ['log', '-1', `--pretty=format:${LOG_FORMAT}`, `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, `${parsed.words[0]}^{commit}`, '--'],
+        { allowFailure: true }
+      );
+      const byHash = ok === 0 ? parseLog(found) : [];
+      if (byHash.length && !commits.some((c) => c.hash === byHash[0].hash)) commits = [byHash[0], ...commits];
+    }
+    return { commits: commits.slice(0, limit), truncated: commits.length > limit, query: parsed };
   },
 
   /**
