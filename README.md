@@ -217,19 +217,18 @@ message tells you where the branch pointed before, so you can put it back.
 
 ### When an operation stops on a conflict
 
-Cherry-pick and revert both change files, so both can stop on a conflict. Git
-then waits. The status bar shows which operation is open and offers two ways
-out.
+A merge, a pull, a cherry-pick, a revert and a rebase from the rebase editor
+can all stop on a conflict. Git then waits. The status bar shows which
+operation is open and offers two ways out.
 
 | Button | What it does |
 |---|---|
 | Continue | Carries on. It stays switched off until no file has a conflict left. |
 | Abandon | Puts the branch back as it was before the operation started. |
 
-Open the commit panel to see the conflicted files. A merge, pull, cherry-pick
-or revert that stops on a conflict stays open, and the status bar's **Resolve…**
-button, or right clicking the file and choosing **Resolve in Merge Editor…**,
-opens the merge editor.
+Open the commit panel to see the conflicted files. The status bar's
+**Resolve…** button, or right clicking the file and choosing **Resolve in
+Merge Editor…**, opens the merge editor.
 
 The editor walks the file from top to bottom. Each `<<<<<<<` block is shown
 in three columns: **Ours** on the left, **Theirs** on the right, and the
@@ -346,9 +345,12 @@ or whose oldest kept commit folds upwards into something that is not there. It
 says which of these is wrong underneath the list rather than waiting until you
 press the button.
 
-If the commits cannot be replayed in the order you asked for, the rebase is
-abandoned and the branch is put back exactly as it was, the same as for a move
-or a drop.
+If a commit does not apply cleanly in the order you asked for, the rebase
+stops on that conflict. Resolve it in the merge editor and press **Continue**.
+The rest of the plan then runs, and it stops again at the next conflict if
+there is one. **Abandon** puts the branch back exactly as it was. A move or a
+drop from the commit menu is different: it is abandoned at once if it
+conflicts, because you asked for one small change, not for a rebase to finish.
 
 ## Moving and removing commits
 
@@ -626,8 +628,8 @@ Your own repositories are never touched.
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
 a force push is still blocked when the remote moved unseen, that a rewrite
-across a merge is turned down rather than flattening it, and that a rebase
-that cannot be replayed puts the branch back exactly as it was.
+across a merge is turned down rather than flattening it, and that a move or a
+drop that cannot be replayed puts the branch back exactly as it was.
 
 ## How it is built
 
@@ -718,8 +720,8 @@ place and missing in another.
 The squash checks run twice. The screen runs the cheap ones, so the menu entry
 is greyed out with a short reason the moment you select the commits. The
 backend runs all of them again before it touches anything, so a mistake in the
-screen cannot lead to a damaged repository. If a rebase fails part way, Gitalia
-aborts it, which leaves the branch where it started.
+screen cannot lead to a damaged repository. If a squash, move or drop fails part
+way, Gitalia aborts it, which leaves the branch where it started.
 
 ## Known limits
 

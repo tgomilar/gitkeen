@@ -472,6 +472,13 @@ class RepoStore {
       // An `edit` in the plan stops the rebase so the commit at that point
       // can be amended. That is not a finished run: the branch is mid-flight,
       // and the status bar's Continue takes over from here.
+      if (result.stopped && result.conflicted) {
+        toasts.info(
+          'Rebase stopped on a conflict',
+          `${result.stoppedAt?.slice(0, 7) ?? 'A commit'} does not apply cleanly. Resolve the conflicted files with Resolve… in the status bar, then Continue. Abandon puts the branch back as it was.`
+        );
+        return { ok: true, stopped: true, stoppedAt: result.stoppedAt };
+      }
       if (result.stopped) {
         toasts.info(
           'Rebase paused',
@@ -512,6 +519,8 @@ class RepoStore {
       await this.refresh();
       if (result.finished === true) {
         toasts.success('Rebase finished', 'The rest of the plan was applied to the branch.');
+      } else if (result.conflicted) {
+        toasts.info('Rebase stopped on a conflict', `${result.stoppedAt?.slice(0, 7) ?? 'The next commit'} does not apply cleanly. Resolve it, then Continue again.`);
       } else if (result.stoppedAt) {
         toasts.info('Rebase paused again', `It stopped at ${result.stoppedAt.slice(0, 7)} to amend. Continue again when it is ready.`);
       } else {
@@ -754,10 +763,14 @@ class RepoStore {
     try {
       const result = await repo.continueOperation();
       await this.refresh();
-      toasts.success(
-        result.finished ? `The ${name} finished` : `The ${name} moved on`,
-        result.finished ? null : 'There is more to resolve.'
-      );
+      if (result.conflicted) {
+        toasts.info(`The ${name} stopped on another conflict`, 'Resolve it, then Continue again.');
+      } else {
+        toasts.success(
+          result.finished ? `The ${name} finished` : `The ${name} moved on`,
+          result.finished ? null : 'There is more to resolve.'
+        );
+      }
       return true;
     } catch (err) {
       toasts.error(`Could not continue the ${name}`, describe(err));

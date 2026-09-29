@@ -411,3 +411,108 @@ describe('continuing an edit stop', () => {
     });
   });
 });
+
+describe('a rebase that meets a conflict', () => {
+  /** base, then two commits that edit the same line, then a third unrelated one. */
+  async function clashing(repo) {
+    await repo.commit('base', { 'f.txt': 'one\n' });
+    await repo.commit('first edit', { 'f.txt': 'two\n' });
+    await repo.commit('second edit', { 'f.txt': 'three\n' });
+    await repo.commit('other', { 'o.txt': 'o\n' });
+    const from = (await repo.hashes())[2];
+    const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+    return { from, commits };
+  }
+
+  test('stops with the conflict open instead of abandoning the plan', async () => {
+    await withRepo(async (repo) => {
+      const { from, commits } = await clashing(repo);
+      const [first, second, other] = commits;
+      // Swapping the two edits makes the second one conflict.
+      const plan = [
+        { hash: second.hash, command: 'pick' },
+        { hash: first.hash, command: 'pick' },
+        { hash: other.hash, command: 'reword', message: 'other, renamed' }
+      ];
+      const result = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(result.stopped, true);
+      assert.equal(result.conflicted, true);
+      assert.equal(repo.midOperation(), true, 'the rebase waits for the conflict');
+      assert.match(await repo.status(), /^(UU|AA) f\.txt$/m);
+
+      // Resolve each stop the way the merge editor does, then continue. Both
+      // swapped edits touch the same line, so both of them stop.
+      let continued, stops = 0;
+      do {
+        stops++;
+        await methods['conflicts.resolve']({ path: repo.path, file: 'f.txt', content: `resolved ${stops}\n` });
+        continued = await methods['repo.continueOperation']({ path: repo.path });
+      } while (continued.conflicted && stops < 3);
+      assert.equal(stops, 2);
+      assert.equal(continued.finished, true);
+      assert.equal(repo.midOperation(), false);
+      assert.deepEqual(await repo.log(), ['other, renamed', 'first edit', 'second edit', 'base'],
+        'the rest of the plan, the reword included, was applied from the saved plan');
+      assert.equal((await repo.git(['show', 'HEAD:f.txt'])).stdout, 'resolved 2\n');
+    });
+  });
+
+  test('a conflict met while continuing is a stop too', async () => {
+    await withRepo(async (repo) => {
+      const { from, commits } = await clashing(repo);
+      const [first, second, other] = commits;
+      const plan = [
+        { hash: first.hash, command: 'edit' },
+        { hash: other.hash, command: 'pick' },
+        { hash: second.hash, command: 'pick' }
+      ];
+      const stopped = await methods['commits.rebase']({ path: repo.path, from, plan });
+      assert.equal(stopped.conflicted, false, 'the edit stop is not a conflict');
+      // Change the line at the stop so that "second edit" no longer applies.
+      repo.write('f.txt', 'changed at the stop\n');
+      const continued = await methods['repo.continueOperation']({ path: repo.path, plan });
+      assert.equal(continued.ok, true);
+      assert.equal(continued.finished, false);
+      assert.equal(continued.conflicted, true);
+      assert.equal(repo.midOperation(), true);
+    });
+  });
+
+  test('Abandon puts the branch back after a conflict stop', async () => {
+    await withRepo(async (repo) => {
+      const { from, commits } = await clashing(repo);
+      const before = await repo.head();
+      const [first, second, other] = commits;
+      await methods['commits.rebase']({
+        path: repo.path, from,
+        plan: [{ hash: second.hash, command: 'pick' }, { hash: first.hash, command: 'pick' }, { hash: other.hash, command: 'pick' }]
+      });
+      await methods['repo.abortOperation']({ path: repo.path });
+      assert.equal(await repo.head(), before);
+      assert.equal(repo.midOperation(), false);
+      assert.equal(await repo.status(), '');
+    });
+  });
+});
+
+describe('why a rebase is paused', () => {
+  test('the status says edit for an edit stop, and conflict for a conflict stop', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'one\n' });
+      await repo.commit('first edit', { 'f.txt': 'two\n' });
+      await repo.commit('second edit', { 'f.txt': 'three\n' });
+      const from = (await repo.hashes())[1];
+      const { commits } = await methods['commits.rebaseSpan']({ path: repo.path, from });
+      const [first, second] = commits;
+
+      await methods['commits.rebase']({ path: repo.path, from, plan: [{ hash: first.hash, command: 'edit' }, { hash: second.hash, command: 'pick' }] });
+      assert.equal((await methods['repo.status']({ path: repo.path })).rebaseStop, 'edit');
+      await methods['repo.abortOperation']({ path: repo.path });
+
+      await methods['commits.rebase']({ path: repo.path, from, plan: [{ hash: second.hash, command: 'pick' }, { hash: first.hash, command: 'pick' }] });
+      assert.equal((await methods['repo.status']({ path: repo.path })).rebaseStop, 'conflict');
+      await methods['repo.abortOperation']({ path: repo.path });
+      assert.equal((await methods['repo.status']({ path: repo.path })).rebaseStop, null);
+    });
+  });
+});

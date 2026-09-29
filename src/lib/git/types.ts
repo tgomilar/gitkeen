@@ -71,6 +71,8 @@ export interface GitStatus {
   detached: boolean;
   files: StatusFile[];
   operation: OperationState;
+  /** Why a rebase is paused: an `edit` to amend, or a conflict. Null otherwise. */
+  rebaseStop?: 'edit' | 'conflict' | null;
 }
 
 export interface RepositoryInfo {
@@ -543,8 +545,10 @@ export interface RebaseResult {
   dropped: number;
   combined: number;
   reworded: number;
-  /** True when an `edit` stopped the rebase part-way to be amended. */
+  /** True when an `edit` or a conflict stopped the rebase part-way. */
   stopped: boolean;
+  /** True when it stopped on a conflict, with files to resolve. */
+  conflicted?: boolean;
   /** The commit the run paused at, when it paused. */
   stoppedAt: string | null;
 }
@@ -581,6 +585,8 @@ export interface OperationResult {
   finished?: boolean;
   /** Where the operation paused again, for a rebase that stopped to amend. */
   stoppedAt?: string | null;
+  /** True when a rebase stopped again because the next commit conflicts. */
+  conflicted?: boolean;
 }
 
 /**

@@ -941,6 +941,12 @@ async function savePlan(root, plan) {
   if (await exists(dir)) await writeFile(join(dir, PLAN_FILE), JSON.stringify(plan));
 }
 
+/** How many files a stopped operation left in conflict. */
+async function conflictCount(path) {
+  const status = parseStatus(await git(path, STATUS_ARGS));
+  return status.files.filter((f) => f.state === 'conflicted').length;
+}
+
 async function savedPlan(dir) {
   try {
     const plan = JSON.parse(await readFile(join(dir, PLAN_FILE), 'utf8'));
@@ -1040,9 +1046,17 @@ async function continueRebase(path, plan, status) {
     }
   }
 
-  await git(path, ['rebase', '--continue'], { env });
+  try {
+    await git(path, ['rebase', '--continue'], { env });
+  } catch (err) {
+    // A later commit conflicting is a stop like any other, with files to
+    // resolve before continuing again.
+    if ((await detectOperation(path)) !== 'rebase' || (await conflictCount(path)) === 0) throw err;
+    const next = await rebaseStopInfo(path);
+    return { ok: true, operation: 'rebase', finished: false, stoppedAt: next.sha, conflicted: true };
+  }
   const next = await rebaseStopInfo(path);
-  return { ok: true, operation: 'rebase', finished: next.sha === null, stoppedAt: next.sha };
+  return { ok: true, operation: 'rebase', finished: next.sha === null, stoppedAt: next.sha, conflicted: false };
 }
 
 export const methods = {
@@ -1067,7 +1081,15 @@ export const methods = {
 
   async 'repo.status'({ path }) {
     const status = parseStatus(await git(path, STATUS_ARGS));
-    return { ...status, operation: await detectOperation(path) };
+    const operation = await detectOperation(path);
+    // Why a rebase is paused: an `edit` waiting to be amended, or a commit
+    // that would not apply. Only an edit stop leaves Git's `amend` file.
+    let rebaseStop = null;
+    if (operation === 'rebase') {
+      const stop = await rebaseStopInfo(path);
+      rebaseStop = stop.amend ? 'edit' : stop.sha ? 'conflict' : null;
+    }
+    return { ...status, operation, rebaseStop };
   },
 
   /**
@@ -2111,18 +2133,19 @@ export const methods = {
     };
     if (rewords.length > 0) env.GITALIA_REWORDS = JSON.stringify(rewords);
 
+    let conflicted = 0;
     try {
       await runGit(path, ['rebase', '--interactive', base], { env });
     } catch (err) {
-      await runGit(path, ['rebase', '--abort'], { allowFailure: true });
-      const text = `${err?.stderr ?? ''}\n${err?.message ?? ''}`;
-      if (/could not apply|CONFLICT|Merge conflict/i.test(text)) {
-        throw new GitError(
-          'The commits could not be replayed in that order: one of them depends on a change another makes. Nothing was altered, and the branch is as it was.',
-          { command: 'git rebase --interactive', stderr: err?.stderr ?? '', code: 1 }
-        );
+      // A conflict leaves the rebase stopped with files to resolve, and the
+      // merge editor can resolve them: the rebase stays open for that, and
+      // Continue or Abandon in the status bar takes it from there. Anything
+      // else is abandoned, so the branch is left as it was.
+      conflicted = (await detectOperation(path)) === 'rebase' ? await conflictCount(path) : 0;
+      if (conflicted === 0) {
+        await runGit(path, ['rebase', '--abort'], { allowFailure: true });
+        throw err;
       }
-      throw err;
     }
 
     const { stdout: after } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
@@ -2135,6 +2158,7 @@ export const methods = {
     if (stop.sha !== null) await savePlan(path, plan);
 
     return {
+      conflicted: conflicted > 0,
       ok: true,
       previousHead: head,
       head: after.trim(),

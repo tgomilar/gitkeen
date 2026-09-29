@@ -1123,8 +1123,9 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Conflict detection --- detected, marked resolved, and resolved in the
     merge editor, which walks the file block by block letting the user pick
     ours or theirs per conflict, with the common ancestor behind a toggle.
-    A rebase that stops on a conflict when it starts is still abandoned
-    automatically; only a conflict met while continuing reaches the editor.
+    A rebase from the rebase editor stops on a conflict so it can be
+    resolved and continued; a move or drop from the menu is abandoned
+    instead.
 -   [x] Partial staging --- whole files by ticking, hunks and single lines
     from the diff viewer
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
