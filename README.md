@@ -39,6 +39,7 @@ branches, commit your work, and change the history you already have.
 | Squash | Combine a run of selected commits into one, as IntelliJ IDEA does. |
 | Search | Search the whole history by message, author, file, date, hash* or branch name. |
 | Blame | See which commit last changed each line of a file, and follow a line back in time. |
+| Bisect | Find the commit that broke something by testing a few commits in between. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -512,6 +513,25 @@ the graph and read its details. **Before this** opens the file as it was just
 before that commit, so you can follow a line back through each change to it.
 **Back** returns to the newer version. Blame follows a file across a rename.
 
+## Bisect: finding the commit that broke it
+
+Bisect finds the first bad commit between one that works and one that does
+not. Each answer you give halves the commits left, so a thousand commits take
+about ten tests.
+
+1. Right click a commit you know works and choose **Bisect from here…**. HEAD
+   is taken as broken. To name both ends, select the two commits and choose
+   **Bisect between these…**; the older one is taken as working.
+2. Gitalia checks out a commit halfway between them. Build it, run it, or run
+   your tests.
+3. Press **Good** or **Bad** in the status bar. Press **Skip** if this commit
+   cannot be tested. The graph marks every commit you answered for.
+4. When one commit is left, the status bar names it and the graph selects it.
+5. Press **Stop** to end the bisect and go back to your branch.
+
+Git refuses to check out a commit that would overwrite your uncommitted
+changes, so stash or commit them before you start.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -693,6 +713,7 @@ Your own repositories are never touched.
 | `server/test/log.test.mjs` | Reading the history a page at a time. |
 | `server/test/recovery.test.mjs` | The operation log, and restoring what an operation changed. |
 | `server/test/blame.test.mjs` | Which commit last changed each line of a file. |
+| `server/test/bisect.test.mjs` | Finding the first bad commit with bisect. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

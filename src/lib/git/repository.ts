@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState
 } from './types';
 
 export class GitRepository {
@@ -207,6 +207,22 @@ export class GitRepository {
   /** Which commit last changed each line of a file, at `rev` or in the working tree. */
   blame(file: string, rev: string | null = null): Promise<BlameResult> {
     return transport.call('blame.file', { path: this.path, file, rev });
+  }
+
+  bisectState(): Promise<BisectState> {
+    return transport.call('bisect.state', { path: this.path });
+  }
+
+  bisectStart(good: string, bad = 'HEAD'): Promise<BisectState> {
+    return transport.call('bisect.start', { path: this.path, good, bad });
+  }
+
+  bisectMark(verdict: 'good' | 'bad' | 'skip'): Promise<BisectState> {
+    return transport.call('bisect.mark', { path: this.path, verdict });
+  }
+
+  bisectReset(): Promise<BisectState> {
+    return transport.call('bisect.reset', { path: this.path });
   }
 
   /** The operation log, newest first. */

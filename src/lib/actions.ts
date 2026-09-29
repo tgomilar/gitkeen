@@ -9,6 +9,7 @@ import { repoStore, describe } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
 import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
 import { blameStore } from './state/blame.svelte';
+import { bisectStore } from './state/bisect.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -350,6 +351,15 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
         icon: 'revert',
         action: () => revertCommits(selected)
       },
+      ...(selected.length === 2
+        ? [{
+            label: 'Bisect between these…',
+            icon: 'commit' as const,
+            hint: 'older works, newer is broken',
+            disabled: !!repoStore.status?.operation,
+            action: () => startBisect(selected[1], selected[0])
+          }]
+        : []),
       SEPARATOR,
       {
         label: 'Copy hashes',
@@ -400,6 +410,13 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       icon: 'switch',
       hint: 'detached',
       action: () => checkoutCommit(commit)
+    },
+    {
+      label: 'Bisect from here…',
+      icon: 'commit',
+      hint: 'this one works, HEAD is broken',
+      disabled: !!repoStore.status?.operation || commit.hash === repoStore.head?.oid,
+      action: () => startBisect(commit)
     },
     SEPARATOR,
     {
@@ -1839,4 +1856,32 @@ export async function blameFile() {
     confirmLabel: 'Blame'
   });
   if (file) await blameStore.show(file.trim());
+}
+
+
+/**
+ * Start a bisect: `good` works, `bad` (HEAD unless named) does not.
+ *
+ * Git then checks out commits between them one at a time, and the status bar
+ * asks whether each one is good or bad.
+ */
+export async function startBisect(good: Commit, bad?: Commit) {
+  if (repoStore.status?.operation) {
+    toasts.error('Cannot start a bisect', `A ${repoStore.status.operation} is in progress. Finish or abandon it first.`);
+    return;
+  }
+  const badName = bad ? `${bad.shortHash} (${bad.subject})` : `HEAD (${repoStore.currentBranch ?? 'detached'})`;
+  const ok = await confirm({
+    title: 'Find the commit that broke it',
+    message:
+      'Git checks out a commit halfway between the good one and the bad one. Test it, then press Good or Bad in the status bar. Each answer halves what is left, until the first bad commit remains. Stop returns you to your branch.',
+    facts: [
+      { label: 'Works at', value: `${good.shortHash} (${good.subject})` },
+      { label: 'Broken at', value: badName },
+      ...(repoStore.isDirty ? [{ label: 'Your changes', value: 'Git refuses to check out a commit that would overwrite them. Stash or commit them first.', tone: 'warning' as const }] : [])
+    ],
+    confirmLabel: 'Start bisect'
+  });
+  if (!ok) return;
+  await bisectStore.start(good.hash, bad?.hash ?? 'HEAD');
 }

@@ -1158,7 +1158,8 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] Submodules
 -   [x] Blame --- per line, grouped by commit, with "Before this" to follow a
     line back through its history
--   [ ] Bisect
+-   [x] Bisect --- started from a known good commit, answered with Good, Bad
+    or Skip in the status bar, marks drawn in the graph
 -   [ ] Advanced analytics
 
 Key: `[x]` done, `[~]` partly done, `[ ]` not started.

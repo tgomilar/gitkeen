@@ -77,9 +77,9 @@
   <div class="commit-cell">
     {#each row.commit.refs as ref}
       <span
-        class="ref {ref.kind}"
+        class="ref {ref.kind} {ref.kind === 'bisect' ? ref.name : ''}"
         class:is-head={ref.isHead}
-        title={ref.kind === 'remote' ? `Remote branch ${ref.name}` : ref.kind === 'tag' ? `Tag ${ref.name}` : ref.name}
+        title={ref.kind === 'remote' ? `Remote branch ${ref.name}` : ref.kind === 'tag' ? `Tag ${ref.name}` : ref.kind === 'bisect' ? `Marked ${ref.name} in the bisect` : ref.name}
       >{ref.name}</span>
     {/each}
     <span class="subject" title={row.commit.subject}>{row.commit.subject}</span>
@@ -147,6 +147,9 @@
   .ref.remote { background: var(--ref-remote-bg); color: var(--ref-remote-text); }
   .ref.tag { background: var(--ref-tag-bg); color: var(--ref-tag-text); }
   .ref.head { background: var(--ref-head-bg); color: var(--ref-head-text); font-weight: 600; }
+  .ref.bisect { background: var(--bg-sunken); color: var(--text-dim); font-style: italic; }
+  .ref.bisect.good { color: var(--success); }
+  .ref.bisect.bad { color: var(--danger); }
   .ref.is-head { background: var(--ref-head-bg); color: var(--ref-head-text); font-weight: 600; }
 
   .subject {

@@ -2,6 +2,16 @@
   import { repoStore } from '../state/repo.svelte';
   import { pluralize } from '../format';
   import { abortOperation, continueOperation, resolveNextConflict } from '../actions';
+  import { bisectStore } from '../state/bisect.svelte';
+
+  // A bisect moves HEAD with every answer, so its state is read again then.
+  $effect(() => {
+    if (repoStore.status?.operation === 'bisect') {
+      void repoStore.head?.oid;
+      bisectStore.load();
+    }
+  });
+  const bisect = $derived(bisectStore.state);
 
   const status = $derived(repoStore.status);
 
@@ -27,7 +37,21 @@
     <span class="item">{repoStore.layout.laneCount} lanes</span>
   {/if}
 
-  {#if status?.operation}
+  {#if status?.operation === 'bisect'}
+    <!-- A bisect is a question and answer, not an operation to continue. -->
+    <span class="item warn">Bisecting</span>
+    {#if bisect.found}
+      <span class="item">first bad commit: <b class="mono">{bisect.found.slice(0, 7)}</b></span>
+    {:else if bisect.onlySkipped}
+      <span class="item dim">only skipped commits are left</span>
+    {:else}
+      <span class="item dim" title="The commit checked out for you to test">testing <span class="mono">{bisect.current?.slice(0, 7) ?? '…'}</span>{#if bisect.steps != null}, about {pluralize(bisect.steps, 'step')} left{/if}</span>
+      <button class="act" onclick={() => bisectStore.mark('good')} disabled={bisectStore.busy} title="This commit works">Good</button>
+      <button class="act danger" onclick={() => bisectStore.mark('bad')} disabled={bisectStore.busy} title="This commit is broken">Bad</button>
+      <button class="act" onclick={() => bisectStore.mark('skip')} disabled={bisectStore.busy} title="This commit cannot be tested">Skip</button>
+    {/if}
+    <button class="act" onclick={() => bisectStore.stop()} disabled={bisectStore.busy} title="End the bisect and go back to your branch">Stop</button>
+  {:else if status?.operation}
     <!-- A stopped operation is the one state a user can get stranded in, so
          the way out of it lives here rather than behind a menu. -->
     <span class="item warn">{operationLabel[status.operation] ?? status.operation}</span>

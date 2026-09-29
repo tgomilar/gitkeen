@@ -3408,6 +3408,103 @@ export const methods = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Bisect
+ * ------------------------------------------------------------------ */
+
+/**
+ * Where a bisect stands: the commit being tested, how far is left, and the
+ * first bad commit once only one candidate remains.
+ *
+ * Git keeps its marks as refs: `refs/bisect/bad`, and a `good-` and `skip-`
+ * ref per commit. The candidates are what the bad commit reaches and no good
+ * one does. When that is the bad commit alone, it is the answer.
+ */
+async function bisectState(path) {
+  if ((await detectOperation(path)) !== 'bisect') return { running: false };
+  const { stdout: marks } = await runGit(path, ['for-each-ref', '--format=%(refname) %(objectname)', 'refs/bisect/'], { allowFailure: true });
+  let bad = null;
+  const good = [], skipped = [];
+  for (const line of marks.split('\n').filter(Boolean)) {
+    const [ref, sha] = line.split(' ');
+    if (ref === 'refs/bisect/bad') bad = sha;
+    else if (ref.startsWith('refs/bisect/good-')) good.push(sha);
+    else if (ref.startsWith('refs/bisect/skip-')) skipped.push(sha);
+  }
+  const { stdout: head } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+  const state = { running: true, current: head.trim() || null, bad, good, skipped, left: null, steps: null, found: null, onlySkipped: false };
+  if (!bad || good.length === 0) return state;
+
+  // `^<hash>` for each good commit. A repeated `--not` would toggle back.
+  const not = good.map((g) => `^${g}`);
+  const { stdout: count } = await runGit(path, ['rev-list', '--count', bad, ...not], { allowFailure: true });
+  const candidates = Number(count.trim() || 0);
+  if (candidates <= 1) {
+    state.found = bad;
+    return state;
+  }
+  const { stdout: vars } = await runGit(path, ['rev-list', '--bisect-vars', bad, ...not], { allowFailure: true });
+  const get = (name) => Number((new RegExp(`${name}=(\\d+)`).exec(vars) ?? [])[1] ?? NaN);
+  state.left = Number.isNaN(get('bisect_all')) ? candidates : get('bisect_all');
+  state.steps = Number.isNaN(get('bisect_steps')) ? null : get('bisect_steps');
+  // Every commit left to test has been skipped: Git cannot narrow it further.
+  const untested = candidates - 1 - skipped.length;
+  state.onlySkipped = skipped.length > 0 && untested <= 0;
+  return state;
+}
+
+const commitish = (value, what) => {
+  if (typeof value !== 'string' || !/^[\w./^~@{}-]+$/.test(value) || value.startsWith('-')) {
+    throw new GitError(`That is not a commit Gitalia can use as ${what}.`, { command: '', stderr: '', code: 1 });
+  }
+  return value;
+};
+
+methods['bisect.state'] = async ({ path }) => bisectState(path);
+
+/**
+ * Start a bisect between a commit that works and one that does not.
+ *
+ * Git checks out a commit halfway between them for the user to test. The
+ * branch they were on is remembered, and stopping the bisect returns there.
+ */
+methods['bisect.start'] = async ({ path, good, bad = 'HEAD' }) => {
+  const operation = await detectOperation(path);
+  if (operation) {
+    throw new GitError(`A ${operation} is in progress. Finish or abandon it first.`, { command: '', stderr: '', code: 1 });
+  }
+  const args = ['bisect', 'start', commitish(bad, 'the bad commit'), commitish(good, 'the good commit'), '--'];
+  const { code, stderr } = await runGit(path, args, { allowFailure: true });
+  if (code !== 0) {
+    await runGit(path, ['bisect', 'reset'], { allowFailure: true });
+    throw new GitError(stderr.trim() || 'Git could not start the bisect.', { command: `git ${args.join(' ')}`, stderr, code });
+  }
+  return bisectState(path);
+};
+
+/** Say whether the commit being tested works, and move on to the next one. */
+methods['bisect.mark'] = async ({ path, verdict }) => {
+  if (!['good', 'bad', 'skip'].includes(verdict)) {
+    throw new GitError('A bisect verdict is good, bad or skip.', { command: '', stderr: '', code: 1 });
+  }
+  if ((await detectOperation(path)) !== 'bisect') {
+    throw new GitError('No bisect is running.', { command: '', stderr: '', code: 1 });
+  }
+  const { code, stderr } = await runGit(path, ['bisect', verdict], { allowFailure: true });
+  // Only skipped commits left is Git's way of ending without an answer, and
+  // not a failure worth an error.
+  if (code !== 0 && !/only 'skip'ped commits/i.test(stderr)) {
+    throw new GitError(stderr.trim() || `Git could not mark the commit ${verdict}.`, { command: `git bisect ${verdict}`, stderr, code });
+  }
+  return bisectState(path);
+};
+
+/** End the bisect and go back to where it started. */
+methods['bisect.reset'] = async ({ path }) => {
+  await git(path, ['bisect', 'reset']);
+  return { running: false };
+};
+
+/* ------------------------------------------------------------------ *
  * The operation log
  * ------------------------------------------------------------------ */
 

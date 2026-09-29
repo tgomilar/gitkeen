@@ -30,8 +30,10 @@ import {
   stashChanges,
   canSquash,
   defaultRemote,
-  blameFile
+  blameFile,
+  startBisect
 } from '../actions';
+import { bisectStore } from './bisect.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -408,6 +410,22 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     group: 'View',
     run: () => b.setDock('stats')
   });
+  if (repoStore.status?.operation === 'bisect') {
+    for (const [verdict, label] of [['good', 'Bisect: this commit works'], ['bad', 'Bisect: this commit is broken'], ['skip', 'Bisect: skip this commit']] as const) {
+      add({ id: `bisect-${verdict}`, label, keywords: `bisect ${verdict} mark test`, icon: 'commit', group: 'History', run: () => bisectStore.mark(verdict) });
+    }
+    add({ id: 'bisect-stop', label: 'Bisect: stop and go back', keywords: 'bisect reset end', icon: 'close', group: 'History', run: () => bisectStore.stop() });
+  } else {
+    add({
+      id: 'bisect-start',
+      label: 'Bisect: the selected commit works, HEAD is broken…',
+      keywords: 'bisect find bug regression broke',
+      icon: 'commit',
+      group: 'History',
+      disabled: !cursorCommit || !!repoStore.status?.operation || cursorCommit.hash === repoStore.head?.oid,
+      run: () => startBisect(cursorCommit!)
+    });
+  }
   add({
     id: 'blame',
     label: 'Blame a file…',

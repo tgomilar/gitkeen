@@ -1,4 +1,4 @@
-export type RefKind = 'local' | 'remote' | 'tag' | 'head';
+export type RefKind = 'local' | 'remote' | 'tag' | 'head' | 'bisect';
 
 export interface CommitRef {
   kind: RefKind;
@@ -844,4 +844,21 @@ export interface BlameResult {
   commits: Record<string, BlameCommit>;
   /** True when the file was too long to show every line. */
   truncated: boolean;
+}
+
+/** Where a bisect stands. */
+export interface BisectState {
+  running: boolean;
+  /** The commit checked out for testing. */
+  current?: string | null;
+  bad?: string | null;
+  good?: string[];
+  skipped?: string[];
+  /** Commits still in the running, and about how many more tests it takes. */
+  left?: number | null;
+  steps?: number | null;
+  /** The first bad commit, once Git has narrowed it down to one. */
+  found?: string | null;
+  /** True when only skipped commits are left, so there is no single answer. */
+  onlySkipped?: boolean;
 }
