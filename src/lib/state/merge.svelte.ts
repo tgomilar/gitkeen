@@ -35,10 +35,22 @@ class MergeStore {
   /** How many conflict blocks have not been given a side yet. */
   unresolved = $derived(this.blocks.filter((i) => !this.choices[i]).length);
 
+  /** True when the choice made keeps the side that deleted the file. */
+  deletes = $derived.by(() => {
+    const sections = this.offer?.sections ?? [];
+    return sections.some((section, i) => {
+      const pick = this.choices[i];
+      return section.type === 'conflict' && !!pick && !!section.deleted?.[pick];
+    });
+  });
+
   async show(file: string, source: string) {
     const repo = repoStore.repo;
     if (!repo) return;
     this.request = { file, source };
+    // The toast that said the operation stopped on a conflict has done its
+    // job, and it sits over the editor's buttons in the bottom corner.
+    toasts.dismissErrors();
     this.offer = null;
     this.error = null;
     this.choices = {};
@@ -76,7 +88,8 @@ class MergeStore {
     if (!repo || !offer || this.busy) return false;
     try {
       this.busy = true;
-      await repo.conflictResolve(offer.path, mergeResult(offer.sections, this.choices));
+      if (this.deletes) await repo.conflictRemove(offer.path);
+      else await repo.conflictResolve(offer.path, mergeResult(offer.sections, this.choices));
     } catch (err) {
       toasts.error('Could not save the merged file', describe(err));
       return false;

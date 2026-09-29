@@ -194,6 +194,11 @@ export class GitRepository {
     return transport.call('conflicts.resolve', { path: this.path, file, content });
   }
 
+  /** Resolve a modify/delete conflict by keeping the side that deleted the file. */
+  conflictRemove(file: string): Promise<{ ok: boolean; resolved: number }> {
+    return transport.call('conflicts.resolve', { path: this.path, file, remove: true });
+  }
+
   /** Throw away the working-tree changes to these paths. */
   rollback(paths: string[]): Promise<RollbackResult> {
     return transport.call('changes.rollback', { path: this.path, paths });

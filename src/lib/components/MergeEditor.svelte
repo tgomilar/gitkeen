@@ -195,7 +195,9 @@
                   <div class="conflict-head">
                     <span class="badge">Conflict {blocks.indexOf(index) + 1}</span>
                     <span class="state">
-                      {#if chosen(index) === 'ours'}
+                      {#if chosen(index) && section.deleted?.[chosen(index)!]}
+                        <b>deletes the file</b>
+                      {:else if chosen(index) === 'ours'}
                         keeps <b>{sideName(section.labels.ours, 'the current side')}</b>
                       {:else if chosen(index) === 'theirs'}
                         keeps <b>{sideName(section.labels.theirs, 'the incoming side')}</b>
@@ -212,7 +214,9 @@
                         <span class="faint mono">{sideName(section.labels.ours, 'current side')}</span>
                       </div>
                       <div class="col-body">
-                        {#if ours.total === 0}
+                        {#if section.deleted?.ours}
+                          <p class="empty-line">this side deleted the file</p>
+                        {:else if ours.total === 0}
                           <p class="empty-line">this side has nothing here</p>
                         {:else}
                           {#each ours.lines as line, n (n)}
@@ -227,7 +231,9 @@
                         class="pick"
                         class:on={chosen(index) === 'ours'}
                         onclick={() => pick(index, 'ours')}
-                      >{chosen(index) === 'ours' ? '✓ Keeps ours' : 'Keep ours'}</button>
+                      >{section.deleted?.ours
+                        ? (chosen(index) === 'ours' ? '✓ Deletes the file' : 'Delete the file')
+                        : (chosen(index) === 'ours' ? '✓ Keeps ours' : 'Keep ours')}</button>
                     </div>
 
                     <div class="col theirs" class:picked={chosen(index) === 'theirs'}>
@@ -236,7 +242,9 @@
                         <span class="faint mono">{sideName(section.labels.theirs, 'incoming side')}</span>
                       </div>
                       <div class="col-body">
-                        {#if theirs.total === 0}
+                        {#if section.deleted?.theirs}
+                          <p class="empty-line">this side deleted the file</p>
+                        {:else if theirs.total === 0}
                           <p class="empty-line">this side has nothing here</p>
                         {:else}
                           {#each theirs.lines as line, n (n)}
@@ -251,7 +259,9 @@
                         class="pick"
                         class:on={chosen(index) === 'theirs'}
                         onclick={() => pick(index, 'theirs')}
-                      >{chosen(index) === 'theirs' ? '✓ Keeps theirs' : 'Keep theirs'}</button>
+                      >{section.deleted?.theirs
+                        ? (chosen(index) === 'theirs' ? '✓ Deletes the file' : 'Delete the file')
+                        : (chosen(index) === 'theirs' ? '✓ Keeps theirs' : 'Keep theirs')}</button>
                     </div>
                   </div>
                 </div>

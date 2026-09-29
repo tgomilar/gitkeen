@@ -9,7 +9,7 @@ import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs'
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
-import { access, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { access, mkdtemp, writeFile, rm, readFile, lstat, realpath } from 'node:fs/promises';
 import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -259,15 +259,23 @@ function splitKeptLines(text) {
  * `merge.conflictstyle=diff3` is skipped, because its content is not one of
  * the two sides being chosen between.
  */
+// A marker is exactly seven characters, then a space and a label or the end
+// of the line. A longer run, such as a Markdown heading's `==========`
+// underline, is file content.
+const MARK_START = /^<{7}(?: |\r?\n?$)/;
+const MARK_BASE = /^\|{7}(?: |\r?\n?$)/;
+const MARK_SPLIT = /^={7}\r?\n?$/;
+const MARK_END = /^>{7}(?: |\r?\n?$)/;
+
 function parseConflictFile(text) {
   const lines = splitKeptLines(text);
   const sections = [];
   let i = 0;
 
   while (i < lines.length) {
-    if (!/^<<<<<<</.test(lines[i])) {
+    if (!MARK_START.test(lines[i])) {
       const start = i;
-      while (i < lines.length && !/^<<<<<<</.test(lines[i])) i++;
+      while (i < lines.length && !MARK_START.test(lines[i])) i++;
       sections.push({ type: 'text', lines: lines.slice(start, i) });
       continue;
     }
@@ -279,15 +287,15 @@ function parseConflictFile(text) {
     let inTheirs = false;
     while (i < lines.length) {
       const line = lines[i];
-      if (/^>>>>>>>/.test(line)) { labels.theirs = line.slice(7).trim(); i++; break; }
-      if (/^\|\|\|\|\|\|\|/.test(line)) {
+      if (MARK_END.test(line)) { labels.theirs = line.slice(7).trim(); i++; break; }
+      if (MARK_BASE.test(line)) {
         // The `|||||||` diff3 block runs to its own `=======`, and the
         // following `=======` marks the start of the theirs half.
         i++;
-        while (i < lines.length && !/^=======/.test(lines[i]) && !/^>>>>>>>/.test(lines[i])) i++;
+        while (i < lines.length && !MARK_SPLIT.test(lines[i]) && !MARK_END.test(lines[i])) i++;
         continue;
       }
-      if (/^=======/.test(line)) { inTheirs = true; i++; continue; }
+      if (MARK_SPLIT.test(line)) { inTheirs = true; i++; continue; }
       (inTheirs ? theirs : ours).push(line);
       i++;
     }
@@ -337,6 +345,32 @@ function workPath(path, file) {
   if (target !== path && !target.startsWith(`${path}${process.platform === 'win32' ? '\\' : '/'}`)) {
     throw new GitError(`Unsafe file path: ${file}`, { command: '', stderr: '', code: 1 });
   }
+  return target;
+}
+
+/**
+ * A working-tree file that is safe to read and write for the merge editor.
+ *
+ * `workPath` only checks the name. A branch can commit a symbolic link, or a
+ * directory that is one, pointing anywhere on disk, and reading or writing
+ * through it would reach outside the repository. The file itself must not be
+ * a link, and the directory it sits in must resolve to somewhere inside the
+ * working tree.
+ */
+async function conflictFilePath(path, file) {
+  const target = workPath(path, file);
+  const refuse = () => {
+    throw new GitError(
+      `${file} is a symbolic link, or sits inside one, so the merge editor will not open it. Resolve it from a terminal.`,
+      { command: '', stderr: '', code: 1 }
+    );
+  };
+  const info = await lstat(target).catch(() => null);
+  if (info && !info.isFile()) refuse();
+  const root = await realpath(path);
+  const parent = await realpath(dirname(target)).catch(() => null);
+  const sep = process.platform === 'win32' ? '\\' : '/';
+  if (!parent || (parent !== root && !parent.startsWith(root + sep))) refuse();
   return target;
 }
 
@@ -2784,7 +2818,7 @@ export const methods = {
    * 1 is read so the common ancestor can be shown as a third, read-only side.
    */
   async 'conflicts.read'({ path, file }) {
-    const target = workPath(path, file);
+    const target = await conflictFilePath(path, file);
     const status = parseStatus(await git(path, STATUS_ARGS));
     if (!status.files.some((f) => f.path === file && f.state === 'conflicted')) {
       throw new GitError(`${file} has no conflict to resolve.`, { command: '', stderr: '', code: 1 });
@@ -2809,23 +2843,26 @@ export const methods = {
       return { path: file, binary: true, truncated: false, lines: 0, sections: [], base: null, stages };
     }
 
-    const { lines, sections } = parseConflictFile(text);
+    let { lines, sections } = parseConflictFile(text);
 
     // A modify/delete conflict leaves no markers in the working tree: Git
-    // keeps the surviving side's content and lets `git add` decide it. The
-    // two sides live only in the index, so offer the whole file as one choice
-    // between them.
+    // keeps the surviving side's content and lets `git add` or `git rm`
+    // decide it. The two sides live only in the index, so the whole file
+    // becomes one choice between them, in place of the plain text the parser
+    // saw. The side with no stage is the one that deleted the file, and
+    // choosing it deletes the file.
     if (!sections.some((s) => s.type === 'conflict')) {
       const oursLines = unmerged.ours && !unmerged.ours.binary ? splitKeptLines(unmerged.ours.content) : [];
       const theirsLines = unmerged.theirs && !unmerged.theirs.binary ? splitKeptLines(unmerged.theirs.content) : [];
       if (oursLines.length > 0 || theirsLines.length > 0) {
-        sections.push({
+        sections = [{
           type: 'conflict',
           lines,
           ours: oursLines,
           theirs: theirsLines,
-          labels: { ours: '', theirs: '' }
-        });
+          labels: { ours: '', theirs: '' },
+          deleted: { ours: !unmerged.ours, theirs: !unmerged.theirs }
+        }];
       }
     }
 
@@ -2848,17 +2885,38 @@ export const methods = {
    * and staging happens only after the marker check, which keeps a half-chosen
    * file out of the index.
    */
-  async 'conflicts.resolve'({ path, file, content }) {
-    const target = workPath(path, file);
+  async 'conflicts.resolve'({ path, file, content, remove = false }) {
+    const target = await conflictFilePath(path, file);
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    if (!status.files.some((f) => f.path === file && f.state === 'conflicted')) {
+      throw new GitError(`${file} is no longer in conflict.`, { command: '', stderr: '', code: 1 });
+    }
+
+    // Keeping the side that deleted the file: `git rm` is how Git records
+    // that resolution. Only a conflict where one side has no stage can end
+    // this way.
+    if (remove) {
+      const unmerged = await readUnmerged(path, file);
+      if (unmerged.ours && unmerged.theirs) {
+        throw new GitError(`Neither side deleted ${file}, so it cannot be resolved by deleting it.`, { command: '', stderr: '', code: 1 });
+      }
+      await git(path, ['rm', '-q', '-f', '--', file]);
+      return { ok: true, resolved: 1 };
+    }
+
     if (typeof content !== 'string') {
       throw new GitError('No merged content was given.', { command: '', stderr: '', code: 1 });
     }
     if (content.includes('\0')) {
       throw new GitError('The merged content is not text.', { command: '', stderr: '', code: 1 });
     }
-    const status = parseStatus(await git(path, STATUS_ARGS));
-    if (!status.files.some((f) => f.path === file && f.state === 'conflicted')) {
-      throw new GitError(`${file} is no longer in conflict.`, { command: '', stderr: '', code: 1 });
+    // Checked before anything is written, so a refused result leaves the
+    // file exactly as Git left it.
+    if (/^<{7} /m.test(content)) {
+      throw new GitError(
+        `The merged ${file} would still contain conflict markers. Choose a side for every conflict first.`,
+        { command: '', stderr: '', code: 1 }
+      );
     }
 
     await writeFile(target, content);

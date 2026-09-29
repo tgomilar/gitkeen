@@ -27,6 +27,11 @@ class ToastStore {
   dismiss(id: number) {
     this.items = this.items.filter((t) => t.id !== id);
   }
+
+  /** Clear the errors, once the user has moved on to dealing with them. */
+  dismissErrors() {
+    this.items = this.items.filter((t) => t.kind !== 'error');
+  }
 }
 
 export const toasts = new ToastStore();

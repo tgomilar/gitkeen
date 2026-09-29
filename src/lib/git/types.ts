@@ -394,6 +394,11 @@ export interface MergeConflictSection {
   theirs: string[];
   /** What Git put after the `<<<<<<<` and `>>>>>>>` markers. */
   labels: { ours: string; theirs: string };
+  /**
+   * Set on a modify/delete conflict, where the whole file is the one choice:
+   * which side deleted the file. Keeping that side deletes it.
+   */
+  deleted?: { ours: boolean; theirs: boolean };
 }
 
 export type MergeSection = MergeTextSection | MergeConflictSection;

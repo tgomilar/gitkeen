@@ -9,7 +9,7 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, symlinkSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { methods } from '../api.mjs';
 import { withRepo } from './harness.mjs';
@@ -230,6 +230,118 @@ describe('writing a resolution', () => {
       assert.equal(result.ok, true);
       assert.equal(result.resolved, 1);
       assert.match(await repo.status(), /^M  f.txt$/);
+    });
+  });
+});
+describe('what the merge editor must not do', () => {
+  test('refuses a conflicted symbolic link, so nothing outside the repository is read or written', async () => {
+    await withRepo(async (repo) => {
+      const outside = join(repo.path, '..', `outside-${Date.now()}.txt`);
+      writeFileSync(outside, 'secret\n');
+      try {
+        await repo.commit('base', { 'keep.txt': 'k\n' });
+        await repo.git(['checkout', '-q', '-b', 'topic']);
+        symlinkSync(outside, join(repo.path, 'l'));
+        await repo.commit('topic adds a link', {});
+        await repo.git(['checkout', '-q', 'main']);
+        symlinkSync('/etc/hosts', join(repo.path, 'l'));
+        await repo.commit('main adds another', {});
+        await methods['repo.merge']({ path: repo.path, source: 'topic' });
+        assert.match(await repo.status(), /^AA l$/m);
+
+        await assert.rejects(() => methods['conflicts.read']({ path: repo.path, file: 'l' }), /symbolic link/);
+        await assert.rejects(
+          () => methods['conflicts.resolve']({ path: repo.path, file: 'l', content: 'overwritten\n' }),
+          /symbolic link/
+        );
+        assert.equal(readFileSync(outside, 'utf8'), 'secret\n', 'the file the link points at is untouched');
+      } finally {
+        rmSync(outside, { force: true });
+      }
+    });
+  });
+
+  test('a refused result leaves the working-tree file as Git wrote it', async () => {
+    await withRepo(async (repo) => {
+      await divergentFile(repo);
+      const offer = await openConflict(repo, 'f.txt');
+      const before = readFileSync(join(repo.path, 'f.txt'), 'utf8');
+      await assert.rejects(
+        () => methods['conflicts.resolve']({ path: repo.path, file: 'f.txt', content: 'half\n<<<<<<< HEAD\nx\n' }),
+        /still contain conflict markers/
+      );
+      assert.equal(readFileSync(join(repo.path, 'f.txt'), 'utf8'), before);
+      assert.ok(offer);
+    });
+  });
+
+  test('a line of equals signs longer than a marker is content, not a divider', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'doc.md': 'Title\n=====\n\nbody\n' });
+      await repo.git(['checkout', '-q', '-b', 'topic']);
+      await repo.commit('topic', { 'doc.md': 'Topic title\n===========\n\nbody\n' });
+      await repo.git(['checkout', '-q', 'main']);
+      await repo.commit('main', { 'doc.md': 'Main title\n==========\n\nbody\n' });
+
+      const offer = await openConflict(repo, 'doc.md');
+      const block = offer.sections.find((s) => s.type === 'conflict');
+      assert.deepEqual(block.ours, ['Main title\n', '==========\n']);
+      assert.deepEqual(block.theirs, ['Topic title\n', '===========\n']);
+    });
+  });
+});
+
+describe('resolving a modify/delete conflict', () => {
+  async function modifyDelete(repo) {
+    await repo.commit('base', { 'gone.txt': 'a\nB\nc\n' });
+    await repo.git(['checkout', '-q', '-b', 'topic']);
+    await repo.commit('topic edits it', { 'gone.txt': 'a\nB\nc\nd\n' });
+    await repo.git(['checkout', '-q', 'main']);
+    await repo.git(['rm', '-q', 'gone.txt']);
+    await repo.git(['commit', '-qm', 'main deleted it']);
+    await methods['repo.merge']({ path: repo.path, source: 'topic' });
+    return methods['conflicts.read']({ path: repo.path, file: 'gone.txt' });
+  }
+
+  test('the whole file is one choice, not the file plus the choice', async () => {
+    await withRepo(async (repo) => {
+      const offer = await modifyDelete(repo);
+      assert.equal(offer.sections.length, 1);
+      const [block] = offer.sections;
+      assert.equal(block.type, 'conflict');
+      assert.deepEqual(block.deleted, { ours: true, theirs: false });
+      assert.equal(assemble(offer.sections, () => 'theirs'), 'a\nB\nc\nd\n');
+    });
+  });
+
+  test('keeping the edited side keeps the file once', async () => {
+    await withRepo(async (repo) => {
+      const offer = await modifyDelete(repo);
+      await methods['conflicts.resolve']({ path: repo.path, file: 'gone.txt', content: assemble(offer.sections, () => 'theirs') });
+      assert.equal((await repo.git(['show', ':gone.txt'])).stdout, 'a\nB\nc\nd\n');
+    });
+  });
+
+  test('keeping the deleting side deletes the file', async () => {
+    await withRepo(async (repo) => {
+      await modifyDelete(repo);
+      const result = await methods['conflicts.resolve']({ path: repo.path, file: 'gone.txt', remove: true });
+      assert.equal(result.ok, true);
+      assert.equal(existsSync(join(repo.path, 'gone.txt')), false, 'gone from the working tree');
+      assert.equal((await repo.files()).includes('gone.txt'), false, 'gone from the index');
+      assert.doesNotMatch(await repo.status(), /gone\.txt/);
+    });
+  });
+
+  test('deleting is refused when neither side deleted the file', async () => {
+    await withRepo(async (repo) => {
+      await divergentFile(repo);
+      await openConflict(repo, 'f.txt');
+      await assert.rejects(
+        () => methods['conflicts.resolve']({ path: repo.path, file: 'f.txt', remove: true }),
+        /Neither side deleted/
+      );
+      assert.match(await repo.status(), /^UU f\.txt$/m);
     });
   });
 });
