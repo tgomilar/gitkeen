@@ -2058,11 +2058,15 @@ export const methods = {
     const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
     const args = ['revert', '--no-edit'];
     // A merge has two sides, so Git needs to be told which one to keep. The
-    // first parent is the branch the merge was made on.
+    // first parent is the branch the merge was made on. Any merge in the
+    // batch needs the flag, so keep scanning until one shows up. Non-merges
+    // ignore the flag, so one `-m` for the whole run is enough.
     for (const hash of hashes) {
       const { stdout: ids } = await runGit(path, ['rev-list', '--parents', '-n', '1', hash], { allowFailure: true });
-      if (ids.trim().split(' ').length > 2) args.push('-m', String(mainline));
-      break;
+      if (ids.trim().split(' ').length > 2) {
+        args.push('-m', String(mainline));
+        break;
+      }
     }
     try {
       await git(path, [...args, ...hashes]);

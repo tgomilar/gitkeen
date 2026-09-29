@@ -184,6 +184,34 @@ describe('dropping commits', () => {
   });
 });
 
+describe('reverting commits', () => {
+  // Reverting a merge needs `-m`, and the flag used to be decided from the
+  // *newest* commit alone. A merge anywhere else in the batch was missed and
+  // Git refused to revert it. The old code failed this test.
+  test('a merge later in the batch still gets the mainline flag', async () => {
+    await withRepo(async (repo) => {
+      await repo.commits(2);                 // c1 c2 on main
+      await repo.git(['checkout', '-q', '-b', 'side']);
+      await repo.commit('side work', { 'side.txt': 'side\n' });
+      await repo.git(['checkout', '-q', 'main']);
+      await repo.commit('main work', { 'main.txt': 'main\n' });
+      await repo.git(['merge', '-q', '--no-ff', 'side', '-m', 'merge: side']);
+      const merge = await repo.head();
+      await repo.commit('after merge', { 'after.txt': 'after\n' });
+      const after = await repo.head();
+
+      const result = await methods['commits.revert']({ path: repo.path, hashes: [after, merge] });
+      assert.equal(result.ok, true, 'the batch reverted');
+      assert.equal(repo.midOperation(), false, 'nothing left on hold');
+      assert.deepEqual(
+        (await repo.files()).sort(),
+        ['c1.txt', 'c2.txt', 'main.txt'],
+        'the merge and the commit built on it were undone'
+      );
+    });
+  });
+});
+
 describe('what a rewrite refuses to start', () => {
   test('uncommitted changes', async () => {
     await withRepo(async (repo) => {
