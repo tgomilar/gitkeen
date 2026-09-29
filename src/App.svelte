@@ -22,6 +22,8 @@
   import MergeEditor from './lib/components/MergeEditor.svelte';
   import RecoveryPanel from './lib/components/RecoveryPanel.svelte';
   import BlameViewer from './lib/components/BlameViewer.svelte';
+  import CompareViewer from './lib/components/CompareViewer.svelte';
+  import { compareStore } from './lib/state/compare.svelte';
   import { blameStore } from './lib/state/blame.svelte';
   import { tick } from 'svelte';
   import { repoStore } from './lib/state/repo.svelte';
@@ -134,7 +136,7 @@
 
   /** True while a dialog, an editor or Settings sits over the application. */
   function overlaid() {
-    return !!dialogs.current || rebaseStore.open || mergeStore.open || settingsStore.open || blameStore.open;
+    return !!dialogs.current || rebaseStore.open || mergeStore.open || settingsStore.open || blameStore.open || compareStore.open;
   }
 
   function isTyping(target: EventTarget | null) {
@@ -165,7 +167,7 @@
 
     // The diff viewer covers the application, so while it is open it owns the
     // keyboard. Its own Escape handler closes it.
-    if (diffStore.open || blameStore.open) return;
+    if (diffStore.open || blameStore.open || compareStore.open) return;
 
     // The palette owns the keyboard while it is open, arrows and Escape
     // included. Everything below this point is for the graph and the bar.
@@ -376,6 +378,8 @@
   </div>
 {/if}
 
+<!-- The compare view opens files in the diff viewer, so it sits beneath it. -->
+<CompareViewer />
 <DiffViewer />
 <MergeEditor />
 <BlameViewer />

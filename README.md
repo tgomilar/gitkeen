@@ -40,6 +40,7 @@ branches, commit your work, and change the history you already have.
 | Search | Search the whole history by message, author, file, date, hash* or branch name. |
 | Blame | See which commit last changed each line of a file, and follow a line back in time. |
 | Bisect | Find the commit that broke something by testing a few commits in between. |
+| Compare | See the commits and files that differ between two branches or commits. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -532,6 +533,24 @@ about ten tests.
 Git refuses to check out a commit that would overwrite your uncommitted
 changes, so stash or commit them before you start.
 
+## Comparing two branches or commits
+
+Right click a branch or tag and choose **Compare with**, followed by the name
+of your current branch. To compare two commits, select both and choose
+**Compare these two**. The command palette also lists **Compare** for every
+local branch.
+
+The left side lists the commits that only one side has. The right side lists
+the files that differ. Click a commit to select it in the graph. Click a file
+to read its diff between the two sides. Press **⇄** to swap the sides.
+
+| Mode | Which files are listed |
+|---|---|
+| Since they split | What the second side changed after the two went apart. This is what merging it would bring in. |
+| Tip to tip | Every difference between the two ends as they are now, changes on both sides included. |
+
+Two histories with no commit in common can only be compared tip to tip.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -714,6 +733,7 @@ Your own repositories are never touched.
 | `server/test/recovery.test.mjs` | The operation log, and restoring what an operation changed. |
 | `server/test/blame.test.mjs` | Which commit last changed each line of a file. |
 | `server/test/bisect.test.mjs` | Finding the first bad commit with bisect. |
+| `server/test/compare.test.mjs` | Comparing two branches or commits. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

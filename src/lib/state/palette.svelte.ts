@@ -34,6 +34,7 @@ import {
   startBisect
 } from '../actions';
 import { bisectStore } from './bisect.svelte';
+import { compareStore } from './compare.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -271,6 +272,16 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       disabled: isCurrent,
       run: () => switchToBranch(local.name)
     });
+    if (!isCurrent) {
+      add({
+        id: `compare-${local.name}`,
+        label: `Compare ${local.name} with ${branch ?? 'HEAD'}`,
+        keywords: 'compare diff ahead behind branch',
+        icon: 'diff',
+        group: 'Branches',
+        run: () => compareStore.show(branch ? `refs/heads/${branch}` : 'HEAD', `refs/heads/${local.name}`, { base: branch ?? 'HEAD', target: local.name })
+      });
+    }
     // A branch cannot be merged into itself, so the current one is not
     // offered at all rather than shown greyed out.
     if (!isCurrent) {

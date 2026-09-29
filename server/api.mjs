@@ -1153,6 +1153,33 @@ function parseSearch(query) {
   return out;
 }
 
+/** Files and line counts from `--numstat -z`, renames included. */
+function parseNumstat(stat) {
+  const records = stat.split('\0');
+  if (records[records.length - 1] === '') records.pop();
+
+  const files = [];
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    if (!record.trim()) continue;
+    const [added, removed, ...rest] = record.split('\t');
+    // A rename leaves the path field empty and spends the next two records
+    // on the old name and the new one.
+    const inline = rest.join('\t');
+    const renamed = inline === '';
+    const origPath = renamed ? records[++i] : null;
+    const filePath = renamed ? records[++i] : inline;
+    files.push({
+      path: filePath,
+      origPath,
+      added: added === '-' ? null : Number(added),
+      removed: removed === '-' ? null : Number(removed),
+      binary: added === '-'
+    });
+  }
+  return files;
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -1351,30 +1378,7 @@ export const methods = {
   async 'commit.details'({ path, hash }) {
     const body = await git(path, ['show', '-s', `--pretty=format:%B`, hash]);
     const stat = await git(path, ['-c', 'core.quotepath=false', 'show', '--numstat', '-z', '--pretty=format:', hash]);
-
-    const records = stat.split('\0');
-    if (records[records.length - 1] === '') records.pop();
-
-    const files = [];
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      if (!record.trim()) continue;
-      const [added, removed, ...rest] = record.split('\t');
-      // A rename leaves the path field empty and spends the next two records
-      // on the old name and the new one.
-      const inline = rest.join('\t');
-      const renamed = inline === '';
-      const origPath = renamed ? records[++i] : null;
-      const filePath = renamed ? records[++i] : inline;
-      files.push({
-        path: filePath,
-        origPath,
-        added: added === '-' ? null : Number(added),
-        removed: removed === '-' ? null : Number(removed),
-        binary: added === '-'
-      });
-    }
-    return { body: body.trim(), files };
+    return { body: body.trim(), files: parseNumstat(stat) };
   },
 
   async 'branch.checkout'({ path, name }) {
@@ -3405,6 +3409,64 @@ export const methods = {
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
+};
+
+/* ------------------------------------------------------------------ *
+ * Comparing two branches or commits
+ * ------------------------------------------------------------------ */
+
+const COMPARE_LIMIT = 500;
+
+/**
+ * What separates two branches or commits.
+ *
+ * `onlyInTarget` are the commits `target` has and `base` does not, and
+ * `onlyInBase` the other way round. The files are one of two diffs:
+ *
+ * - `split` (the default): what `target` changed since the two went apart,
+ *   which is what merging `target` into `base` would bring in.
+ * - `tips`: the plain difference between the two ends.
+ *
+ * `from` and `to` are the two commits the file diff was taken between, so
+ * the viewer can show any one file the same way.
+ */
+methods['compare.refs'] = async ({ path, base, target, mode = 'split' }) => {
+  const a = commitish(base, 'the first side');
+  const b = commitish(target, 'the second side');
+  if (mode !== 'split' && mode !== 'tips') {
+    throw new GitError('Compare either since the split or tip to tip.', { command: '', stderr: '', code: 1 });
+  }
+  const resolve = async (rev) => {
+    const { stdout, code } = await runGit(path, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { allowFailure: true });
+    if (code !== 0) throw new GitError(`${rev} is not a commit or branch here.`, { command: '', stderr: '', code: 1 });
+    return stdout.trim();
+  };
+  const [baseHash, targetHash] = [await resolve(a), await resolve(b)];
+
+  const { stdout: split } = await runGit(path, ['merge-base', baseHash, targetHash], { allowFailure: true });
+  const mergeBase = split.trim() || null;
+
+  const side = async (range) => {
+    const { stdout } = await runGit(path, [
+      'log', `--pretty=format:${LOG_FORMAT}`, '--decorate=full', `--max-count=${COMPARE_LIMIT + 1}`,
+      `--decorate-refs-exclude=${recovery.RECOVERY_PREFIX}*`, range, '--'
+    ], { allowFailure: true });
+    const commits = parseLog(stdout);
+    return { commits: commits.slice(0, COMPARE_LIMIT), truncated: commits.length > COMPARE_LIMIT };
+  };
+  const onlyInTarget = await side(`${baseHash}..${targetHash}`);
+  const onlyInBase = await side(`${targetHash}..${baseHash}`);
+
+  // Unrelated histories have no split point, so only the tips can be compared.
+  const from = mode === 'split' && mergeBase ? mergeBase : baseHash;
+  const stat = await git(path, ['-c', 'core.quotepath=false', 'diff', '--numstat', '-z', '-M', from, targetHash, '--']);
+  return {
+    base: a, target: b, baseHash, targetHash, mergeBase,
+    mode: mode === 'split' && !mergeBase ? 'tips' : mode,
+    from, to: targetHash,
+    onlyInTarget, onlyInBase,
+    files: parseNumstat(stat)
+  };
 };
 
 /* ------------------------------------------------------------------ *

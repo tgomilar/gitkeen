@@ -10,6 +10,7 @@ import { commitStore } from './state/commit.svelte';
 import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
 import { blameStore } from './state/blame.svelte';
 import { bisectStore } from './state/bisect.svelte';
+import { compareStore } from './state/compare.svelte';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -353,6 +354,11 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       },
       ...(selected.length === 2
         ? [{
+            label: 'Compare these two',
+            icon: 'diff' as const,
+            hint: 'older against newer',
+            action: () => compareStore.show(selected[1].hash, selected[0].hash, { base: selected[1].shortHash, target: selected[0].shortHash })
+          }, {
             label: 'Bisect between these…',
             icon: 'commit' as const,
             hint: 'older works, newer is broken',
@@ -695,6 +701,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
   if (kind === 'tag') {
     return [
       { label: 'Create branch from tag…', icon: 'branch', action: () => createBranchFrom(branch.name, `tag ${branch.name}`) },
+      compareWithCurrent(`refs/tags/${branch.name}`, branch.name),
       SEPARATOR,
       {
         label: 'Delete…',
@@ -722,6 +729,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
         disabled: !current,
         action: () => mergeBranch(branch.name)
       },
+      compareWithCurrent(`refs/remotes/${branch.name}`, branch.name),
       SEPARATOR,
       { label: 'Copy branch name', icon: 'copy', action: () => copy(branch.name, branch.name) }
     ];
@@ -773,6 +781,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       disabled: branch.isHead || !current,
       action: () => mergeBranch(branch.name)
     },
+    ...(branch.isHead ? [] : [compareWithCurrent(`refs/heads/${branch.name}`, branch.name)]),
     SEPARATOR,
     ...push,
     SEPARATOR,
@@ -1884,4 +1893,19 @@ export async function startBisect(good: Commit, bad?: Commit) {
   });
   if (!ok) return;
   await bisectStore.start(good.hash, bad?.hash ?? 'HEAD');
+}
+
+
+/**
+ * A menu entry that compares a branch or tag with where HEAD is: the current
+ * branch, or the commit HEAD is detached at.
+ */
+function compareWithCurrent(ref: string, label: string): MenuItem {
+  const current = repoStore.currentBranch;
+  return {
+    label: `Compare with ${current ?? 'HEAD'}`,
+    icon: 'diff',
+    hint: 'commits and files that differ',
+    action: () => compareStore.show(current ? `refs/heads/${current}` : 'HEAD', ref, { base: current ?? 'HEAD', target: label })
+  };
 }

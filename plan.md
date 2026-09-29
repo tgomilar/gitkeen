@@ -1149,6 +1149,8 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Commit search with author, date and path filtering (section 7):
     the loaded commits filter as you type, and Git searches the whole
     history a moment later
+-   [x] Branch and commit comparison (section 7): the commits only on each
+    side, and the files that differ since the split or tip to tip
 -   [ ] Worktrees
 -   [ ] GitHub integration
 -   [ ] GitLab integration

@@ -862,3 +862,22 @@ export interface BisectState {
   /** True when only skipped commits are left, so there is no single answer. */
   onlySkipped?: boolean;
 }
+
+/** What separates two branches or commits. */
+export interface CompareResult {
+  /** The names as given, and the commits they stand for. */
+  base: string;
+  target: string;
+  baseHash: string;
+  targetHash: string;
+  /** Where the two went apart, or null when they share no history. */
+  mergeBase: string | null;
+  /** `split`: what target changed since then. `tips`: the two ends as they are. */
+  mode: 'split' | 'tips';
+  /** The two commits the file diff was taken between. */
+  from: string;
+  to: string;
+  onlyInTarget: { commits: Commit[]; truncated: boolean };
+  onlyInBase: { commits: Commit[]; truncated: boolean };
+  files: CommitFileStat[];
+}

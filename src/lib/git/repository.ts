@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult
 } from './types';
 
 export class GitRepository {
@@ -207,6 +207,11 @@ export class GitRepository {
   /** Which commit last changed each line of a file, at `rev` or in the working tree. */
   blame(file: string, rev: string | null = null): Promise<BlameResult> {
     return transport.call('blame.file', { path: this.path, file, rev });
+  }
+
+  /** Commits on each side and the files that differ, since the split or tip to tip. */
+  compare(base: string, target: string, mode: 'split' | 'tips' = 'split'): Promise<CompareResult> {
+    return transport.call('compare.refs', { path: this.path, base, target, mode });
   }
 
   bisectState(): Promise<BisectState> {
