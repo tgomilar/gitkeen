@@ -29,7 +29,15 @@ what it will do, and afterwards the Undo panel can put it back.
 | **Keep your editor** | Gitkeen does not edit code. Use any editor you like. |
 | **Still type commands** | The console runs Git commands with suggestions from your repository, and shows the result as a picture. |
 
-## Get started
+## Download
+
+Download the app for macOS, Windows or Linux from the
+[latest release](https://github.com/tgomilar/gitkeen/releases/latest). You also
+need Git 2.30 or newer. The app is not signed yet, so your system asks once
+before it opens it: [Installing Gitkeen](docs/install.md) shows the steps.
+Gitkeen updates itself when a new version is out.
+
+## Run it from source
 
 You need Git 2.30 or newer and Node.js 20 or newer.
 
@@ -37,9 +45,6 @@ You need Git 2.30 or newer and Node.js 20 or newer.
 2. Start Gitkeen: `npm run dev`
 3. Open `http://localhost:5183`.
 4. Paste the path of a repository and press **Open**.
-
-A desktop app for macOS is also available. See
-[The desktop app](docs/desktop-app.md).
 
 ## A quick tour
 
@@ -85,6 +90,7 @@ commands, options, branches and files. [The console](docs/console.md)
 
 | Page | What it covers |
 |---|---|
+| [Installing Gitkeen](docs/install.md) | Which file to download, opening the app the first time, updates |
 | [Getting started](docs/getting-started.md) | Starting Gitkeen, the window, selecting commits, the command palette |
 | [Committing](docs/committing.md) | The commit panel, the diff viewer, stashes, signed commits |
 | [Changing history](docs/history.md) | Cherry-pick, revert, reset, squash, the rebase editor, moving and dropping commits |
@@ -97,7 +103,7 @@ commands, options, branches and files. [The console](docs/console.md)
 | [More features](docs/more-features.md) | Worktrees, submodules, Git LFS, patches and bundles |
 | [Themes and text size](docs/appearance.md) | Light and dark, five colour palettes, text size |
 | [Keyboard shortcuts](docs/keyboard.md) | Every key |
-| [The desktop app](docs/desktop-app.md) | Building and using the macOS app |
+| [The desktop app](docs/desktop-app.md) | What is different in the app, and building it yourself |
 | [Development](docs/development.md) | How Gitkeen is built, the code, the tests, the logo |
 
 ## The most useful keys

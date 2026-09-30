@@ -121,6 +121,42 @@ cases, among others:
 2. A rewrite across a merge is refused.
 3. A failed move or drop puts the branch back as it was.
 
+## Releasing
+
+A release is built by GitHub Actions for macOS (Apple silicon and Intel),
+Windows and Linux, and attached to a draft release on GitHub.
+
+1. Run `npm run release -- 0.2.0 --push`. The script sets the version in
+   `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, `Cargo.lock`
+   and `src-tauri/tauri.conf.json`, commits, tags `v0.2.0`, and pushes.
+2. The tag starts `.github/workflows/release.yml`. It makes a draft release
+   with notes written by `scripts/release-notes.mjs` from the `feat`, `fix` and
+   `perf` commits since the last tag, then builds on four machines and adds
+   their files to the draft.
+3. When the four builds are green, open the draft on the Releases page, read
+   the notes, and press **Publish**.
+
+The workflow can also be started by hand from the Actions tab. It then makes a
+draft for the version already in `package.json`.
+
+### Updates
+
+The app updates itself from the newest published release. The workflow writes
+`latest.json` into the release, with a signature for each file. The app
+checks every download against the public key in `src-tauri/tauri.conf.json`.
+
+The private key is in `~/.tauri/gitkeen.key` on the computer that made it, and
+in the repository secret `TAURI_SIGNING_PRIVATE_KEY`. Keep a copy somewhere
+safe. Without it, no update can be signed, and every installed copy would have
+to be replaced by hand.
+
+### The backend on each system
+
+`scripts/build-sidecar.mjs` puts the Node.js backend into a copy of Node, for
+the system in `TARGET`. For the system it runs on, it uses its own Node. For
+another system, such as an Intel Mac built on Apple silicon, it downloads the
+official Node for that system from nodejs.org, at the same version.
+
 ## Screenshots and GIFs
 
 The pictures in `docs/media` are made by scripts, so they can be made again
