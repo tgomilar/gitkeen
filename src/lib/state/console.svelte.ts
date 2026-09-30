@@ -6,6 +6,7 @@ import { repoStore } from './repo.svelte';
 import { rebaseStore } from './rebase.svelte';
 import { diffStore } from './diff.svelte';
 import { describe } from './repo.svelte';
+import { onEcho } from '../console/echo';
 import type { ConsoleRedirect, ConsoleResult } from '../git/types';
 
 export interface ConsoleEntry {
@@ -32,6 +33,8 @@ function readStored<T>(key: string, fallback: T): T {
   }
 }
 
+const ENTRY_LIMIT = 300;
+
 class ConsoleStore {
   open = $state(readStored(OPEN_KEY, false));
   height = $state(readStored(HEIGHT_KEY, 280));
@@ -39,6 +42,11 @@ class ConsoleStore {
   /** Commands typed in this repository, oldest first. */
   history = $state<string[]>([]);
   private historyFor: string | null = null;
+
+  constructor() {
+    // What the buttons do, as the Git command that does the same.
+    onEcho((text, command) => this.note(text, command));
+  }
 
   toggle() {
     this.setOpen(!this.open);
@@ -77,7 +85,12 @@ class ConsoleStore {
 
   /** A line in the scrollback about something done with a button, and the command it matches. */
   note(text: string, command: string) {
-    this.entries = [...this.entries, { id: nextId++, line: command, state: 'note', result: null, note: text, at: Date.now() }];
+    this.add({ id: nextId++, line: command, state: 'note', result: null, note: text, at: Date.now() });
+  }
+
+  /** The scrollback keeps the latest entries only, so a long session stays quick. */
+  private add(entry: ConsoleEntry) {
+    this.entries = [...this.entries, entry].slice(-ENTRY_LIMIT);
   }
 
   private update(id: number, patch: Partial<ConsoleEntry>) {
@@ -92,7 +105,7 @@ class ConsoleStore {
     if (text === 'clear' || text === 'cls') { this.clear(); return; }
     this.remember(text);
     const id = nextId++;
-    this.entries = [...this.entries, { id, line: text, state: 'running', result: null, at: Date.now() }];
+    this.add({ id, line: text, state: 'running', result: null, at: Date.now() });
     await this.send(id, text, false);
   }
 

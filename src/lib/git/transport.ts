@@ -22,6 +22,7 @@ export interface Transport {
   readonly kind: 'http' | 'tauri';
   call<T>(method: string, args?: Record<string, unknown>): Promise<T>;
 }
+import { echo } from '../console/echo';
 
 class HttpTransport implements Transport {
   readonly kind = 'http' as const;
@@ -78,4 +79,16 @@ function detectTransport(): Transport {
   return (globalThis as any).__TAURI__ ? new TauriTransport() : new HttpTransport();
 }
 
-export const transport: Transport = detectTransport();
+/** Every successful call is offered to the console, which shows the matching Git command. */
+function withEcho(inner: Transport): Transport {
+  return {
+    kind: inner.kind,
+    async call<T>(method: string, args?: Record<string, unknown>) {
+      const result = await inner.call<T>(method, args);
+      echo(method, args);
+      return result;
+    }
+  };
+}
+
+export const transport: Transport = withEcho(detectTransport());
