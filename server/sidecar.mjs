@@ -7,6 +7,7 @@
  * packaged app there is no separate Node or script file to run for that.
  */
 import { execFileSync } from 'node:child_process';
+import { delimiter } from 'node:path';
 
 const HELPER_FLAG = '--gitkeen-rebase-helper';
 
@@ -22,7 +23,9 @@ const FROM_SHELL = [
 ];
 
 function adoptShellEnvironment() {
-  const shell = process.env.SHELL || '/bin/zsh';
+  // A Windows app gets the user's environment already, and has no login shell.
+  if (process.platform === 'win32') return;
+  const shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/sh');
   try {
     const script = FROM_SHELL.map((name) => `printf '%s\\0%s\\0' ${name} "$${name}"`).join('; ');
     const out = execFileSync(shell, ['-ilc', script], { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -35,8 +38,8 @@ function adoptShellEnvironment() {
     // No login shell to ask: fall back to the usual places tools live.
   }
   const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
-  const path = (process.env.PATH || '').split(':').filter(Boolean);
-  process.env.PATH = [...path, ...extra.filter((d) => !path.includes(d))].join(':');
+  const path = (process.env.PATH || '').split(delimiter).filter(Boolean);
+  process.env.PATH = [...path, ...extra.filter((d) => !path.includes(d))].join(delimiter);
 }
 
 const at = process.argv.indexOf(HELPER_FLAG);
