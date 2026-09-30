@@ -1129,6 +1129,8 @@ product value is the **interaction model around the Git DAG**.
     colours of the chosen palette
 -   [x] Image diff (section 14): before and after side by side, with sizes
 -   [x] Patch generation, apply patch and bundle support (section 7)
+-   [x] Roll back a hunk or single lines, with the file saved first so the
+    Undo panel can bring it back
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
 -   [x] Keyboard shortcuts: every shortcut in section 17 is built.

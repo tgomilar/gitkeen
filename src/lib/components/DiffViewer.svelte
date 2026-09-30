@@ -320,6 +320,11 @@
             <button disabled={!selectedHunks.length || staging || diffStore.loading} onclick={applySelection} title="S">
               {request.side === 'staged' ? 'Unstage selected' : 'Stage selected'}
             </button>
+            {#if request.side !== 'staged'}
+              <button class="danger" disabled={!selectedHunks.length || staging || diffStore.loading}
+                onclick={() => diffStore.rollbackHunks(selectedHunks)}
+                title="Throw the selected change away. The Undo panel can bring it back.">Roll back selected…</button>
+            {/if}
             {#if limited.hidden > 0}
               <span class="count faint">the rest is not drawn yet</span>
             {/if}
@@ -645,6 +650,8 @@
   }
   .stagebar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .stagebar button.whole { margin-left: auto; }
+  .stagebar button.danger { color: var(--danger); }
+  .stagebar button.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
   .stagebar button:disabled { opacity: 0.55; cursor: default; }
   .stagebar .count { color: var(--text-dim); font-family: var(--font-mono); font-size: 11px; }
   .stagebar .count.faint { color: var(--text-faint); }

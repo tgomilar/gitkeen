@@ -176,6 +176,11 @@ export class GitRepository {
    * Stage or unstage individual hunks of one file. `hunks` come from a
    * `fileDiff` of the matching `side`.
    */
+  /** Throw away hunks, or lines of them, from the working tree. The Undo panel can bring them back. */
+  rollbackHunks(file: string, hunks: FileDiff['hunks']): Promise<{ ok: boolean; rolledBack: number }> {
+    return transport.call('changes.rollbackHunks', { path: this.path, file, hunks });
+  }
+
   stageHunks(file: string, side: 'staged' | 'unstaged', hunks: FileDiff['hunks']): Promise<{ ok: boolean; applied: number }> {
     return transport.call('changes.stageHunks', { path: this.path, file, side, hunks });
   }

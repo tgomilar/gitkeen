@@ -43,10 +43,12 @@ class RecoveryStore {
       message:
         kind === 'remote'
           ? `A force push cannot be taken back without pushing again, so the old remote commit becomes a new local branch. Push it yourself if you want the remote back.`
-          : `This puts ${kind === 'stash' ? 'the stash back on the stash list' : `${name} back at ${short}`}. The restore is logged too, so it can be undone from here.`,
+          : kind === 'file'
+            ? `This writes back what ${name} held before the rollback. What it holds now is saved first, so the restore can be undone from here too.`
+            : `This puts ${kind === 'stash' ? 'the stash back on the stash list' : `${name} back at ${short}`}. The restore is logged too, so it can be undone from here.`,
       facts: [
         { label: kind === 'remote' ? 'Remote branch' : kind[0].toUpperCase() + kind.slice(1), value: name },
-        { label: 'Goes back to', value: short },
+        ...(kind === 'file' ? [] : [{ label: 'Goes back to', value: short }]),
         ...(onBranch
           ? [{ label: 'Your changes', value: 'Kept. Git refuses the restore rather than overwrite a file you changed.' }]
           : [])

@@ -10,6 +10,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { methods } from '../api.mjs';
 import { withRepo } from './harness.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** A ten-line file with `nth` and `nth2` rewritten, so the change is two hunks. */
 async function tenLines(repo) {
@@ -367,6 +369,79 @@ describe('image diffs', () => {
       await repo.commit('base', { 'a.txt': 'a\n' });
       await assert.rejects(() => methods['diff.image']({ path: repo.path, file: 'a.txt' }), /not an image/);
       await assert.rejects(() => methods['diff.image']({ path: repo.path, file: '../x.png' }), /Unsafe/);
+    });
+  });
+});
+
+describe('rolling back hunks', () => {
+  const read = (repo, file) => readFileSync(join(repo.path, file), 'utf8');
+
+  test('one hunk of two goes back, the other stays', async () => {
+    await withRepo(async (repo) => {
+      const { lines } = await tenLines(repo);
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      await methods['changes.rollbackHunks']({ path: repo.path, file: 'f.txt', hunks: [hunks[0]] });
+      assert.equal(read(repo, 'f.txt'), [...lines.slice(0, 9), 'L10'].join('\n') + '\n');
+    });
+  });
+
+  test('a single line goes back, and the rest of its hunk stays', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nb\n' });
+      repo.write('f.txt', 'a\nnew 1\nnew 2\nb\n');
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      for (const line of hunks[0].lines) if (line.kind === 'add' && line.text !== 'new 1') line.skip = true;
+      await methods['changes.rollbackHunks']({ path: repo.path, file: 'f.txt', hunks });
+      assert.equal(read(repo, 'f.txt'), 'a\nnew 2\nb\n');
+    });
+  });
+
+  test('what is staged is not touched', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'a\nb\n' });
+      repo.write('f.txt', 'A\nb\n');
+      await repo.git(['add', 'f.txt']);
+      repo.write('f.txt', 'A\nB\n');
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      await methods['changes.rollbackHunks']({ path: repo.path, file: 'f.txt', hunks });
+      assert.equal(read(repo, 'f.txt'), 'A\nb\n', 'the working tree matches the index again');
+      assert.equal((await repo.git(['show', ':f.txt'])).stdout, 'A\nb\n', 'the staged change stays');
+    });
+  });
+
+  test('a diff read before the file changed again is refused, and the file is left alone', async () => {
+    await withRepo(async (repo) => {
+      await tenLines(repo);
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      repo.write('f.txt', 'something else entirely\n');
+      await assert.rejects(() => methods['changes.rollbackHunks']({ path: repo.path, file: 'f.txt', hunks }), /changed since/);
+      assert.equal(read(repo, 'f.txt'), 'something else entirely\n');
+    });
+  });
+
+  test('the Undo panel brings a rolled back hunk back', async () => {
+    await withRepo(async (repo) => {
+      const { changed } = await tenLines(repo);
+      const { hunks } = await methods['diff.file']({ path: repo.path, file: 'f.txt', side: 'unstaged' });
+      await methods['changes.rollbackHunks']({ path: repo.path, file: 'f.txt', hunks });
+      const [entry] = (await methods['recovery.list']({ path: repo.path })).entries;
+      assert.equal(entry.label, 'Rolled back part of f.txt');
+      assert.equal(entry.target.kind, 'file');
+      await methods['recovery.restore']({ path: repo.path, id: entry.id });
+      assert.equal(read(repo, 'f.txt'), changed.join('\n') + '\n');
+    });
+  });
+
+  test('a whole file rolled back can be brought back too', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'f.txt': 'committed\n' });
+      repo.write('f.txt', 'my unsaved work\n');
+      await methods['changes.rollback']({ path: repo.path, paths: ['f.txt'] });
+      assert.equal(read(repo, 'f.txt'), 'committed\n');
+      const [entry] = (await methods['recovery.list']({ path: repo.path })).entries;
+      assert.equal(entry.label, 'Rolled back f.txt');
+      await methods['recovery.restore']({ path: repo.path, id: entry.id });
+      assert.equal(read(repo, 'f.txt'), 'my unsaved work\n');
     });
   });
 });

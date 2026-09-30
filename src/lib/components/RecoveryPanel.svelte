@@ -47,7 +47,7 @@
     {:else if recoveryStore.entries.length === 0 && !recoveryStore.loading}
       <p class="empty">
         Nothing to undo yet. Resets, squashes, drops, moves, rebases, amends, deleted branches, tags
-        and stashes, and force pushes appear here.
+        and stashes, force pushes, and rolled back files and hunks appear here.
       </p>
     {/if}
 

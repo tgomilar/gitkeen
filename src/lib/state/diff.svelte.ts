@@ -5,6 +5,7 @@
  * details pane, so what it shows lives here rather than in either of them.
  */
 import { repoStore, describe } from './repo.svelte';
+import { confirm } from './dialogs.svelte';
 import { toasts } from './toasts.svelte';
 import type { FileDiff } from '../git/types';
 import type { GitRepository } from '../git/repository';
@@ -95,6 +96,39 @@ class DiffStore {
   }
 
   /** Stage or unstage the ticked hunks, then read the result back. */
+  /**
+   * Throw away the chosen hunks or lines from the working tree, after asking.
+   * The file's content is saved first, so the Undo panel can bring it back.
+   */
+  async rollbackHunks(hunks: FileDiff['hunks']) {
+    const repo = repoStore.repo;
+    const request = this.request;
+    if (!repo || !request || request.hash != null || hunks.length === 0) return false;
+    const lines = hunks.reduce((n, h) => n + h.lines.filter((l) => l.kind !== 'context' && !l.skip).length, 0);
+    const ok = await confirm({
+      title: `Roll back ${lines === 1 ? 'this line' : `these ${lines} lines`}?`,
+      message: `The change goes out of ${request.file} in the working tree. What is staged is not touched.`,
+      tone: 'warning',
+      facts: [{ label: 'To undo it', value: 'Restore it from the Undo panel.' }],
+      confirmLabel: 'Roll back'
+    });
+    if (!ok) return false;
+    try {
+      this.loading = true;
+      await repo.rollbackHunks(request.file, hunks);
+    } catch (err) {
+      toasts.error('Could not roll back the selection', describe(err));
+      return false;
+    } finally {
+      this.loading = false;
+    }
+    await repoStore.refresh();
+    toasts.success(`Rolled back ${lines === 1 ? 'a line' : `${lines} lines`} of ${request.file}`, 'The Undo panel can bring it back.');
+    await this.setSide('unstaged');
+    if (this.diff && this.diff.hunks.length === 0 && !this.diff.binary) this.close();
+    return true;
+  }
+
   async stageHunks(hunks: FileDiff['hunks'], side: 'staged' | 'unstaged') {
     const repo = repoStore.repo;
     const request = this.request;

@@ -820,7 +820,7 @@ export interface RecoveryEntry {
   /** What happened, in words: "Reset main (hard)". */
   label: string;
   /** What it changed. A remote target is the remote-tracking branch a force push replaced. */
-  target: { kind: 'branch' | 'tag' | 'stash' | 'remote'; name: string };
+  target: { kind: 'branch' | 'tag' | 'stash' | 'remote' | 'file'; name: string };
   /** Where the target pointed before, which is what a restore goes back to. */
   before: string;
   /** Where it pointed after, or null when it was deleted. */
@@ -831,8 +831,8 @@ export interface RecoveryEntry {
 
 export interface RecoveryResult {
   ok: boolean;
-  kind: 'branch' | 'tag' | 'stash';
-  /** The branch, tag or stash that was put back. */
+  kind: 'branch' | 'tag' | 'stash' | 'file';
+  /** The branch, tag, stash or file that was put back. */
   name: string;
   at: string;
   /** True when it had been deleted and was made again. */

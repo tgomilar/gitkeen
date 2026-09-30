@@ -16,7 +16,7 @@
  */
 import { runGit, git, GitError } from './git.mjs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 const KEEP = 100;
 export const RECOVERY_PREFIX = 'refs/gitalia/recovery/';
@@ -99,8 +99,9 @@ export async function list(path) {
  * overwrite a local change to a file the restore would touch. Another branch
  * is only a ref, so it is moved, or recreated if it was deleted. A deleted tag
  * comes back only under its own name, and a dropped stash goes back on the
- * stash list. A force push cannot be taken back from here, because that would
- * mean pushing again; its old remote tip is offered as a new local branch.
+ * stash list. A file rolled back gets its content back, exactly as it was. A
+ * force push cannot be taken back from here, because that would mean pushing
+ * again; its old remote tip is offered as a new local branch.
  */
 export async function restore(path, id, operationInProgress) {
   const entry = (await readEntries(path)).find((e) => e.id === id);
@@ -142,6 +143,20 @@ export async function restore(path, id, operationInProgress) {
   if (kind === 'stash') {
     await git(path, ['stash', 'store', '-m', entry.detail || 'Restored by Gitalia', entry.before]);
     return { ok: true, kind, name, at: entry.before, recreated: true };
+  }
+
+  if (kind === 'file') {
+    const target = resolve(path, name);
+    if (!target.startsWith(resolve(path) + sep)) {
+      throw new GitError(`${name} is not inside this repository.`, { command: '', stderr: '', code: 1 });
+    }
+    // What is there now is saved first, so this restore can be undone too.
+    const { stdout: now, code } = await runGit(path, ['hash-object', '-w', '--', name], { allowFailure: true });
+    await record(path, { operation: 'recovery.restore', label, target: entry.target, before: code === 0 ? now.trim() : null, after: entry.before });
+    const { stdout: content } = await runGit(path, ['cat-file', 'blob', entry.before], { binary: true });
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, content);
+    return { ok: true, kind, name, at: entry.before, recreated: code !== 0 };
   }
 
   if (kind === 'remote') {

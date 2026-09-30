@@ -161,6 +161,7 @@ width. Press Escape to close it.
 | Staged | Its twin tab: the change already in the index. |
 | Hunk box | Next to each hunk of a working tree change. Tick the hunks you want, then **Stage selected**. Do the same on the Staged tab to **Unstage selected**. |
 | Line number of a changed line | Click it to leave that one line out of the stage, or to bring it back. A line left out is faded and crossed out, and its hunk box shows a dash. |
+| Roll back selected… | On the Working tree tab: throws the selected hunks or lines away. What is staged is not touched, and the Undo panel can bring them back. |
 | Stage file / Unstage file | Stages or unstages the whole file in one click, from the viewer. |
 
 A file with part of its change in the index and part still in the working tree
@@ -739,6 +740,7 @@ Choose **Undo** in the rail on the left to see these operations, newest first.
 | Delete a tag | Creates the tag again, if no tag has taken its name since. |
 | Drop a stash | Puts the stash back on the stash list. |
 | Force push | Creates a local branch named `recovered/<branch>` at the commit the remote had. Push it yourself to put the remote back. |
+| Roll back a file, a hunk or a line | Writes back what the file held before the rollback. |
 
 A restore is logged as well, so you can undo a restore the same way. Restoring
 the branch you are on keeps your uncommitted changes. If a restore would
@@ -814,8 +816,6 @@ The merge editor edits the result one conflict block at a time. The text
 outside the conflicts cannot be edited there, and binary conflicts still go
 through an external editor.
 
-The diff viewer cannot roll back a single hunk yet. Staging a hunk or a single
-line is built, and rolling back a hunk is the next step.
 
 ## Requirements
 

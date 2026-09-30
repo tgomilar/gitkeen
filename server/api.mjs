@@ -1236,6 +1236,16 @@ function lfsPointerChange(parsed) {
   return { before: parsed.status === 'added' ? null : before, after: parsed.status === 'deleted' ? null : after };
 }
 
+/**
+ * Keep a copy of a working-tree file in Git's object store, and return its
+ * hash, or null when there is no such file. A rollback throws the content
+ * away, and this is what lets the Undo panel bring it back.
+ */
+async function saveWorkingFile(path, file) {
+  const { stdout, code } = await runGit(path, ['hash-object', '-w', '--', file], { allowFailure: true });
+  return code === 0 ? stdout.trim() : null;
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -3028,6 +3038,55 @@ export const methods = {
   },
 
   /**
+   * Throw away chosen hunks, or chosen lines of them, from the working tree.
+   *
+   * The hunks come from the unstaged side, the working tree against the
+   * index, and are applied in reverse to the working tree only: what is
+   * staged is not touched. A line left out (`skip`) stays as it is. The file's
+   * content is saved first, so the Undo panel can bring it back.
+   */
+  async 'changes.rollbackHunks'({ path, file, hunks }) {
+    if (!Array.isArray(hunks) || hunks.length === 0) {
+      throw new GitError('Select at least one hunk.', { command: '', stderr: '', code: 1 });
+    }
+    if (!file || !/^(?:[^/]+(?:\/|$))+$/.test(file) || file.includes('..')) {
+      throw new GitError('A relative file path is required.', { command: '', stderr: '', code: 1 });
+    }
+    // Reversing on the working tree: an addition left out stays, as context;
+    // a removal left out stays removed, so it is dropped. The same mirror as
+    // unstaging, so `buildHunkPatch` is asked for that side.
+    const ordered = [...hunks].sort((a, b) => (b.newStart ?? 0) - (a.newStart ?? 0));
+    const patches = ordered.map((hunk) => buildHunkPatch(file, hunk, 'staged')).filter((p) => p !== null);
+    if (patches.length === 0) throw new GitError('Select at least one changed line.', { command: '', stderr: '', code: 1 });
+
+    const blob = await saveWorkingFile(path, file);
+    await withScratch(async (dir) => {
+      const patchFile = join(dir, 'hunk.patch');
+      // Checked first, all of them, so a hunk that no longer fits leaves the
+      // file exactly as it was rather than half rolled back.
+      for (const patch of patches) {
+        await writeFile(patchFile, patch, 'utf8');
+        const check = await runGit(path, ['apply', '-R', '--check', '--recount', patchFile], { allowFailure: true });
+        if (check.code !== 0) {
+          throw new GitError('The file changed since the diff was read. Refresh and try again.', { command: 'git apply -R --check', stderr: check.stderr, code: check.code });
+        }
+      }
+      for (const patch of patches) {
+        await writeFile(patchFile, patch, 'utf8');
+        await git(path, ['apply', '-R', '--recount', patchFile]);
+      }
+    });
+    if (blob) {
+      const { stdout: now } = await runGit(path, ['hash-object', '--', file], { allowFailure: true });
+      await recovery.record(path, {
+        operation: 'changes.rollbackHunks', label: `Rolled back part of ${file}`,
+        target: { kind: 'file', name: file }, before: blob, after: now.trim() || null
+      }).catch(() => {});
+    }
+    return { ok: true, rolledBack: patches.length };
+  },
+
+  /**
    * Commit the staged working tree.
    *
    * The tick is a stage, so "the files the user ticked" is exactly what the
@@ -3339,10 +3398,25 @@ export const methods = {
       if (!inHead.includes(file.origPath)) inHead.push(file.origPath);
     }
 
+    // What each file holds now is lost to Git once it is checked out, so it
+    // is saved first, and the Undo panel can put it back.
+    const saved = [];
+    for (const p of inHead) {
+      const blob = await saveWorkingFile(path, p);
+      if (blob) saved.push({ p, blob });
+    }
+
     if (notInHead.length > 0) await git(path, ['reset', '-q', '--', ...notInHead]);
     if (inHead.length > 0) {
       await git(path, ['reset', '-q', '--', ...inHead]);
       await git(path, ['checkout', '--', ...inHead]);
+    }
+    for (const { p, blob } of saved) {
+      const { stdout: now } = await runGit(path, ['hash-object', '--', p], { allowFailure: true });
+      await recovery.record(path, {
+        operation: 'changes.rollback', label: `Rolled back ${p}`,
+        target: { kind: 'file', name: p }, before: blob, after: now.trim() || null
+      }).catch(() => {});
     }
     return { ok: true, restored: inHead.length, unstaged: notInHead.length };
   },
