@@ -867,6 +867,37 @@ Other commands:
 | `npm run build` | Builds the files for production. |
 | `npm run check` | Checks all types. |
 | `npm run preview` | Serves the built files. |
+| `npm run desktop:dev` | Runs the desktop app in development. |
+| `npm run desktop:build` | Builds the desktop app, `Gitalia.app` and a `.dmg` to share it. |
+
+## The desktop app
+
+Gitalia also runs as a desktop app, built with Tauri*. It is the same
+interface and the same Git backend as in the browser. The backend runs as a
+separate program inside the app, and only the app can reach it: it listens on
+this computer alone, and answers nothing without a secret the app chooses
+each time it starts.
+
+To build it you need Rust (install it from rustup.rs) and the Xcode command
+line tools. Then run `npm run desktop:build`. The first build takes a few
+minutes and needs about 3 GB of free disk space for Rust's build folder,
+`src-tauri/target`, which you can delete afterwards. The app lands in
+`src-tauri/target/release/bundle/`:
+
+| File | Size |
+|---|---|
+| `macos/Gitalia.app` | about 97 MB, most of it the Node runtime the backend needs |
+| `dmg/Gitalia_0.1.0_aarch64.dmg` | about 32 MB, for giving the app to someone else |
+
+In the app, the welcome screen has a **Choose folder…** button, patches and
+bundles are saved through the usual save dialog, and links to GitHub open in
+your browser. The app reads `PATH`, `GITHUB_TOKEN` and the AI settings from
+your login shell when it starts, the same ones a terminal has, so it finds
+`git-lfs`, `gh` and your keys even when opened from the Finder.
+
+The app is not signed with an Apple Developer ID or notarized yet. It opens
+on the Mac that built it. On another Mac, macOS says it cannot check the app;
+right click it and choose **Open** to open it anyway.
 
 ## Keyboard
 
@@ -1039,14 +1070,14 @@ way, Gitalia aborts it, which leaves the branch where it started.
 
 ## Known limits
 
-1. The browser cannot open a folder chooser, so you paste a path instead. Tauri
-   will provide a real folder chooser.
+1. In the browser there is no folder chooser, so you paste a path instead. The
+   desktop app has one.
 2. The graph starts with the newest 5000 commits. "Load older commits" adds
    more a page at a time. A refresh keeps the commits already loaded.
 3. The recent list is stored in the browser, so it is lost if you clear the
    browser data.
-4. The backend runs only during development. There is no packaged application
-   yet.
+4. The desktop app is built for Apple silicon Macs only so far, and it is not
+   signed for other Macs or updated automatically yet.
 5. Gitalia does not watch the folder for changes. Press Refresh, or Command
    with R, after you edit files in your editor.
 6. The Stats report reads the newest 20000 commits. If a repository holds more,

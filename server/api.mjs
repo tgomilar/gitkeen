@@ -19,6 +19,13 @@ import { tmpdir } from 'node:os';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REBASE_HELPER = join(HERE, 'rebase-helper.mjs');
 
+/**
+ * How Git runs the rebase helper as its editor. Normally that is Node with
+ * the helper script. The desktop app's backend is one executable with no
+ * script beside it, so it sets GITALIA_REBASE_EDITOR to call itself instead.
+ */
+const rebaseEditor = () => process.env.GITALIA_REBASE_EDITOR || `"${process.execPath}" "${REBASE_HELPER}"`;
+
 // Git's empty tree object. Diffing the first commit against it shows every
 // file as added, because there is no parent commit to compare with.
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -903,7 +910,7 @@ async function firstParentOf(path, hash) {
  * a commit did not ask to be handed a rebase to finish by hand.
  */
 async function runRebasePlan(path, base, todo) {
-  const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+  const editor = rebaseEditor();
   const env = {
     GIT_SEQUENCE_EDITOR: `${editor} sequence`,
     GITALIA_TODO: todo
@@ -1025,7 +1032,7 @@ async function messageRewrites(path, plan) {
  * is used, so a reload of the app loses nothing.
  */
 async function continueRebase(path, plan, status) {
-  const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+  const editor = rebaseEditor();
   const stop = await rebaseStopInfo(path);
   if (!Array.isArray(plan) || plan.length === 0) plan = await savedPlan(stop.dir);
 
@@ -2038,7 +2045,7 @@ export const methods = {
       ...replayedHashes.map((sha) => `pick ${sha}`)
     ].join('\n');
 
-    const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+    const editor = rebaseEditor();
     const env = {
       GIT_SEQUENCE_EDITOR: `${editor} sequence`,
       GIT_EDITOR: `${editor} message`,
@@ -2363,7 +2370,7 @@ export const methods = {
 
     const rewords = await messageRewrites(path, plan);
 
-    const editor = `"${process.execPath}" "${REBASE_HELPER}"`;
+    const editor = rebaseEditor();
     const env = {
       GIT_SEQUENCE_EDITOR: `${editor} sequence`,
       GIT_EDITOR: `${editor} message`,

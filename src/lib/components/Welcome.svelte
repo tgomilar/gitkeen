@@ -2,6 +2,14 @@
   import { repoStore } from '../state/repo.svelte';
   import { readRecent, forgetRepo, type RecentRepo } from '../state/recent';
   import { relativeTime } from '../format';
+  import { chooseFolder } from '../desktop';
+  import { isDesktop } from '../git/transport';
+
+  /** The desktop app can show a folder chooser; the browser can only take a typed path. */
+  async function browse() {
+    const folder = await chooseFolder();
+    if (folder) { path = folder; open(folder); }
+  }
 
   let path = $state('');
   let recent = $state<RecentRepo[]>([]);
@@ -84,10 +92,14 @@
       <button type="submit" disabled={repoStore.opening || !path.trim()}>
         {repoStore.opening ? 'Opening…' : 'Open'}
       </button>
+      {#if isDesktop}
+        <button type="button" class="browse" onclick={browse} disabled={repoStore.opening}>Choose folder…</button>
+      {/if}
     </form>
 
     <p class="note">
-      Paste a path to any folder inside a repository. Gitalia finds the repository root itself.
+      {isDesktop ? 'Choose any folder inside a repository, or paste its path.' : 'Paste a path to any folder inside a repository.'}
+      Gitalia finds the repository root itself.
     </p>
 
     {#if repoStore.openError}
@@ -196,6 +208,8 @@
   }
   .opener button:hover:not(:disabled) { background: var(--accent-hover); }
   .opener button:disabled { opacity: 0.5; cursor: default; }
+  .opener button.browse { background: var(--bg-panel); border-color: var(--border-strong); color: var(--text); }
+  .opener button.browse:hover:not(:disabled) { background: var(--bg-hover); }
 
   .note {
     margin: 8px 0 0;

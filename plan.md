@@ -1088,7 +1088,10 @@ product value is the **interaction model around the Git DAG**.
 
 ### P0 --- Must have
 
--   [ ] Tauri project --- still a Vite dev server; the RPC seam is in place
+-   [x] Tauri project --- a desktop app (Gitalia.app and a .dmg) whose Rust
+    shell starts the Node backend as a sidecar and forwards calls to it.
+    Not done yet: Developer ID signing and notarization, automatic updates,
+    and builds for Intel Macs, Windows and Linux.
 -   [x] Svelte + TypeScript
 -   [x] Git process runner
 -   [x] Open repository

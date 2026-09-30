@@ -9,6 +9,7 @@ import { repoStore, describe } from './state/repo.svelte';
 import { commitStore } from './state/commit.svelte';
 import { confirm, confirmOr, prompt, choose } from './state/dialogs.svelte';
 import { blameStore } from './state/blame.svelte';
+import { saveFile } from './desktop';
 import { bisectStore } from './state/bisect.svelte';
 import { compareStore } from './state/compare.svelte';
 import { worktreeStore } from './state/worktrees.svelte';
@@ -2083,14 +2084,9 @@ function lfsItemFor(path: string): MenuItem[] {
  * Patches and bundles
  * ------------------------------------------------------------------ */
 
-/** Hand a file to the browser to save. */
-function download(name: string, data: BlobPart, type: string) {
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/** Hand a file to be saved: a save dialog in the app, a download in the browser. */
+async function download(name: string, data: Uint8Array | string, type: string) {
+  return saveFile(name, data, type);
 }
 
 /** Ask for one local file, or null when the user closes the chooser. */
@@ -2111,7 +2107,7 @@ export async function savePatch(commits: Commit[]) {
   if (!repo || commits.length === 0) return;
   try {
     const patch = await repo.createPatch(commits.map((c) => c.hash));
-    download(patch.name, patch.content, 'text/x-patch');
+    if (!(await download(patch.name, patch.content, 'text/x-patch'))) return;
     toasts.success(`Saved ${pluralize(patch.commits, 'commit')} as a patch`, patch.name);
   } catch (err) {
     toasts.error('Could not save the patch', describe(err));
@@ -2157,7 +2153,7 @@ export async function exportBundle() {
   try {
     const bundle = await repo.createBundle();
     const bytes = Uint8Array.from(atob(bundle.base64), (c) => c.charCodeAt(0));
-    download(bundle.name, bytes, 'application/octet-stream');
+    if (!(await download(bundle.name, bytes, 'application/octet-stream'))) return;
     toasts.success('Saved the bundle', `${bundle.name}, ${Math.max(1, Math.round(bundle.bytes / 1024))} KB. Anyone can clone or fetch from it.`);
   } catch (err) {
     toasts.error('Could not save the bundle', describe(err));

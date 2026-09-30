@@ -3,3 +3,9 @@ dist
 .DS_Store
 .idea
 *.local
+
+# The desktop app: build output, and the backend executable built from server/
+dist-sidecar/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/

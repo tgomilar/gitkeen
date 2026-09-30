@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The Gitalia mark, a "g" drawn as a branch that forks and merges back,
+       on the rounded square macOS draws app icons in. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#1f1f1f" />
+  <g transform="translate(222 212) scale(17)" fill="none" stroke-width="2.6" stroke-linecap="round">
+    <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="#f4553f" />
+    <path d="M24 7 H16 a7 7 0 0 0 0 14 H24" stroke="#e3e3e6" />
+    <circle cx="24" cy="4" r="3.4" fill="#4a8fe0" stroke="none" />
+    <circle cx="9" cy="14" r="3.4" fill="#f4553f" stroke="none" />
+    <circle cx="8" cy="30" r="3.4" fill="#4a8fe0" stroke="none" />
+  </g>
+</svg>

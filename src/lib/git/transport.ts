@@ -1,8 +1,9 @@
 /**
  * The one seam between the UI and however Git is actually reached.
  *
- * Today that is an HTTP call to the dev server. Under Tauri it becomes
- * `invoke(method, args)`. Nothing above this file changes when it does.
+ * In the browser that is an HTTP call to the dev server. In the desktop app
+ * it is `invoke('git_call')`, which the Rust shell forwards to the same
+ * backend running as a sidecar. Nothing above this file knows which.
  */
 
 export class GitCallError extends Error {
@@ -48,22 +49,30 @@ class HttpTransport implements Transport {
 }
 
 /**
- * Placeholder for the desktop build. Kept here so the shape of the eventual
- * Rust call site is visible next to the one it replaces.
+ * The desktop app: the call goes to the Rust shell, which passes it to the
+ * backend sidecar and hands its answer back in the same envelope as HTTP.
  */
 class TauriTransport implements Transport {
   readonly kind = 'tauri' as const;
 
   async call<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
     const invoke = (globalThis as any).__TAURI__?.core?.invoke;
-    if (!invoke) throw new GitCallError('Tauri runtime not available', method);
+    if (!invoke) throw new GitCallError('The desktop runtime is not available.', method);
+    let payload: { result?: T; error?: { message: string; command?: string | null } };
     try {
-      return (await invoke(method.replace(/\./g, '_'), args)) as T;
+      payload = await invoke('git_call', { method, args });
     } catch (err) {
       throw new GitCallError(String(err), method);
     }
+    if (payload.error) {
+      throw new GitCallError(payload.error.message, method, payload.error.command ?? null);
+    }
+    return payload.result as T;
   }
 }
+
+/** True inside the desktop app. */
+export const isDesktop = !!(globalThis as any).__TAURI__;
 
 function detectTransport(): Transport {
   return (globalThis as any).__TAURI__ ? new TauriTransport() : new HttpTransport();

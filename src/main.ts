@@ -4,6 +4,7 @@ import './styles/palettes.css';
 // Applies the saved palette before the first paint, so it never flashes.
 import { appearance } from './lib/state/appearance.svelte';
 import App from './App.svelte';
+import { routeLinksToBrowser } from './lib/desktop';
 import { repoStore } from './lib/state/repo.svelte';
 
 const target = document.getElementById('app');
@@ -18,6 +19,8 @@ if (theme === 'light' || theme === 'dark') localStorage.setItem('gitalia.theme',
 // &palette=github (or one, solarized, dracula, vscode) picks a colour palette the same way.
 const palette = params.get('palette');
 if (palette) appearance.setPalette(palette);
+
+routeLinksToBrowser();
 
 const app = mount(App, { target });
 
