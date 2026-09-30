@@ -5,6 +5,8 @@ export interface Toast {
   kind: ToastKind;
   message: string;
   detail?: string | null;
+  /** A button on the toast, such as Update and restart. */
+  action?: { label: string; run: () => void } | null;
 }
 
 let nextId = 1;
@@ -12,12 +14,18 @@ let nextId = 1;
 class ToastStore {
   items = $state<Toast[]>([]);
 
-  push(kind: ToastKind, message: string, detail: string | null = null) {
-    const toast: Toast = { id: nextId++, kind, message, detail };
+  push(kind: ToastKind, message: string, detail: string | null = null, action: Toast['action'] = null) {
+    const toast: Toast = { id: nextId++, kind, message, detail, action };
     this.items = [...this.items, toast];
-    // Errors stay until dismissed; they usually need reading.
-    if (kind !== 'error') setTimeout(() => this.dismiss(toast.id), 3200);
+    // Errors stay until dismissed; they usually need reading. So does a toast
+    // with a button, which is asking the user to decide something.
+    if (kind !== 'error' && !action) setTimeout(() => this.dismiss(toast.id), 3200);
     return toast.id;
+  }
+
+  /** A toast that stays until the user presses its button or dismisses it. */
+  offer(message: string, detail: string | null, action: NonNullable<Toast['action']>) {
+    return this.push('info', message, detail, action);
   }
 
   info(message: string, detail?: string | null) { return this.push('info', message, detail); }

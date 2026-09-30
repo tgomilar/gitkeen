@@ -28,10 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app",
-      "dmg"
-    ],
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -43,6 +40,30 @@
       "binaries/gitkeen-backend"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "A visual Git workspace"
+    "shortDescription": "A visual Git workspace",
+    "createUpdaterArtifacts": true,
+    "linux": {
+      "deb": {
+        "depends": [
+          "git"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "git"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1OTFGOTYyNTQyQkMxNjkKUldScHdTdFVZdm1SSlpSaTgyejhaazcxWXdqUnJteGRQMXRDMmhXZWUzZHdVM0dCUVkxSjRPVDgK",
+      "endpoints": [
+        "https://github.com/tgomilar/gitkeen/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

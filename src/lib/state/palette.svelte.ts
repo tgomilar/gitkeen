@@ -14,6 +14,8 @@ import { consoleStore } from './console.svelte';
 import type { Commit } from '../git/types';
 import type { IconName } from '../components/Icon.svelte';
 import { toasts } from './toasts.svelte';
+import { checkForUpdates } from '../updates';
+import { isDesktop } from '../git/transport';
 import {
   switchToBranch,
   createBranchFrom,
@@ -448,6 +450,16 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     hint: '?',
     run: () => b.setDock('help')
   });
+  if (isDesktop) {
+    add({
+      id: 'check-updates',
+      label: 'Check for updates',
+      keywords: 'update upgrade new version release',
+      icon: 'refresh',
+      group: 'View',
+      run: () => checkForUpdates()
+    });
+  }
   if (repoStore.status?.operation === 'bisect') {
     for (const [verdict, label] of [['good', 'Bisect: this commit works'], ['bad', 'Bisect: this commit is broken'], ['skip', 'Bisect: skip this commit']] as const) {
       add({ id: `bisect-${verdict}`, label, keywords: `bisect ${verdict} mark test`, icon: 'commit', group: 'History', run: () => bisectStore.mark(verdict) });

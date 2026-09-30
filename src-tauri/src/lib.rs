@@ -90,6 +90,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // Updates come from the latest GitHub release, signed with the key in
+        // tauri.conf.json, and the process plugin restarts into the new version.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(Backend::default())
         .invoke_handler(tauri::generate_handler![git_call, save_file])
         .setup(|app| {

@@ -7,6 +7,7 @@ import './styles/palettes.css';
 import { appearance } from './lib/state/appearance.svelte';
 import App from './App.svelte';
 import { routeLinksToBrowser } from './lib/desktop';
+import { checkForUpdates } from './lib/updates';
 import { repoStore } from './lib/state/repo.svelte';
 
 const target = document.getElementById('app');
@@ -28,5 +29,8 @@ const app = mount(App, { target });
 
 const repo = params.get('repo');
 if (repo) repoStore.open(repo);
+
+// In the desktop app, look for a new version once the window has settled.
+setTimeout(() => checkForUpdates({ quiet: true }), 4000);
 
 export default app;

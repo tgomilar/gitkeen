@@ -8,6 +8,9 @@
       <div class="body">
         <p class="message">{toast.message}</p>
         {#if toast.detail}<p class="detail">{toast.detail}</p>{/if}
+        {#if toast.action}
+          <button class="action" onclick={() => { toasts.dismiss(toast.id); toast.action!.run(); }}>{toast.action.label}</button>
+        {/if}
       </div>
       <button class="close" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss">×</button>
     </div>
@@ -69,4 +72,15 @@
     line-height: 1.2;
   }
   .close:hover { color: var(--text); }
+
+  .action {
+    margin-top: 6px;
+    padding: 3px 10px;
+    background: var(--accent);
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--accent-text);
+    font-size: 12px;
+  }
+  .action:hover { filter: brightness(1.08); }
 </style>
