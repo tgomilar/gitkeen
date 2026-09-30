@@ -38,6 +38,16 @@
 </script>
 
 <nav class="rail" aria-label="Tool panels">
+  <!-- The mark from the logo: a lowercase "g" drawn as a branch that forks and merges back. -->
+  <div class="mark" title="Gitalia">
+    <svg viewBox="0 0 34 34" width="30" height="30" fill="none" stroke-width="2.6" role="img" aria-label="Gitalia">
+      <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="#f03c2e" />
+      <path d="M24 7 H16 a7 7 0 0 0 0 14 H24" stroke="var(--text)" />
+      <circle cx="24" cy="4" r="3.4" fill="#2f6fd0" />
+      <circle cx="9" cy="14" r="3.4" fill="#f03c2e" />
+      <circle cx="8" cy="30" r="3.4" fill="#2f6fd0" />
+    </svg>
+  </div>
   {#each items as item (item.id)}
     <button
       class="item"
@@ -80,6 +90,14 @@
     padding: 6px 4px;
     background: var(--bg-app);
     border-right: 1px solid var(--border);
+  }
+
+  .mark {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 10px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--border);
   }
 
   .item {
