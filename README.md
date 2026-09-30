@@ -45,6 +45,7 @@ branches, commit your work, and change the history you already have.
 | Submodules | See the repositories kept inside this one, check them out, and open them. |
 | Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
 | Git LFS* | See which files are stored in LFS, track new kinds of file, and download their content. |
+| Patches and bundles | Save commits as a patch file and apply one, or carry a whole repository in one bundle file. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -681,6 +682,26 @@ welcome screen. The whole interface scales together, the way an editor zooms,
 so rows, spacing and text keep their proportions and nothing is cut off.
 Gitalia remembers the size.
 
+## Patches and bundles: moving work without a server
+
+A patch file holds commits as text, the way `git format-patch` writes them.
+Right click a commit and choose **Save as patch**, or select several and
+choose **Save … commits as a patch**. To apply one, choose **Apply a patch
+file…** in the command palette.
+
+| Kind of patch | What applying it does |
+|---|---|
+| Written by `git format-patch` or Gitalia | Adds its commits on top of the current branch, with their authors and messages. |
+| A plain diff | Changes the files. The change then waits in the commit panel. |
+
+Gitalia checks the patch first. If it does not fit, nothing is changed.
+
+A bundle is one file that holds branches and tags, for moving a repository
+where there is no server. **Export a bundle** in the command palette saves
+every branch and tag. **Import a bundle…** brings one in under a name you
+choose, so its branches arrive as `name/branch`, the way a remote's do. No
+branch of your own moves.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -868,6 +889,7 @@ Your own repositories are never touched.
 | `server/test/worktree.test.mjs` | Adding, listing, removing and pruning worktrees. |
 | `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
 | `server/test/signing.test.mjs` | Signing a commit, and reading whether a signature checks out. |
+| `server/test/patch.test.mjs` | Saving and applying patches, and exporting and importing bundles. |
 | `server/test/lfs.test.mjs` | Tracking files in Git LFS, reading LFS diffs, and downloading content. Skipped without git-lfs. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong

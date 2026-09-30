@@ -91,6 +91,22 @@ export class GitRepository {
    * tree file, `side` picks one half of it: what is staged (`staged`) or what
    * still waits to be (`unstaged`).
    */
+  createPatch(hashes: string[]): Promise<{ name: string; content: string; commits: number }> {
+    return transport.call('patch.create', { path: this.path, hashes });
+  }
+
+  applyPatch(patch: string): Promise<{ ok: boolean; mode: 'commits' | 'files'; commits: number }> {
+    return transport.call('patch.apply', { path: this.path, patch });
+  }
+
+  createBundle(): Promise<{ name: string; bytes: number; base64: string }> {
+    return transport.call('bundle.create', { path: this.path });
+  }
+
+  importBundle(base64: string, name: string): Promise<{ ok: boolean; branches: string[] }> {
+    return transport.call('bundle.import', { path: this.path, base64, name });
+  }
+
   /** Both versions of an image file, for the same sides `fileDiff` compares. */
   imageDiff(options: { file: string; origPath?: string | null; hash?: string | null; base?: string | null; side?: 'staged' | 'unstaged' | null }): Promise<ImageDiff> {
     return transport.call('diff.image', { path: this.path, ...options });

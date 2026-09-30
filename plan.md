@@ -1128,6 +1128,7 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Syntax highlighting in the diff and blame views (section 14), in the
     colours of the chosen palette
 -   [x] Image diff (section 14): before and after side by side, with sizes
+-   [x] Patch generation, apply patch and bundle support (section 7)
 -   [x] Tags --- created at any commit and deleted, lightweight or annotated
 -   [x] Command palette
 -   [x] Keyboard shortcuts: every shortcut in section 17 is built.

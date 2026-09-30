@@ -3473,6 +3473,134 @@ export const methods = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Patches and bundles
+ * ------------------------------------------------------------------ */
+
+/** A file name from a commit subject: lower case, dashes, at most 50 letters. */
+function slug(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'change';
+}
+
+/** Run `body` with a scratch folder, removed afterwards whatever happens. */
+async function withScratch(body) {
+  const dir = await mkdtemp(join(tmpdir(), 'gitalia-'));
+  try {
+    return await body(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Commits as a patch file, the way `git format-patch` writes them: author,
+ * date and message kept, oldest first, so `git am` can replay them.
+ */
+methods['patch.create'] = async ({ path, hashes }) => {
+  if (!Array.isArray(hashes) || hashes.length === 0) {
+    throw new GitError('Choose at least one commit.', { command: '', stderr: '', code: 1 });
+  }
+  const commits = hashes.map((h) => commitish(h, 'a commit'));
+  // Oldest first, whatever order they were picked in.
+  const { stdout: order } = await runGit(path, ['rev-list', '--no-walk=sorted', '--reverse', ...commits, '--'], { allowFailure: true });
+  const ordered = order.split('\n').filter(Boolean);
+  let content = '';
+  for (const [i, hash] of ordered.entries()) {
+    const { stdout, code, stderr } = await runGit(path, [
+      'format-patch', '-1', '--stdout', `--start-number=${i + 1}`, ...(ordered.length > 1 ? ['--numbered'] : []), hash
+    ], { allowFailure: true });
+    if (code !== 0) throw new GitError(stderr.trim() || 'Git could not write the patch.', { command: 'git format-patch', stderr, code });
+    content += stdout;
+  }
+  const { stdout: subject } = await runGit(path, ['log', '-1', '--format=%s', ordered[ordered.length - 1]], { allowFailure: true });
+  const name = ordered.length === 1
+    ? `${ordered[0].slice(0, 7)}-${slug(subject.trim())}.patch`
+    : `${ordered.length}-commits-to-${ordered[ordered.length - 1].slice(0, 7)}.patch`;
+  return { name, content, commits: ordered.length };
+};
+
+/**
+ * Apply a patch file.
+ *
+ * A patch written by `git format-patch` carries its commits, so `git am`
+ * replays them as commits, author and message included. Any other diff only
+ * changes the files, which then wait in the commit panel. Both are checked
+ * first, so a patch that does not fit changes nothing; one that fails part
+ * way through `git am` is abandoned, leaving the branch as it was.
+ */
+methods['patch.apply'] = async ({ path, patch }) => {
+  if (typeof patch !== 'string' || !patch.trim()) {
+    throw new GitError('The patch is empty.', { command: '', stderr: '', code: 1 });
+  }
+  const operation = await detectOperation(path);
+  if (operation) throw new GitError(`A ${operation} is in progress. Finish or abandon it first.`, { command: '', stderr: '', code: 1 });
+  const mailbox = /^From [0-9a-f]{40} /m.test(patch);
+  return withScratch(async (dir) => {
+    const file = join(dir, 'change.patch');
+    await writeFile(file, patch);
+    if (mailbox) {
+      const { stdout: before } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+      const { code, stderr } = await runGit(path, ['am', '--quiet', '--', file], { allowFailure: true });
+      if (code !== 0) {
+        await runGit(path, ['am', '--abort'], { allowFailure: true });
+        throw new GitError(
+          `The patch does not apply to this branch, so nothing was changed.\n\n${stderr.trim()}`,
+          { command: 'git am', stderr, code }
+        );
+      }
+      const { stdout: count } = await runGit(path, ['rev-list', '--count', `${before.trim()}..HEAD`], { allowFailure: true });
+      return { ok: true, mode: 'commits', commits: Number(count.trim() || 0) };
+    }
+    const check = await runGit(path, ['apply', '--check', '--', file], { allowFailure: true });
+    if (check.code !== 0) {
+      throw new GitError(
+        `The patch does not apply to the files as they are, so nothing was changed.\n\n${check.stderr.trim()}`,
+        { command: 'git apply --check', stderr: check.stderr, code: check.code }
+      );
+    }
+    await git(path, ['apply', '--', file]);
+    return { ok: true, mode: 'files', commits: 0 };
+  });
+};
+
+/**
+ * Every branch and tag in one file that `git clone` or `git fetch` can read,
+ * for moving a repository without a server. Sent back as base64.
+ */
+methods['bundle.create'] = async ({ path }) => withScratch(async (dir) => {
+  const file = join(dir, 'repo.bundle');
+  const { code, stderr } = await runGit(path, ['bundle', 'create', '--quiet', file, '--branches', '--tags'], { allowFailure: true });
+  if (code !== 0) throw new GitError(stderr.trim() || 'Git could not write the bundle.', { command: 'git bundle create', stderr, code });
+  const data = await readFile(file);
+  return { name: `${basename(path)}.bundle`, bytes: data.length, base64: data.toString('base64') };
+});
+
+/**
+ * Bring the branches and tags of a bundle file in, the way a fetch from a
+ * remote would: its branches arrive as `<name>/<branch>`, and no branch of
+ * this repository moves.
+ */
+methods['bundle.import'] = async ({ path, base64, name }) => {
+  if (typeof name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+    throw new GitError('Name the bundle with letters, numbers, dots, dashes or underscores.', { command: '', stderr: '', code: 1 });
+  }
+  if (typeof base64 !== 'string' || !base64) throw new GitError('The bundle file is empty.', { command: '', stderr: '', code: 1 });
+  return withScratch(async (dir) => {
+    const file = join(dir, 'in.bundle');
+    await writeFile(file, Buffer.from(base64, 'base64'));
+    const verify = await runGit(path, ['bundle', 'verify', '--quiet', file], { allowFailure: true });
+    if (verify.code !== 0) {
+      throw new GitError(`This is not a bundle Git can read here.\n\n${verify.stderr.trim()}`, { command: 'git bundle verify', stderr: verify.stderr, code: verify.code });
+    }
+    const { stdout: heads } = await runGit(path, ['bundle', 'list-heads', file], { allowFailure: true });
+    const branches = heads.split('\n').map((l) => l.split(' ')[1]).filter((r) => r?.startsWith('refs/heads/')).map((r) => r.slice(11));
+    const args = ['fetch', '--quiet', '--no-write-fetch-head', file, `+refs/heads/*:refs/remotes/${name}/*`, 'refs/tags/*:refs/tags/*'];
+    const { code, stderr } = await runGit(path, args, { allowFailure: true });
+    if (code !== 0) throw new GitError(stderr.trim() || 'Git could not read the bundle.', { command: 'git fetch <bundle>', stderr, code });
+    return { ok: true, branches: branches.map((b) => `${name}/${b}`) };
+  });
+};
+
+/* ------------------------------------------------------------------ *
  * Image diffs
  * ------------------------------------------------------------------ */
 

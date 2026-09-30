@@ -356,6 +356,11 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
         icon: 'revert',
         action: () => revertCommits(selected)
       },
+      {
+        label: `Save ${selection.length} commits as a patch`,
+        icon: 'copy',
+        action: () => savePatch(selected)
+      },
       ...(selected.length === 2
         ? [{
             label: 'Compare these two',
@@ -478,6 +483,7 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       action: () => resetToCommit(commit)
     },
     SEPARATOR,
+    { label: 'Save as patch', icon: 'copy', hint: '.patch file', action: () => savePatch([commit]) },
     { label: 'Copy commit hash', icon: 'copy', action: () => copy(commit.hash, 'commit hash') },
     { label: 'Copy short hash', icon: 'copy', action: () => copy(commit.shortHash, commit.shortHash) },
     { label: 'Copy subject', icon: 'copy', action: () => copy(commit.subject, 'subject') }
@@ -2070,4 +2076,119 @@ function lfsItemFor(path: string): MenuItem[] {
   const pattern = `*.${ext}`;
   if (status.patterns.some((p) => p.pattern === pattern)) return [];
   return [{ label: `Store ${pattern} files in Git LFS`, icon: 'folder', hint: 'from now on', action: () => lfsStore.track(pattern, true) }];
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Patches and bundles
+ * ------------------------------------------------------------------ */
+
+/** Hand a file to the browser to save. */
+function download(name: string, data: BlobPart, type: string) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Ask for one local file, or null when the user closes the chooser. */
+function pickFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}
+
+/** Save commits as a patch file that `git am` or Gitalia can apply elsewhere. */
+export async function savePatch(commits: Commit[]) {
+  const repo = repoStore.repo;
+  if (!repo || commits.length === 0) return;
+  try {
+    const patch = await repo.createPatch(commits.map((c) => c.hash));
+    download(patch.name, patch.content, 'text/x-patch');
+    toasts.success(`Saved ${pluralize(patch.commits, 'commit')} as a patch`, patch.name);
+  } catch (err) {
+    toasts.error('Could not save the patch', describe(err));
+  }
+}
+
+/** Choose a patch file and apply it: as commits if it has them, else to the files. */
+export async function applyPatchFile() {
+  const repo = repoStore.repo;
+  if (!repo) return;
+  const file = await pickFile('.patch,.diff,.mbox,text/*');
+  if (!file) return;
+  const patch = await file.text();
+  const carriesCommits = /^From [0-9a-f]{40} /m.test(patch);
+  const ok = await confirm({
+    title: `Apply ${file.name}?`,
+    message: carriesCommits
+      ? 'The patch carries commits. They are added on top of the current branch, with their authors and messages.'
+      : 'The patch is a plain diff. It changes the files, and the change then waits in the commit panel.',
+    facts: [
+      { label: 'Onto', value: repoStore.currentBranch ?? 'the detached HEAD' },
+      { label: 'If it does not fit', value: 'Nothing is changed.' }
+    ],
+    confirmLabel: 'Apply'
+  });
+  if (!ok) return;
+  try {
+    const result = await repo.applyPatch(patch);
+    await repoStore.refresh();
+    toasts.success(
+      result.mode === 'commits' ? `Applied ${pluralize(result.commits, 'commit')}` : 'Applied the patch to the files',
+      result.mode === 'files' ? 'The change is in the commit panel.' : null
+    );
+  } catch (err) {
+    toasts.error('Could not apply the patch', describe(err));
+  }
+}
+
+/** Save every branch and tag as one bundle file. */
+export async function exportBundle() {
+  const repo = repoStore.repo;
+  if (!repo) return;
+  try {
+    const bundle = await repo.createBundle();
+    const bytes = Uint8Array.from(atob(bundle.base64), (c) => c.charCodeAt(0));
+    download(bundle.name, bytes, 'application/octet-stream');
+    toasts.success('Saved the bundle', `${bundle.name}, ${Math.max(1, Math.round(bundle.bytes / 1024))} KB. Anyone can clone or fetch from it.`);
+  } catch (err) {
+    toasts.error('Could not save the bundle', describe(err));
+  }
+}
+
+/** Bring a bundle's branches and tags in, as if from a remote. */
+export async function importBundle() {
+  const repo = repoStore.repo;
+  if (!repo) return;
+  const file = await pickFile('.bundle,application/octet-stream');
+  if (!file) return;
+  const name = await prompt({
+    title: `Import ${file.name}`,
+    message: 'Its branches arrive under this name, the way a remote\'s do. No branch of this repository moves.',
+    input: {
+      label: 'Name',
+      value: file.name.replace(/\.bundle$/, '').replace(/[^A-Za-z0-9._-]+/g, '-') || 'bundle',
+      validate: (value) => (/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) ? null : 'Use letters, numbers, dots, dashes or underscores.')
+    },
+    confirmLabel: 'Import'
+  });
+  if (!name) return;
+  try {
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < buffer.length; i += 0x8000) binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
+    const result = await repo.importBundle(btoa(binary), name);
+    await repoStore.refresh();
+    toasts.success(`Imported ${pluralize(result.branches.length, 'branch', 'branches')}`, result.branches.join(', '));
+  } catch (err) {
+    toasts.error('Could not import the bundle', describe(err));
+  }
 }

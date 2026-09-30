@@ -32,7 +32,11 @@ import {
   defaultRemote,
   blameFile,
   startBisect,
-  newWorktree
+  newWorktree,
+  savePatch,
+  applyPatchFile,
+  exportBundle,
+  importBundle
 } from '../actions';
 import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
@@ -475,6 +479,18 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       run: () => appearance.setTextSize(t.scale)
     });
   }
+  add({
+    id: 'patch-save',
+    label: commits.length > 1 ? `Save ${commits.length} commits as a patch` : 'Save the selected commit as a patch',
+    keywords: 'patch format-patch export email',
+    icon: 'copy',
+    group: 'History',
+    disabled: commits.length === 0,
+    run: () => savePatch(commits)
+  });
+  add({ id: 'patch-apply', label: 'Apply a patch file…', keywords: 'patch am apply diff import', icon: 'include', group: 'History', run: () => applyPatchFile() });
+  add({ id: 'bundle-export', label: 'Export a bundle', keywords: 'bundle backup offline export all branches', icon: 'copy', group: 'Branches', run: () => exportBundle() });
+  add({ id: 'bundle-import', label: 'Import a bundle…', keywords: 'bundle offline import fetch', icon: 'fetch', group: 'Branches', run: () => importBundle() });
   add({
     id: 'lfs',
     label: 'Git LFS…',
