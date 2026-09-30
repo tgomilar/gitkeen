@@ -1,18 +1,23 @@
 # Installing Gitkeen
 
-Download Gitkeen from the [latest release](https://github.com/tgomilar/gitkeen/releases/latest).
 You also need Git 2.30 or newer on your computer.
 
 ## Which file to download
 
-| System | File |
+Choose the file for your system. Each link always gives the newest version.
+
+| Your system | Download |
 |---|---|
-| macOS on Apple silicon (M1 and newer) | `Gitkeen_<version>_aarch64.dmg` |
-| macOS on Intel | `Gitkeen_<version>_x64.dmg` |
-| Windows 10 and 11 | `Gitkeen_<version>_x64-setup.exe` (or the `.msi`) |
-| Linux, any distribution | `Gitkeen_<version>_amd64.AppImage` |
-| Debian and Ubuntu | `Gitkeen_<version>_amd64.deb` |
-| Fedora and openSUSE | `Gitkeen-<version>-1.x86_64.rpm` |
+| macOS on Apple silicon (M1 and newer) | [Gitkeen-macOS-Apple-silicon.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Apple-silicon.dmg) |
+| macOS on Intel | [Gitkeen-macOS-Intel.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Intel.dmg) |
+| Windows 10 and 11 | [Gitkeen-Windows-Installer.exe](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Windows-Installer.exe) |
+| Linux | [Gitkeen-Linux.AppImage](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.AppImage) |
+| Debian and Ubuntu | [Gitkeen-Linux.deb](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.deb) |
+
+On Fedora, openSUSE and other Linux systems, use the AppImage.
+
+A release also lists `.app.tar.gz` files and `latest.json`. Gitkeen uses them
+to update itself. You do not need to download them.
 
 To see which kind of Mac you have, open the Apple menu and choose **About This
 Mac**. A chip named "Apple M" is Apple silicon.
@@ -39,7 +44,7 @@ xattr -dr com.apple.quarantine /Applications/Gitkeen.app
 
 ### Windows
 
-1. Run the `-setup.exe` file.
+1. Run `Gitkeen-Windows-Installer.exe`.
 2. If Windows says "Windows protected your PC", press **More info**, then
    **Run anyway**.
 3. Install [Git for Windows](https://git-scm.com/download/win) if you do not
@@ -50,20 +55,14 @@ xattr -dr com.apple.quarantine /Applications/Gitkeen.app
 For the AppImage, make the file executable, then run it:
 
 ```
-chmod +x Gitkeen_*_amd64.AppImage
-./Gitkeen_*_amd64.AppImage
+chmod +x Gitkeen-Linux.AppImage
+./Gitkeen-Linux.AppImage
 ```
 
 For the `.deb` package on Debian or Ubuntu:
 
 ```
-sudo apt install ./Gitkeen_*_amd64.deb
-```
-
-For the `.rpm` package on Fedora:
-
-```
-sudo dnf install ./Gitkeen-*.x86_64.rpm
+sudo apt install ./Gitkeen-Linux.deb
 ```
 
 ## Updates
@@ -76,6 +75,6 @@ any time, choose **Check for updates** in the command palette.
 | Installed from | Updates itself |
 |---|---|
 | macOS `.dmg` | Yes |
-| Windows `-setup.exe` or `.msi` | Yes |
+| Windows installer | Yes |
 | Linux AppImage | Yes |
-| Linux `.deb` or `.rpm` | No. Download and install the new package yourself. |
+| Linux `.deb` | No. Download and install the new package yourself. |

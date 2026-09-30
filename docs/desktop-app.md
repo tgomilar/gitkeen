@@ -44,5 +44,5 @@ tools.
 1. The app is not signed with an Apple Developer ID or a Windows certificate.
    macOS and Windows ask once before they open it. See
    [Installing Gitkeen](install.md#opening-gitkeen-the-first-time).
-2. On Linux, only the AppImage updates itself. The `.deb` and `.rpm` packages
-   are updated by installing the new package.
+2. On Linux, only the AppImage updates itself. The `.deb` package is updated
+   by installing the new package.

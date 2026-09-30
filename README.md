@@ -31,11 +31,19 @@ what it will do, and afterwards the Undo panel can put it back.
 
 ## Download
 
-Download the app for macOS, Windows or Linux from the
-[latest release](https://github.com/tgomilar/gitkeen/releases/latest). You also
-need Git 2.30 or newer. The app is not signed yet, so your system asks once
-before it opens it: [Installing Gitkeen](docs/install.md) shows the steps.
-Gitkeen updates itself when a new version is out.
+Choose the file for your system. Each link always gives the newest version.
+
+| Your system | Download |
+|---|---|
+| macOS on Apple silicon (M1 and newer) | [Gitkeen-macOS-Apple-silicon.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Apple-silicon.dmg) |
+| macOS on Intel | [Gitkeen-macOS-Intel.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Intel.dmg) |
+| Windows 10 and 11 | [Gitkeen-Windows-Installer.exe](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Windows-Installer.exe) |
+| Linux | [Gitkeen-Linux.AppImage](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.AppImage) |
+| Debian and Ubuntu | [Gitkeen-Linux.deb](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.deb) |
+
+You also need Git 2.30 or newer. The app is not signed yet, so macOS and
+Windows ask once before they open it: [Installing Gitkeen](docs/install.md)
+shows the steps. Gitkeen updates itself when a new version is out.
 
 ## Run it from source
 
