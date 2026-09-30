@@ -19,8 +19,10 @@ import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, writeFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not .pathname, which gives /D:/… on Windows.
+const root = fileURLToPath(new URL('..', import.meta.url));
 const work = join(root, 'dist-sidecar');
 const host = execFileSync('rustc', ['-vV'], { encoding: 'utf8' }).match(/^host: (.+)$/m)[1];
 const triple = process.env.TARGET || host;
