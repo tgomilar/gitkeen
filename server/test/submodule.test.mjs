@@ -48,7 +48,7 @@ describe('submodules', () => {
   test('a fresh clone has it not checked out, and update brings it in', async () => {
     await withRepo(async (repo) => {
       const { lib, second } = await withLibrary(repo);
-      const clone = mkdtempSync(join(tmpdir(), 'gitalia-clone-'));
+      const clone = mkdtempSync(join(tmpdir(), 'gitkeen-clone-'));
       try {
         await repo.git(['clone', '-q', repo.path, clone]);
         let [sub] = await find(clone);

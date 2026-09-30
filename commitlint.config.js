@@ -1,7 +1,7 @@
 /**
  * Commit message rules for this repository.
  *
- * Gitalia reads this file when it opens the repository and holds the Commit
+ * Gitkeen reads this file when it opens the repository and holds the Commit
  * panel to it, so the rules apply without commitlint being installed. Adding
  * @commitlint/cli and a commit-msg hook later would extend the same rules to
  * commits made from the terminal; nothing here would need to change.
@@ -11,7 +11,7 @@
  * and a rule that rejected the second would be a change of style dressed up as
  * a lint rule.
  *
- * The rules below are stated in the shape Gitalia can read back — [level,
+ * The rules below are stated in the shape Gitkeen can read back — [level,
  * applicable, value] on one line — so that what the Commit panel enforces and
  * explains stays the same as what commitlint would enforce.
  */

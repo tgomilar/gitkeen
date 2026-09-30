@@ -1,5 +1,5 @@
 /** Recently opened repositories, kept in the browser for now. */
-const KEY = 'gitalia.recent-repositories';
+const KEY = 'gitkeen.recent-repositories';
 const LIMIT = 12;
 
 export interface RecentRepo {

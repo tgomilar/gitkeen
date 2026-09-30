@@ -2,7 +2,7 @@
  * Moving, dropping and rebasing commits.
  *
  * These rewrite history, so a bug here costs the user real work. The cases
- * that matter most are the ones where Gitalia must refuse: a wrong refusal
+ * that matter most are the ones where Gitkeen must refuse: a wrong refusal
  * is an annoyance, a wrong rewrite is lost commits.
  */
 import { test, describe } from 'node:test';

@@ -1088,7 +1088,7 @@ product value is the **interaction model around the Git DAG**.
 
 ### P0 --- Must have
 
--   [x] Tauri project --- a desktop app (Gitalia.app and a .dmg) whose Rust
+-   [x] Tauri project --- a desktop app (Gitkeen.app and a .dmg) whose Rust
     shell starts the Node backend as a sidecar and forwards calls to it.
     Not done yet: Developer ID signing and notarization, automatic updates,
     and builds for Intel Macs, Windows and Linux.
@@ -1188,7 +1188,7 @@ product value is the **interaction model around the Git DAG**.
     stashes), drawn results for status, log, diff, show, branch and stash
     list, errors in plain words, a preview and a question before a risky
     command, recovery points for the Undo panel, Git only with no shell,
-    and interactive commands sent to Gitalia's own editors. Opened from the
+    and interactive commands sent to Gitkeen's own editors. Opened from the
     rail or with Ctrl+`.
 
 Key: `[x]` done, `[~]` partly done, `[ ]` not started.

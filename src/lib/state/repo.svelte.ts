@@ -467,7 +467,7 @@ class RepoStore {
    * Remove commits from the branch.
    *
    * Reported like a reset: the previous HEAD is named in the message, because
-   * a rewrite cannot be undone through Gitalia and that hash is what makes it
+   * a rewrite cannot be undone through Gitkeen and that hash is what makes it
    * recoverable with `git reset` from the terminal.
    */
   async drop(hashes: string[]): Promise<DropResult | null> {

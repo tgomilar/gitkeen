@@ -28,7 +28,7 @@ function isSameOrigin(req) {
 
 export function gitApiPlugin() {
   return {
-    name: 'gitalia-git-api',
+    name: 'gitkeen-git-api',
     configureServer(server) {
       server.middlewares.use('/api/git', async (req, res) => {
         if (!isSameOrigin(req)) {

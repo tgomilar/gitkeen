@@ -1,5 +1,5 @@
 /**
- * Gitalia's own settings, which are about the user rather than a repository.
+ * Gitkeen's own settings, which are about the user rather than a repository.
  *
  * Only keys live here so far: the AI providers' and a GitHub token. They are kept outside every repository on
  * purpose: a key is not part of a project and must never be committed by the
@@ -18,19 +18,25 @@ import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 
-const FILE = process.env.GITALIA_CONFIG || join(homedir(), '.config', 'gitalia', 'config.json');
+const FILE = process.env.GITKEEN_CONFIG || join(homedir(), '.config', 'gitkeen', 'config.json');
+// Where the settings lived while the app was called Gitalia. Read only until
+// the first save, which writes everything to FILE.
+const LEGACY_FILE = join(homedir(), '.config', 'gitalia', 'config.json');
 
 /** The providers a key can be stored for, and the variable that overrides it. */
 export const KEY_ENV = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
-  // Not an AI provider: the token Gitalia talks to GitHub with.
+  // Not an AI provider: the token Gitkeen talks to GitHub with.
   github: 'GITHUB_TOKEN'
 };
 
 async function readFileSettings() {
   try {
-    const raw = await readFile(FILE, 'utf8');
+    const raw = await readFile(FILE, 'utf8').catch((err) => {
+      if (err.code !== 'ENOENT' || process.env.GITKEEN_CONFIG) throw err;
+      return readFile(LEGACY_FILE, 'utf8');
+    });
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {

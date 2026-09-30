@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- The Gitalia mark, a "g" drawn as a branch that forks and merges back,
+  <!-- The Gitkeen mark, a "g" drawn as a branch that forks and merges back,
        on the rounded square macOS draws app icons in. -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="#1f1f1f" />
   <g transform="translate(222 212) scale(17)" fill="none" stroke-width="2.6" stroke-linecap="round">

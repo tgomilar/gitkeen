@@ -78,7 +78,7 @@ describe('comparing two branches', () => {
     await withRepo(async (repo) => {
       await repo.commits(1);
       await assert.rejects(() => methods['compare.refs']({ path: repo.path, base: 'main', target: 'nope' }), /not a commit or branch/);
-      await assert.rejects(() => methods['compare.refs']({ path: repo.path, base: '--output=x', target: 'main' }), /not a commit Gitalia/);
+      await assert.rejects(() => methods['compare.refs']({ path: repo.path, base: '--output=x', target: 'main' }), /not a commit Gitkeen/);
     });
   });
 });

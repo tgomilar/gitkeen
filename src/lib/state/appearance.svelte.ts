@@ -1,5 +1,5 @@
 /**
- * The colour palette: which well-known editor theme Gitalia's colours follow.
+ * The colour palette: which well-known editor theme Gitkeen's colours follow.
  *
  * The palette and light or dark are chosen apart, so every palette comes in
  * both. The colours themselves live in theme.css (the default) and
@@ -21,8 +21,8 @@ export const PALETTES: Palette[] = [
   { id: 'dracula', name: 'Dracula', light: 'Alucard', dark: 'Dracula' }
 ];
 
-const KEY = 'gitalia.palette';
-const SIZE_KEY = 'gitalia.text-size';
+const KEY = 'gitkeen.palette';
+const SIZE_KEY = 'gitkeen.text-size';
 
 /**
  * Text sizes, as a scale of the whole interface. Rows, spacing and text grow

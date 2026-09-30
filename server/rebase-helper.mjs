@@ -4,14 +4,14 @@
  *
  * Git is told to run this file in two roles:
  *
- *   sequence  rewrite the todo list into the plan Gitalia decided on
+ *   sequence  rewrite the todo list into the plan Gitkeen decided on
  *   message   write the final commit message
  *
- * Doing it this way means the user never sees an editor, and Gitalia keeps
+ * Doing it this way means the user never sees an editor, and Gitkeen keeps
  * using real Git rather than reimplementing what rebase does.
  *
  * The sequence role takes its plan from the environment rather than working
- * it out here. GITALIA_TODO holds one command per selected commit, oldest
+ * it out here. GITKEEN_TODO holds one command per selected commit, oldest
  * first, as newline-separated `<command> <sha>` pairs. The helper checks that
  * the todo list Git produced holds exactly the commits the plan names, in the
  * order it expects, and refuses rather than guessing if it does not: writing
@@ -29,7 +29,7 @@ if (!role || !target) {
 }
 
 if (role === 'sequence') {
-  const plan = (process.env.GITALIA_TODO ?? '')
+  const plan = (process.env.GITKEEN_TODO ?? '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
@@ -39,7 +39,7 @@ if (role === 'sequence') {
     });
 
   if (plan.length === 0) {
-    console.error('rebase-helper: GITALIA_TODO is empty');
+    console.error('rebase-helper: GITKEEN_TODO is empty');
     process.exit(1);
   }
 
@@ -93,7 +93,7 @@ if (role === 'sequence') {
 
 if (role === 'message') {
   // One message, written for every commit Git asks about. Squash uses this.
-  const single = process.env.GITALIA_SQUASH_MESSAGE_FILE;
+  const single = process.env.GITKEEN_SQUASH_MESSAGE_FILE;
   if (single) {
     writeFileSync(target, readFileSync(single, 'utf8'));
     process.exit(0);
@@ -107,12 +107,12 @@ if (role === 'message') {
    * with that commit's current message first, so the message already there
    * is the only thing identifying it.
    *
-   * GITALIA_REWORDS holds a JSON array of { from, to }: the message to
+   * GITKEEN_REWORDS holds a JSON array of { from, to }: the message to
    * expect, and the one to write in its place. A message that matches
    * nothing is left exactly as it was, because rewriting a commit the user
    * did not ask to reword would be worse than doing nothing.
    */
-  const rewords = process.env.GITALIA_REWORDS;
+  const rewords = process.env.GITKEEN_REWORDS;
   if (rewords) {
     const plan = JSON.parse(rewords);
     const current = readFileSync(target, 'utf8');

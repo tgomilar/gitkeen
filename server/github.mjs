@@ -2,7 +2,7 @@
  * GitHub: pull requests and checks for a repository whose remote is on
  * github.com.
  *
- * The token comes from Gitalia's settings file or `GITHUB_TOKEN` (see
+ * The token comes from Gitkeen's settings file or `GITHUB_TOKEN` (see
  * settings.mjs), and failing both, from the GitHub CLI if it is signed in.
  * It never leaves this process: the page learns only whether there is one.
  */
@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { readKey, KEY_ENV } from './settings.mjs';
 import { runGit } from './git.mjs';
 
-const API = process.env.GITALIA_GITHUB_API || 'https://api.github.com';
+const API = process.env.GITKEEN_GITHUB_API || 'https://api.github.com';
 
 /** The token, and where it came from. */
 export async function githubToken() {
@@ -67,7 +67,7 @@ export async function github(token, method, route, body) {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${token}`,
         'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'Gitalia',
+        'User-Agent': 'Gitkeen',
         ...(body ? { 'Content-Type': 'application/json' } : {})
       },
       body: body ? JSON.stringify(body) : undefined,

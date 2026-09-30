@@ -164,7 +164,7 @@ describe('a graph narrowed to one branch', () => {
 
       const { commits } = await methods['log.list']({ path: repo.path, refs: ['topic'] });
       assert.deepEqual(commits.map((c) => c.subject), ['topic work', 'c3', 'c2', 'c1']);
-      assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitalia'))));
+      assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitkeen'))));
     });
   });
 });

@@ -917,7 +917,7 @@ export interface Worktree {
   prunable: boolean;
   /** The first one, which holds the repository itself. */
   main: boolean;
-  /** The one Gitalia has open. */
+  /** The one Gitkeen has open. */
   current: boolean;
 }
 
@@ -968,7 +968,7 @@ export interface ImageDiff {
   after: ImageSide | null;
 }
 
-/** Whether a repository is on GitHub, and Gitalia can talk to it. */
+/** Whether a repository is on GitHub, and Gitkeen can talk to it. */
 export interface GithubStatus {
   repo: { owner: string; name: string; remote: string } | null;
   connected: boolean;
@@ -1012,7 +1012,7 @@ export interface ConsolePreview {
   lines?: string[];
 }
 
-/** Where a command that would open an editor goes in Gitalia instead. */
+/** Where a command that would open an editor goes in Gitkeen instead. */
 export type ConsoleRedirect =
   | { to: 'rebase'; base: string | null }
   | { to: 'hunks'; file: string | null }

@@ -35,7 +35,7 @@ describe('what the console will run', () => {
     assert.equal(checkCommand(['config', '--get', 'user.name']).ok, true);
   });
 
-  test('a command that would wait for an editor goes to Gitalia\'s editor instead', () => {
+  test('a command that would wait for an editor goes to Gitkeen\'s editor instead', () => {
     assert.deepEqual(checkCommand(['rebase', '-i', 'HEAD~3']).redirect, { to: 'rebase', base: 'HEAD~3' });
     assert.deepEqual(checkCommand(['add', '-p', 'a.txt']).redirect, { to: 'hunks', file: 'a.txt' });
     assert.deepEqual(checkCommand(['commit']).redirect, { to: 'commit' });

@@ -569,7 +569,7 @@ export async function dropCommits(commits: Commit[]) {
  * Move a commit one place through the history.
  *
  * One step per click. Replaying a commit somewhere else can conflict, and a
- * conflict mid-rebase is the part worth warning about, because Gitalia
+ * conflict mid-rebase is the part worth warning about, because Gitkeen
  * abandons the move rather than leaving a rebase open.
  */
 export async function moveCommit(commit: Commit, direction: 'up' | 'down') {
@@ -992,7 +992,7 @@ export async function mergeBranch(source: string) {
               value: `${pluralize(conflicts.length, 'file')}: ${conflicts.slice(0, 3).join(', ')}${conflicts.length > 3 ? `, and ${conflicts.length - 3} more` : ''}`,
               tone: 'warning' as const
             },
-            { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+            { label: 'If it conflicts', value: 'Gitkeen stops and lets you resolve it, or abandon it.' }
           ]
         : []),
       ...(inspection.fastForward
@@ -1010,7 +1010,7 @@ export async function mergeBranch(source: string) {
 /**
  * Bring the upstream branch in, saying what is coming before it arrives.
  *
- * Gitalia says "behind the remote" in several places and, until now, could
+ * Gitkeen says "behind the remote" in several places and, until now, could
  * only tell the user to go and pull elsewhere. The probe fetches first, so
  * the dialog names the commits that would actually arrive rather than what
  * a stale remote-tracking ref remembers.
@@ -1075,7 +1075,7 @@ export async function pullBranch() {
           }]),
       ...(inspection.fastForward
         ? []
-        : [{ label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }]),
+        : [{ label: 'If it conflicts', value: 'Gitkeen stops and lets you resolve it, or abandon it.' }]),
       ...(inspection.staleRefs
         ? [{
             label: 'Warning',
@@ -1343,7 +1343,7 @@ export async function rollbackChanges(changes: Change[]) {
   if (changes.length === 0) return;
 
   // A file Git has never seen has no committed version to go back to, and
-  // Gitalia will not delete it, so there is nothing to undo.
+  // Gitkeen will not delete it, so there is nothing to undo.
   const tracked = changes.filter((c) => c.kind !== 'unversioned');
   if (tracked.length === 0) {
     await confirm({
@@ -1550,7 +1550,7 @@ export async function cherryPickCommits(commits: Commit[]) {
       { label: 'Onto', value: inspection.branch ?? 'detached HEAD' },
       ...commitFacts(commits),
       ...warnings.map((value) => ({ label: 'Note', value, tone: 'warning' as const })),
-      { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+      { label: 'If it conflicts', value: 'Gitkeen stops and lets you resolve it, or abandon it.' }
     ],
     confirmLabel: commits.length === 1 ? 'Copy commit' : `Copy ${commits.length} commits`
   });
@@ -1581,7 +1581,7 @@ export async function revertCommits(commits: Commit[]) {
   const ok = await confirm({
     title: commits.length === 1 ? 'Revert this commit?' : `Revert ${commits.length} commits?`,
     message:
-      'Nothing is removed from history. Gitalia adds a new commit that undoes the change, so the record of both stays.',
+      'Nothing is removed from history. Gitkeen adds a new commit that undoes the change, so the record of both stays.',
     tone: warnings.length > 0 || merges.length > 0 ? 'warning' : 'normal',
     facts: [
       { label: 'On', value: inspection.branch ?? 'detached HEAD' },
@@ -1591,12 +1591,12 @@ export async function revertCommits(commits: Commit[]) {
             label: 'Merge commit',
             // A merge joins two histories, so Git has to be told which one to
             // treat as the trunk. The first parent is the branch merged into.
-            value: 'A merge joins two histories. Gitalia undoes it against the first parent, which is the branch it was merged into.',
+            value: 'A merge joins two histories. Gitkeen undoes it against the first parent, which is the branch it was merged into.',
             tone: 'warning' as const
           }]
         : []),
       ...warnings.map((value) => ({ label: 'Note', value, tone: 'warning' as const })),
-      { label: 'If it conflicts', value: 'Gitalia stops and lets you resolve it, or abandon it.' }
+      { label: 'If it conflicts', value: 'Gitkeen stops and lets you resolve it, or abandon it.' }
     ],
     confirmLabel: commits.length === 1 ? 'Revert commit' : `Revert ${commits.length} commits`
   });
@@ -1836,7 +1836,7 @@ export async function deleteStash(stash: Stash) {
   const ok = await confirm({
     title: 'Delete this stash?',
     message:
-      'The change is thrown away. It is not in any commit and not in your working tree, so this cannot be undone through Gitalia.',
+      'The change is thrown away. It is not in any commit and not in your working tree, so this cannot be undone through Gitkeen.',
     tone: 'danger',
     facts: [
       { label: 'Stash', value: stash.message || '(no name)' },
@@ -1977,7 +1977,7 @@ export async function newWorktree(existing?: string) {
   if (made) {
     const open = await confirm({
       title: 'Open the new worktree?',
-      message: `${branch} is checked out in ${made}. Gitalia can switch to it now, or you can open it later from the Worktrees list.`,
+      message: `${branch} is checked out in ${made}. Gitkeen can switch to it now, or you can open it later from the Worktrees list.`,
       confirmLabel: 'Open it',
       cancelLabel: 'Stay here'
     });
@@ -2003,7 +2003,7 @@ async function removeWorktree(tree: Worktree) {
 export function worktreeMenuItems(tree: Worktree): MenuItem[] {
   return [
     {
-      label: tree.current ? 'Open (it is open now)' : 'Open in Gitalia',
+      label: tree.current ? 'Open (it is open now)' : 'Open in Gitkeen',
       icon: 'switch',
       disabled: tree.current || tree.prunable,
       action: () => worktreeStore.open(tree)
@@ -2049,7 +2049,7 @@ export function describeSubmodule(sub: Submodule): string {
 export function submoduleMenuItems(sub: Submodule): MenuItem[] {
   return [
     {
-      label: 'Open in Gitalia',
+      label: 'Open in Gitkeen',
       icon: 'switch',
       hint: sub.state === 'not-initialized' ? 'update it first' : undefined,
       disabled: sub.state === 'not-initialized',
@@ -2101,7 +2101,7 @@ function pickFile(accept: string): Promise<File | null> {
   });
 }
 
-/** Save commits as a patch file that `git am` or Gitalia can apply elsewhere. */
+/** Save commits as a patch file that `git am` or Gitkeen can apply elsewhere. */
 export async function savePatch(commits: Commit[]) {
   const repo = repoStore.repo;
   if (!repo || commits.length === 0) return;

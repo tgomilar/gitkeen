@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" fill="none" stroke-width="2.6">
-  <!-- The Gitalia mark: a lowercase "g" drawn as a branch that forks and merges back. -->
+  <!-- The Gitkeen mark: a lowercase "g" drawn as a branch that forks and merges back. -->
   <style>
     .line { stroke: #1c1c1f; }
     @media (prefers-color-scheme: dark) { .line { stroke: #e3e3e6; } }

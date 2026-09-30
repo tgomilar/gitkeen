@@ -1,4 +1,4 @@
-/* Gitalia design tokens.
+/* Gitkeen design tokens.
    Dense, quiet, high-contrast where it matters. Colour is reserved for the
    graph, refs and state, so the chrome never competes with the history.
    The palette follows VS Code's default themes, Light Modern and Dark
@@ -15,7 +15,7 @@
   --radius-md: 5px;
 
   /* Light theme: VS Code's Light Modern, the default most developers look
-     at every day, so Gitalia sits beside their editor without a jolt. */
+     at every day, so Gitkeen sits beside their editor without a jolt. */
   --bg-app: #f8f8f8;
   --bg-panel: #ffffff;
   --bg-raised: #ffffff;

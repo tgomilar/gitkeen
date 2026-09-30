@@ -42,7 +42,7 @@ export async function chooseFolder(title = 'Open a repository'): Promise<string 
 
 /**
  * In the app, a link meant for a new tab opens in the user's browser: the
- * app's own window must keep showing Gitalia.
+ * app's own window must keep showing Gitkeen.
  */
 export function routeLinksToBrowser() {
   if (!isDesktop) return;

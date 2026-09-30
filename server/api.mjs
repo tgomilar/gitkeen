@@ -1,5 +1,5 @@
 /**
- * Gitalia RPC surface.
+ * Gitkeen RPC surface.
  *
  * Every method is `(args) => Promise<result>`. The frontend never builds a
  * git command line; it calls these names. A Tauri build registers commands
@@ -24,9 +24,9 @@ const REBASE_HELPER = join(HERE, 'rebase-helper.mjs');
 /**
  * How Git runs the rebase helper as its editor. Normally that is Node with
  * the helper script. The desktop app's backend is one executable with no
- * script beside it, so it sets GITALIA_REBASE_EDITOR to call itself instead.
+ * script beside it, so it sets GITKEEN_REBASE_EDITOR to call itself instead.
  */
-const rebaseEditor = () => process.env.GITALIA_REBASE_EDITOR || `"${process.execPath}" "${REBASE_HELPER}"`;
+const rebaseEditor = () => process.env.GITKEEN_REBASE_EDITOR || `"${process.execPath}" "${REBASE_HELPER}"`;
 
 // Git's empty tree object. Diffing the first commit against it shows every
 // file as added, because there is no parent commit to compare with.
@@ -915,7 +915,7 @@ async function runRebasePlan(path, base, todo) {
   const editor = rebaseEditor();
   const env = {
     GIT_SEQUENCE_EDITOR: `${editor} sequence`,
-    GITALIA_TODO: todo
+    GITKEEN_TODO: todo
   };
   try {
     await runGit(path, ['rebase', '--interactive', base], { env });
@@ -964,7 +964,7 @@ async function rebaseStopInfo(root) {
  * survive a reload of the app. Git deletes `rebase-merge` when the rebase
  * finishes or is abandoned, so the saved plan goes with it.
  */
-const PLAN_FILE = 'gitalia-plan.json';
+const PLAN_FILE = 'gitkeen-plan.json';
 
 async function savePlan(root, plan) {
   const dir = join(await gitDir(root), 'rebase-merge');
@@ -1048,7 +1048,7 @@ async function continueRebase(path, plan, status) {
     if (message || changed) {
       if (changed) await git(path, ['add', '-u']);
       const args = ['commit', '--amend', '--allow-empty'];
-      const file = join(stop.dir, 'gitalia-message');
+      const file = join(stop.dir, 'gitkeen-message');
       if (message) {
         await writeFile(file, message);
         args.push('-F', file);
@@ -1072,7 +1072,7 @@ async function continueRebase(path, plan, status) {
   if (Array.isArray(plan) && plan.length > 0) {
     const rewords = await messageRewrites(path, plan);
     if (rewords.length > 0) {
-      env = { GIT_EDITOR: `${editor} message`, GITALIA_REWORDS: JSON.stringify(rewords) };
+      env = { GIT_EDITOR: `${editor} message`, GITKEEN_REWORDS: JSON.stringify(rewords) };
     }
   }
 
@@ -1304,7 +1304,7 @@ export const methods = {
     }
     workPath(path, file);
     if (rev !== null && (typeof rev !== 'string' || !/^[\w./^~@{}-]+$/.test(rev) || rev.startsWith('-'))) {
-      throw new GitError('That is not a commit Gitalia can read.', { command: '', stderr: '', code: 1 });
+      throw new GitError('That is not a commit Gitkeen can read.', { command: '', stderr: '', code: 1 });
     }
     const args = ['blame', '--porcelain', ...(rev ? [rev] : []), '--', file];
     const { stdout, stderr, code } = await runGit(path, args, { allowFailure: true });
@@ -1967,7 +1967,7 @@ export const methods = {
       replayedMerges = Number(afterMerges.trim() || 0);
       if (replayedMerges > 0) {
         problems.push(
-          `${replayedMerges} merge ${replayedMerges === 1 ? 'commit sits' : 'commits sit'} between the selection and the branch tip. Squashing would flatten ${replayedMerges === 1 ? 'it' : 'them'}, so Gitalia will not do this.`
+          `${replayedMerges} merge ${replayedMerges === 1 ? 'commit sits' : 'commits sit'} between the selection and the branch tip. Squashing would flatten ${replayedMerges === 1 ? 'it' : 'them'}, so Gitkeen will not do this.`
         );
       }
     }
@@ -2028,7 +2028,7 @@ export const methods = {
     }
 
     const newestHash = hashes[0];
-    const dir = await mkdtemp(join(tmpdir(), 'gitalia-squash-'));
+    const dir = await mkdtemp(join(tmpdir(), 'gitkeen-squash-'));
     const messageFile = join(dir, 'message.txt');
     await writeFile(messageFile, text, 'utf8');
 
@@ -2051,8 +2051,8 @@ export const methods = {
     const env = {
       GIT_SEQUENCE_EDITOR: `${editor} sequence`,
       GIT_EDITOR: `${editor} message`,
-      GITALIA_TODO: todo,
-      GITALIA_SQUASH_MESSAGE_FILE: messageFile
+      GITKEEN_TODO: todo,
+      GITKEEN_SQUASH_MESSAGE_FILE: messageFile
     };
 
     try {
@@ -2162,8 +2162,8 @@ export const methods = {
     if (spanMerges > 0) {
       problems.push(
         spanMerges === 1
-          ? 'A merge commit sits between here and the tip of the branch. Rewriting across a merge would flatten it, so Gitalia does not offer it.'
-          : `${spanMerges} merge commits sit between here and the tip of the branch. Rewriting across a merge would flatten them, so Gitalia does not offer it.`
+          ? 'A merge commit sits between here and the tip of the branch. Rewriting across a merge would flatten it, so Gitkeen does not offer it.'
+          : `${spanMerges} merge commits sit between here and the tip of the branch. Rewriting across a merge would flatten them, so Gitkeen does not offer it.`
       );
     }
 
@@ -2376,9 +2376,9 @@ export const methods = {
     const env = {
       GIT_SEQUENCE_EDITOR: `${editor} sequence`,
       GIT_EDITOR: `${editor} message`,
-      GITALIA_TODO: todo
+      GITKEEN_TODO: todo
     };
-    if (rewords.length > 0) env.GITALIA_REWORDS = JSON.stringify(rewords);
+    if (rewords.length > 0) env.GITKEEN_REWORDS = JSON.stringify(rewords);
 
     let conflicted = 0;
     try {
@@ -2669,7 +2669,7 @@ export const methods = {
     const merges = commits.filter((c) => c.isMerge);
     if (merges.length > 0 && mode === 'cherry-pick') {
       problems.push(
-        `${merges.length === 1 ? 'A merge commit is' : `${merges.length} merge commits are`} selected. Copying a merge needs a side of it to be chosen, which Gitalia cannot do yet.`
+        `${merges.length === 1 ? 'A merge commit is' : `${merges.length} merge commits are`} selected. Copying a merge needs a side of it to be chosen, which Gitkeen cannot do yet.`
       );
     }
 
@@ -3028,7 +3028,7 @@ export const methods = {
     const ordered = [...hunks].sort((a, b) => (b.oldStart ?? 0) - (a.oldStart ?? 0));
     let dir = null;
     try {
-      dir = await mkdtemp(join(tmpdir(), 'gitalia-hunks-'));
+      dir = await mkdtemp(join(tmpdir(), 'gitkeen-hunks-'));
       const patchFile = join(dir, 'hunk.patch');
       const patches = ordered.map((hunk) => buildHunkPatch(file, hunk, side)).filter((p) => p !== null);
       if (patches.length === 0) {
@@ -3814,7 +3814,7 @@ async function githubContext(path) {
 const asGitError = (err) => (err instanceof GitError ? err : new GitError(err.message, { command: '', stderr: '', code: 1 }));
 
 /**
- * Whether this repository is on GitHub and Gitalia can talk to it. The page
+ * Whether this repository is on GitHub and Gitkeen can talk to it. The page
  * asks this first, and shows GitHub features only when both are true.
  */
 methods['github.status'] = async ({ path }) => {
@@ -3979,7 +3979,7 @@ const EXPLAIN_MATERIAL = {
  */
 methods['ai.explain'] = async (args) => {
   const gather = EXPLAIN_MATERIAL[args.kind];
-  if (!gather) throw new GitError(`Gitalia cannot explain "${args.kind}".`, { command: '', stderr: '', code: 1 });
+  if (!gather) throw new GitError(`Gitkeen cannot explain "${args.kind}".`, { command: '', stderr: '', code: 1 });
   const { material, stat } = await gather(args);
   try {
     return await explain({ kind: args.kind, material, stat, provider: args.provider ?? null });
@@ -3999,7 +3999,7 @@ function slug(text) {
 
 /** Run `body` with a scratch folder, removed afterwards whatever happens. */
 async function withScratch(body) {
-  const dir = await mkdtemp(join(tmpdir(), 'gitalia-'));
+  const dir = await mkdtemp(join(tmpdir(), 'gitkeen-'));
   try {
     return await body(dir);
   } finally {
@@ -4144,7 +4144,7 @@ async function imageBlob(path, spec) {
 methods['diff.image'] = async ({ path, file, origPath = null, hash = null, base = null, side = null }) => {
   const ext = /\.([a-z0-9]+)$/i.exec(file)?.[1]?.toLowerCase();
   const type = ext && IMAGE_TYPES[ext];
-  if (!type) throw new GitError(`${file} is not an image Gitalia can show.`, { command: '', stderr: '', code: 1 });
+  if (!type) throw new GitError(`${file} is not an image Gitkeen can show.`, { command: '', stderr: '', code: 1 });
   const target = workPath(path, file);
   const oldName = origPath ?? file;
 
@@ -4426,7 +4426,7 @@ methods['worktree.add'] = async ({ path, dir, branch, create = false, from = nul
  * Delete a working tree's folder and forget it.
  *
  * Git refuses when the folder holds changes not committed yet, unless
- * `force` is set. The main worktree, and the one Gitalia has open, are never
+ * `force` is set. The main worktree, and the one Gitkeen has open, are never
  * removed from here.
  */
 methods['worktree.remove'] = async ({ path, dir, force = false }) => {
@@ -4439,7 +4439,7 @@ methods['worktree.remove'] = async ({ path, dir, force = false }) => {
   for (const t of trees) if (t.path === dir || (await real(t.path)) === wanted) tree = t;
   if (!tree) throw new GitError(`${dir} is not a worktree of this repository.`, { command: '', stderr: '', code: 1 });
   if (tree.main) throw new GitError('The main worktree holds the repository itself, so it cannot be removed.', { command: '', stderr: '', code: 1 });
-  if (tree.current) throw new GitError('Gitalia has this worktree open. Open another one first.', { command: '', stderr: '', code: 1 });
+  if (tree.current) throw new GitError('Gitkeen has this worktree open. Open another one first.', { command: '', stderr: '', code: 1 });
   const args = ['worktree', 'remove', ...(force ? ['--force'] : []), '--', tree.path];
   const { code, stderr } = await runGit(path, args, { allowFailure: true });
   if (code !== 0) {
@@ -4563,7 +4563,7 @@ async function bisectState(path) {
 
 const commitish = (value, what) => {
   if (typeof value !== 'string' || !/^[\w./^~@{}-]+$/.test(value) || value.startsWith('-')) {
-    throw new GitError(`That is not a commit Gitalia can use as ${what}.`, { command: '', stderr: '', code: 1 });
+    throw new GitError(`That is not a commit Gitkeen can use as ${what}.`, { command: '', stderr: '', code: 1 });
   }
   return value;
 };

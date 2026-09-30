@@ -1,10 +1,10 @@
-# Gitalia
+# Gitkeen
 
-Gitalia is a standalone visual Git* client. It gives you the commit graph and
+Gitkeen is a standalone visual Git* client. It gives you the commit graph and
 the history tools that IntelliJ IDEA* offers, without asking you to change your
-editor. Your editor writes code. Gitalia manages your history.
+editor. Your editor writes code. Gitkeen manages your history.
 
-The plan the app is built from is `plan.md`. Today Gitalia covers one
+The plan the app is built from is `plan.md`. Today Gitkeen covers one
 workflow: open a repository*, read its history, select commits, switch
 branches, commit your work, and change the history you already have.
 
@@ -12,7 +12,7 @@ branches, commit your work, and change the history you already have.
 
 | Area | What you can do |
 |---|---|
-| Repository | Open any folder inside a repository. Gitalia finds the root itself. |
+| Repository | Open any folder inside a repository. Gitkeen finds the root itself. |
 | Current branch | See the branch you are on, pinned above the branch list. |
 | Recent list | Reopen a repository you used before. |
 | Graph | Read the full commit graph with lanes, merges, branches and tags. |
@@ -57,15 +57,15 @@ branches, commit your work, and change the history you already have.
 ## How squashing works
 
 Select two or more commits that sit next to each other, then right click and
-choose **Squash commits**. Gitalia joins their messages, oldest first, and lets
+choose **Squash commits**. Gitkeen joins their messages, oldest first, and lets
 you edit the result before anything happens.
 
-Gitalia refuses to squash in these cases, and says which one applies:
+Gitkeen refuses to squash in these cases, and says which one applies:
 
 | Case | Reason |
 |---|---|
 | Fewer than two commits | There is nothing to combine. |
-| The commits are not in the history of the current branch | There is nothing for Git to rewrite. Gitalia names the branches that do hold them. |
+| The commits are not in the history of the current branch | There is nothing for Git to rewrite. Gitkeen names the branches that do hold them. |
 | The commits are not next to each other | Only a continuous run can become one commit. |
 | The selection contains a merge commit | A merge commit joins two histories, so it cannot be folded into another commit. |
 | The selection includes the first commit | It has no parent to build on. |
@@ -74,7 +74,7 @@ Gitalia refuses to squash in these cases, and says which one applies:
 | A merge sits between the selection and the branch tip | Squashing would flatten that merge, losing the record of it. |
 
 Squashing takes one of two routes. When the selection reaches the tip of the
-branch, Gitalia moves the branch back and makes one new commit. Nothing else
+branch, Gitkeen moves the branch back and makes one new commit. Nothing else
 moves, and nothing can conflict. Otherwise Git replays the later commits on top
 of the combined one. This cannot conflict either, because the combined commit
 leaves exactly the same files behind as the newest commit it replaced. Those
@@ -105,11 +105,11 @@ Its box shows a dash instead of a tick, and the row says **partly staged**,
 because a commit would take only part of it. Click the box once to stage the
 rest of the file. Click it again to unstage the whole file.
 
-When you press Commit, Gitalia commits exactly what the index holds: whole
+When you press Commit, Gitkeen commits exactly what the index holds: whole
 ticked files and, if you staged some of a file, only those hunks*. A file you
 prepared with `git add` but left untouched is part of the commit; a change you
 never staged stays out of it, on purpose. A renamed file is one row on screen,
-and Gitalia sends both the old name and the new name to Git, so the rename is
+and Gitkeen sends both the old name and the new name to Git, so the rename is
 recorded as a rename.
 
 The colour of a file name tells you its state.
@@ -125,7 +125,7 @@ The colour of a file name tells you its state.
 Tick **Amend** to replace the previous commit instead of making a new one. The
 box fills the message field with the message of that commit, and gives your own
 text back if you untick it. If the commit you are replacing already exists on a
-remote, Gitalia says so first, because publishing the replacement would need a
+remote, Gitkeen says so first, because publishing the replacement would need a
 force push.
 
 Two situations change these rules, and the panel says so on screen.
@@ -133,11 +133,11 @@ Two situations change these rules, and the panel says so on screen.
 1. While a merge or a rebase is unfinished, Git refuses to commit part of the
    working tree. The tick boxes stop applying and the commit takes everything.
 2. A file with a merge conflict cannot be committed until you resolve it.
-   Gitalia names those files instead of letting Git fail with its own message.
+   Gitkeen names those files instead of letting Git fail with its own message.
 
 Click a file name to select it. Double click it, or press Enter, to read its
 diff. Right click it for **Roll back**, which throws away your changes to it. A
-file that was newly added becomes unversioned again and stays on disk. Gitalia
+file that was newly added becomes unversioned again and stays on disk. Gitkeen
 never deletes a file.
 
 The toolbar above the list can group the files by folder, expand and collapse
@@ -170,7 +170,7 @@ A file with part of its change in the index and part still in the working tree
 opens on its **Working tree** half. When you stage or unstage every hunk, the
 viewer follows the whole change over to the other tab by itself.
 
-Code is coloured by its language, which Gitalia reads from the file name.
+Code is coloured by its language, which Gitkeen reads from the file name.
 About 30 languages are known, among them TypeScript, JavaScript, Svelte, Vue,
 Python, Rust*, Go, Java, Kotlin, Swift, C, C++, C#, Ruby, PHP, shell, SQL, CSS,
 HTML, JSON, YAML, TOML, Markdown and Dockerfiles. The colours follow the
@@ -183,13 +183,13 @@ name was edited does not read as a line that was rewritten. When two lines have
 almost nothing in common, the whole line is marked instead, because marking
 every word would be harder to read than marking none.
 
-Gitalia handles these cases and says which one applies:
+Gitkeen handles these cases and says which one applies:
 
 | Case | What you see |
 |---|---|
 | A renamed file | The old name in the header. If only the name changed, the viewer says so. |
 | An image | The picture before and after, side by side on a checkerboard so transparent parts show, with each one's size in pixels and in bytes. PNG, JPEG, GIF, WebP, BMP, ICO and AVIF are shown. |
-| Another binary file | A note that the file changed. Gitalia cannot show how. |
+| Another binary file | A note that the file changed. Gitkeen cannot show how. |
 | A permission change | A note that Git recorded a change although the text is the same. |
 | A very large file | The first 800 lines, with a button to draw more. Above 20000 lines the rest is not read at all. |
 
@@ -204,7 +204,7 @@ of them at once.
 | Revert | Adds a new commit that undoes the change. Nothing is removed from the history. |
 | Reset Current Branch to Here | Moves the branch to this commit. |
 
-Gitalia asks Git about the state of the repository before it offers to run any
+Gitkeen asks Git about the state of the repository before it offers to run any
 of these, and says what it found.
 
 | Case | What happens |
@@ -273,16 +273,16 @@ When one side deleted the file and the other side changed it, the editor shows
 the whole file as one choice. The side that deleted it offers **Delete the
 file**, and choosing it removes the file.
 
-Gitalia refuses to mark a file that still contains markers, so a line such as
+Gitkeen refuses to mark a file that still contains markers, so a line such as
 `<<<<<<<` cannot reach your history by accident. It also refuses to open a
 symbolic link*, because writing through one could change a file outside the
 repository. A binary file, a link, or a file you would rather fix by hand can
-still be resolved outside Gitalia and then marked resolved from the commit
+still be resolved outside Gitkeen and then marked resolved from the commit
 panel.
 
 ## Bringing in what others have pushed
 
-Press **Pull** in the toolbar, or Command or Control with Shift and L. Gitalia
+Press **Pull** in the toolbar, or Command or Control with Shift and L. Gitkeen
 fetches first, then tells you what is actually coming before anything is
 merged: how many commits, how many files they touch, and the first few of them
 by subject, author and age.
@@ -298,14 +298,14 @@ What the dialog says depends on what it found:
 |---|---|
 | You have no commits of your own | The branch moves straight up to the remote. No merge commit is made. |
 | You and the remote have both moved on | Git merges them and makes a merge commit. Your commits are kept as they are. |
-| Nothing new on the remote | Gitalia says so and stops, rather than opening a dialog that would merge nothing. |
+| Nothing new on the remote | Gitkeen says so and stops, rather than opening a dialog that would merge nothing. |
 
 A pull will not start if you have uncommitted changes, if another operation is
 already running, if the branch tracks nothing, or if HEAD is detached. The
 reason is named in each case. An untracked file does not block a pull, because
 Git can merge around it.
 
-If the merge conflicts, Gitalia stops and leaves it open, exactly as it does
+If the merge conflicts, Gitkeen stops and leaves it open, exactly as it does
 for a cherry-pick. The conflicted files appear in the commit panel, and the
 status bar offers to continue once you have marked them resolved, or to
 abandon the merge and put the branch back as it was.
@@ -315,7 +315,7 @@ it now offers to pull as the first way out.
 
 ## Rebasing a run of commits
 
-Right click a commit and choose **Rebase from here**. Gitalia opens the todo
+Right click a commit and choose **Rebase from here**. Gitkeen opens the todo
 list of `git rebase -i` as a list you edit, showing that commit and everything
 newer.
 
@@ -358,12 +358,12 @@ This is what Continue adds to the stopped commit:
 If you make commits of your own while the rebase is paused (for example, to
 split the commit in two), Continue keeps them exactly as you made them and
 amends nothing. The plan is saved with the rebase, so Continue still writes
-the messages that come later in the plan after you reload Gitalia.
+the messages that come later in the plan after you reload Gitkeen.
 
 Nothing runs until you press **Start rebase**. Until then the plan is only a
 plan, and Cancel costs nothing. **Reset** puts every row back as it arrived.
 
-Gitalia will not start a rebase that changes nothing, that drops every commit,
+Gitkeen will not start a rebase that changes nothing, that drops every commit,
 or whose oldest kept commit folds upwards into something that is not there. It
 says which of these is wrong underneath the list rather than waiting until you
 press the button.
@@ -377,7 +377,7 @@ conflicts, because you asked for one small change, not for a rebase to finish.
 
 ## Moving and removing commits
 
-Both of these rewrite history. Gitalia drives real `git rebase --interactive`
+Both of these rewrite history. Gitkeen drives real `git rebase --interactive`
 underneath, writing the todo list for you, so the result is what Git would
 have produced had you edited that list by hand.
 
@@ -395,17 +395,17 @@ dialog says how many commits that is, and warns you when any of them have
 already been pushed, because publishing the result then needs a force push.
 
 If the commits cannot be replayed in the new order, because one depends on a
-change another makes, Gitalia abandons the attempt and puts the branch back
+change another makes, Gitkeen abandons the attempt and puts the branch back
 exactly as it was. You are never left with a half-finished rebase to sort out.
 Nothing is altered, and the message says so.
 
 Neither is offered for a merge commit, and neither is offered when a merge
 sits between the commit and the tip of the branch. Replaying commits across a
 merge flattens it, throwing away the branch structure the merge records, so
-Gitalia refuses rather than quietly rewriting your history into a straight
+Gitkeen refuses rather than quietly rewriting your history into a straight
 line. The same applies to the rebase editor.
 
-Both name the branch's previous position in the message that follows. Gitalia
+Both name the branch's previous position in the message that follows. Gitkeen
 cannot undo a rewrite, but `git reset --hard <that hash>` in a terminal can.
 
 ## Tagging a commit
@@ -414,7 +414,7 @@ Right click a commit in the graph and choose **New tag here**, or right click
 the **Tags** heading in the sidebar for a tag at HEAD. The heading carries its
 own menu so there is a way in when you have no tags yet.
 
-Gitalia asks for the name first and checks it against the rules Git uses, so a
+Gitkeen asks for the name first and checks it against the rules Git uses, so a
 name Git would refuse is caught before it is sent. It then asks for an
 optional description:
 
@@ -439,13 +439,13 @@ Right click a branch in the sidebar, in either the Local or the Remote
 section, and choose **Merge into <current branch>…**. The item names the branch
 you are on, so it is always clear which way the merge goes.
 
-Before anything is touched, Gitalia asks Git what the merge would do and shows
+Before anything is touched, Gitkeen asks Git what the merge would do and shows
 it: how many commits are coming, how many files they touch, the first few
 commits by subject and author, and **which files would conflict**. That last
 part is a real answer from Git, not a general warning, and finding it out
 costs nothing: the working tree is not touched and no merge is started.
 
-If the branch you are on has no commits of its own, Gitalia fast-forwards it.
+If the branch you are on has no commits of its own, Gitkeen fast-forwards it.
 The branch simply moves up and no merge commit is made, which the dialog says
 plainly so an absent merge commit is never a surprise. Otherwise Git joins the
 two branches with a merge commit. Nothing on either branch is rewritten.
@@ -453,7 +453,7 @@ two branches with a merge commit. Nothing on either branch is rewritten.
 Merging is refused, with the reason named, when you have uncommitted changes,
 when another operation is already running, when HEAD is detached, or when the
 branch is the one you are already on. An untracked file does not block a
-merge. If the branch is already contained in this one, Gitalia says so and
+merge. If the branch is already contained in this one, Gitkeen says so and
 stops rather than making an empty merge.
 
 A conflicted merge is left open, the same as a conflicted pull: resolve the
@@ -466,7 +466,7 @@ files in the commit panel and press the stash button in its toolbar. The
 changes are saved and taken out of your working tree, which is left as though
 you had never made them.
 
-This is Git's own stash, not a private store of Gitalia's own: `git stash
+This is Git's own stash, not a private store of Gitkeen's own: `git stash
 list` shows what you set aside here, and the command line can reach it.
 
 Only the files you tick are stashed. Everything else stays in your working
@@ -497,7 +497,7 @@ are not part of your history, so showing them would only be confusing.
 
 Type in the search box above the graph, or press Command or Control with K.
 The commits already loaded are filtered at once. A moment after you stop
-typing, Gitalia also asks Git to search the whole history, so older commits
+typing, Gitkeen also asks Git to search the whole history, so older commits
 are found too. An older commit appears at the end of the list without its
 graph lines, because that part of the graph is not loaded. You can still
 select it and read its details.
@@ -542,7 +542,7 @@ about ten tests.
 1. Right click a commit you know works and choose **Bisect from here…**. HEAD
    is taken as broken. To name both ends, select the two commits and choose
    **Bisect between these…**; the older one is taken as working.
-2. Gitalia checks out a commit halfway between them. Build it, run it, or run
+2. Gitkeen checks out a commit halfway between them. Build it, run it, or run
    your tests.
 3. Press **Good** or **Bad** in the status bar. Press **Skip** if this commit
    cannot be tested. The graph marks every commit you answered for.
@@ -578,9 +578,9 @@ another, without stashing or switching.
 
 1. Right click a branch and choose **Open in a new worktree…**, or choose
    **New worktree…** in the command palette to start a new branch.
-2. Gitalia offers a folder beside the repository, named after it and the
+2. Gitkeen offers a folder beside the repository, named after it and the
    branch. Change it if you want.
-3. Choose **Open it** to switch Gitalia to the new folder.
+3. Choose **Open it** to switch Gitkeen to the new folder.
 
 The **Worktrees** list at the bottom of the Branches panel shows every folder
 and the branch it has checked out. Double click one to open it. Right click to
@@ -604,7 +604,7 @@ Branches panel lists them under **Submodules**, each with its state:
 
 Right click a submodule to **Check out** or **Update** it to the recorded
 commit, or to copy its path or URL. Double click it, or choose **Open in
-Gitalia**, to work in it as a repository of its own. Right click the
+Gitkeen**, to work in it as a repository of its own. Right click the
 **Submodules** heading, or use the command palette, to update them all.
 
 ## Signed commits
@@ -633,7 +633,7 @@ Hover over the label to see the signer and the key.
 
 Git LFS keeps large files, such as images, videos and builds, outside the
 repository. Git commits a small pointer to each one, and the content is
-downloaded when it is needed. Gitalia needs the `git-lfs` program for this. On
+downloaded when it is needed. Gitkeen needs the `git-lfs` program for this. On
 a Mac, install it with `brew install git-lfs`.
 
 When a repository uses LFS, the status bar shows **LFS**. It warns when some
@@ -666,7 +666,7 @@ palette comes in both:
 | Solarized | Solarized Light | Solarized Dark |
 | Dracula | Alucard | Dracula |
 
-The command palette lists each palette too. Gitalia remembers your choice. The
+The command palette lists each palette too. Gitkeen remembers your choice. The
 graph lanes, the branch and tag labels, the file states and the diff colours
 all follow the palette. The Git orange of the logo stays the same.
 
@@ -685,7 +685,7 @@ Command or Control with + makes the text one step larger, with − one step
 smaller, and with 0 puts it back to the default. These keys also work on the
 welcome screen. The whole interface scales together, the way an editor zooms,
 so rows, spacing and text keep their proportions and nothing is cut off.
-Gitalia remembers the size.
+Gitkeen remembers the size.
 
 ## Patches and bundles: moving work without a server
 
@@ -696,10 +696,10 @@ file…** in the command palette.
 
 | Kind of patch | What applying it does |
 |---|---|
-| Written by `git format-patch` or Gitalia | Adds its commits on top of the current branch, with their authors and messages. |
+| Written by `git format-patch` or Gitkeen | Adds its commits on top of the current branch, with their authors and messages. |
 | A plain diff | Changes the files. The change then waits in the commit panel. |
 
-Gitalia checks the patch first. If it does not fit, nothing is changed.
+Gitkeen checks the patch first. If it does not fit, nothing is changed.
 
 A bundle is one file that holds branches and tags, for moving a repository
 where there is no server. **Export a bundle** in the command palette saves
@@ -710,7 +710,7 @@ branch of your own moves.
 ## GitHub
 
 When a repository has a remote on github.com, **GitHub** appears in the rail
-on the left. Gitalia needs a token to reach GitHub. It uses, in this order:
+on the left. Gitkeen needs a token to reach GitHub. It uses, in this order:
 
 1. `GITHUB_TOKEN` from the environment.
 2. A token saved in Settings, under GitHub.
@@ -718,7 +718,7 @@ on the left. Gitalia needs a token to reach GitHub. It uses, in this order:
 
 A fine-grained token needs access to the repository, **Pull requests** (read
 and write), and **Commit statuses** and **Actions** (read). The token stays in
-Gitalia's backend. The page is told only whether there is one.
+Gitkeen's backend. The page is told only whether there is one.
 
 | Where | What it shows or does |
 |---|---|
@@ -732,7 +732,7 @@ opened for it, because GitHub makes the pull request from what it has.
 
 ## AI help
 
-Gitalia can ask an AI model for help. It works with an Anthropic or OpenAI
+Gitkeen can ask an AI model for help. It works with an Anthropic or OpenAI
 key, which you add in Settings (the sparkle button in the title bar), or with
 a model running on your own computer in LM Studio* or Ollama*. A local model
 sends nothing off your computer. When no provider is set up, none of these
@@ -761,7 +761,7 @@ Type a command such as `status`, `log` or `switch main`. You can leave out
 `git`. Press Tab, or use the arrows and Enter, to take a suggestion. The
 suggestions come from the open repository:
 
-| You type | Gitalia suggests |
+| You type | Gitkeen suggests |
 |---|---|
 | The start of a command | Commands, each with a short description. |
 | A `-` after a command | That command's options, each with a short description. |
@@ -770,7 +770,7 @@ suggestions come from the open repository:
 | A place that takes a commit | The recent commits, with their subjects, and the tags. |
 | `stash pop` and similar | The stashes, with their messages. |
 
-The result is drawn where Gitalia has a picture for it. **Show raw output**
+The result is drawn where Gitkeen has a picture for it. **Show raw output**
 switches to Git's own text.
 
 | Command | How the result is shown |
@@ -781,7 +781,7 @@ switches to Git's own text.
 | `branch` | Each branch, with how many commits it is ahead of and behind its upstream. |
 | `stash list` | Each stash, with its message, branch and age. |
 
-When a command fails, Gitalia says what went wrong in plain words and how to
+When a command fails, Gitkeen says what went wrong in plain words and how to
 fix it. With an AI provider set up, **Explain this error** asks for more.
 
 ### What keeps the console safe
@@ -792,9 +792,9 @@ fix it. With an AI provider set up, **Explain this error** asks for more.
    Git start another program.
 3. A command that can lose work shows what it will do before you press Enter.
    After Enter it asks again, with **Run it** and **Cancel**.
-4. Before such a command runs, Gitalia saves a recovery point for each branch,
+4. Before such a command runs, Gitkeen saves a recovery point for each branch,
    file, tag or stash it could lose. The **Undo** panel can put them back.
-5. A command that would wait for an editor opens Gitalia's own editor instead:
+5. A command that would wait for an editor opens Gitkeen's own editor instead:
    `rebase -i` opens the rebase editor, `add -p` opens the diff viewer to
    stage hunks, and `commit` with no message opens the commit panel.
 
@@ -805,7 +805,7 @@ commands as you work.
 
 ## Undoing an operation
 
-Before an operation rewrites or deletes history, Gitalia saves where the
+Before an operation rewrites or deletes history, Gitkeen saves where the
 affected branch, tag or stash pointed. This is a recovery point. It keeps the
 old commits safe from Git's clean up, and it never appears in the graph.
 
@@ -827,11 +827,11 @@ overwrite a file you changed, Git refuses it and nothing moves. Nothing can be
 restored while a merge, rebase or other operation is still open.
 
 The log keeps the newest 100 operations. It is stored in the repository's
-`.git` folder, so it belongs to the repository and not to Gitalia.
+`.git` folder, so it belongs to the repository and not to Gitkeen.
 
 ## The Stats report
 
-Press **Stats** in the rail on the left. Gitalia reads the history and writes a
+Press **Stats** in the rail on the left. Gitkeen reads the history and writes a
 report on it: how much work was done, who did it, and when. It is meant for the
 questions a developer or a project lead actually asks. Who is working on this?
 Is the pace steady or did it stop in March? Which files does this project keep
@@ -865,7 +865,7 @@ anything there and the report reads itself again.
 
 That last one matters more than it sounds. If `package-lock.json` is counted,
 whoever last ran an install becomes the largest contributor in the report. That
-is the kind of wrong number a report must not produce, so Gitalia leaves those
+is the kind of wrong number a report must not produce, so Gitkeen leaves those
 files out until you ask for them.
 
 ### Three things worth knowing
@@ -922,11 +922,11 @@ Other commands:
 | `npm run check` | Checks all types. |
 | `npm run preview` | Serves the built files. |
 | `npm run desktop:dev` | Runs the desktop app in development. |
-| `npm run desktop:build` | Builds the desktop app, `Gitalia.app` and a `.dmg` to share it. |
+| `npm run desktop:build` | Builds the desktop app, `Gitkeen.app` and a `.dmg` to share it. |
 
 ## The desktop app
 
-Gitalia also runs as a desktop app, built with Tauri*. It is the same
+Gitkeen also runs as a desktop app, built with Tauri*. It is the same
 interface and the same Git backend as in the browser. The backend runs as a
 separate program inside the app, and only the app can reach it: it listens on
 this computer alone, and answers nothing without a secret the app chooses
@@ -940,8 +940,8 @@ minutes and needs about 3 GB of free disk space for Rust's build folder,
 
 | File | Size |
 |---|---|
-| `macos/Gitalia.app` | about 97 MB, most of it the Node runtime the backend needs |
-| `dmg/Gitalia_0.1.0_aarch64.dmg` | about 32 MB, for giving the app to someone else |
+| `macos/Gitkeen.app` | about 97 MB, most of it the Node runtime the backend needs |
+| `dmg/Gitkeen_0.1.0_aarch64.dmg` | about 32 MB, for giving the app to someone else |
 
 In the app, the welcome screen has a **Choose folder…** button, patches and
 bundles are saved through the usual save dialog, and links to GitHub open in
@@ -984,7 +984,7 @@ The plan asks for a keyboard first application. These keys work now.
 | Up and Down arrows | In the console, bring back an earlier command, or move through the suggestions. |
 | Command or Control with L | Clear the console. |
 | G | Put the keyboard on the commit graph. |
-| R | Revert the selected commits. Gitalia asks before it changes anything. |
+| R | Revert the selected commits. Gitkeen asks before it changes anything. |
 | S | Stage or unstage the file selected in the commit panel. In the diff viewer, stage or unstage the selected hunks. |
 
 The single keys G, R and S do nothing while you type in a text field or while
@@ -1028,7 +1028,7 @@ Your own repositories are never touched.
 | `server/test/explain.test.mjs` | What each AI explanation is shown, against a stand-in model. |
 | `server/test/lfs.test.mjs` | Tracking files in Git LFS, reading LFS diffs, and downloading content. Skipped without git-lfs. |
 
-The cases worth having are the ones where Gitalia must **refuse**. A wrong
+The cases worth having are the ones where Gitkeen must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
 a force push is still blocked when the remote moved unseen, that a rewrite
 across a merge is turned down rather than flattening it, and that a move or a
@@ -1116,7 +1116,7 @@ loading it all. A refresh returns to the newest window.
 ### Safety
 
 Section 18 of the plan asks the application to protect the user. Before a
-branch is deleted, Gitalia asks Git three questions: is this branch merged, does
+branch is deleted, Gitkeen asks Git three questions: is this branch merged, does
 a copy exist on a remote, and how many commits would become unreachable. It
 then states those facts in the dialog. It only uses the forced delete when the
 answer shows that commits would be lost, and only after you agree.
@@ -1128,7 +1128,7 @@ The squash checks run twice. The screen runs the cheap ones, so the menu entry
 is greyed out with a short reason the moment you select the commits. The
 backend runs all of them again before it touches anything, so a mistake in the
 screen cannot lead to a damaged repository. If a squash, move or drop fails part
-way, Gitalia aborts it, which leaves the branch where it started.
+way, Gitkeen aborts it, which leaves the branch where it started.
 
 ## Known limits
 
@@ -1140,7 +1140,7 @@ way, Gitalia aborts it, which leaves the branch where it started.
    browser data.
 4. The desktop app is built for Apple silicon Macs only so far, and it is not
    signed for other Macs or updated automatically yet.
-5. Gitalia does not watch the folder for changes. Press Refresh, or Command
+5. Gitkeen does not watch the folder for changes. Press Refresh, or Command
    with R, after you edit files in your editor.
 6. The Stats report reads the newest 20000 commits. If a repository holds more,
    the report says so and counts only those.
@@ -1162,7 +1162,7 @@ on a separate server and commits only a small pointer to each one, so the
 repository stays small.
 
 **Hash**: The unique name Git gives a commit. It is a long string of letters
-and numbers, and Gitalia usually shows only its first seven characters.
+and numbers, and Gitkeen usually shows only its first seven characters.
 
 **HTTP**: Hypertext Transfer Protocol. The way a web browser and a server send
 requests and answers to each other.
@@ -1171,11 +1171,11 @@ requests and answers to each other.
 around it. A file with changes in two separate places has two hunks.
 
 **IDEA**: IntelliJ IDEA, a code editor made by the company JetBrains. Its Git
-tools are the model for Gitalia.
+tools are the model for Gitkeen.
 
 **LM Studio**: A program that runs AI language models on your own computer.
 
-**Node.js**: A program that runs JavaScript outside a web browser. Gitalia's
+**Node.js**: A program that runs JavaScript outside a web browser. Gitkeen's
 backend runs on it during development.
 
 **Repository**: A folder whose history Git records, together with that
@@ -1199,7 +1199,7 @@ also sign Git commits, which is often simpler than setting up OpenPGP.
 zsh or bash. It can run any program and join programs together, which is why
 the console does not use one.
 
-**Svelte**: A tool for building web user interfaces. Gitalia's screens are
+**Svelte**: A tool for building web user interfaces. Gitkeen's screens are
 written with it.
 
 **Symbolic link**: A special file that points to another file or folder, which

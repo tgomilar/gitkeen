@@ -76,7 +76,7 @@ describe('git lfs', { skip: !haveLfs && 'git-lfs is not installed' }, () => {
     await withRepo(async (repo) => {
       await repo.commits(1);
       await withLfsFile(repo);
-      const clone = mkdtempSync(join(tmpdir(), 'gitalia-lfs-'));
+      const clone = mkdtempSync(join(tmpdir(), 'gitkeen-lfs-'));
       try {
         execFileSync('git', ['clone', '-q', repo.path, clone], { env: { ...process.env, GIT_LFS_SKIP_SMUDGE: '1' } });
         execFileSync('git', ['lfs', 'install', '--local'], { cwd: clone, stdio: 'ignore' });

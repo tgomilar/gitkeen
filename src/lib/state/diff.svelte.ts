@@ -10,7 +10,7 @@ import { toasts } from './toasts.svelte';
 import type { FileDiff } from '../git/types';
 import type { GitRepository } from '../git/repository';
 
-const MODE_KEY = 'gitalia.diff-mode';
+const MODE_KEY = 'gitkeen.diff-mode';
 
 export type DiffMode = 'unified' | 'split';
 

@@ -1,4 +1,6 @@
 import { mount } from 'svelte';
+// First, so every state module below finds its saved value under the new name.
+import './lib/state/legacy-storage';
 import './styles/theme.css';
 import './styles/palettes.css';
 // Applies the saved palette before the first paint, so it never flashes.
@@ -15,7 +17,7 @@ if (!target) throw new Error('Missing #app element');
 // Read before mounting, because App reads the stored theme as it initialises.
 const params = new URLSearchParams(location.search);
 const theme = params.get('theme');
-if (theme === 'light' || theme === 'dark') localStorage.setItem('gitalia.theme', theme);
+if (theme === 'light' || theme === 'dark') localStorage.setItem('gitkeen.theme', theme);
 // &palette=github (or one, solarized, dracula, vscode) picks a colour palette the same way.
 const palette = params.get('palette');
 if (palette) appearance.setPalette(palette);

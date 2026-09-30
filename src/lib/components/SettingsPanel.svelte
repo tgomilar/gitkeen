@@ -51,7 +51,7 @@
   </header>
 
   <p class="intro">
-    Gitalia can write the subject line from the change you are about to commit.
+    Gitkeen can write the subject line from the change you are about to commit.
     Pick where that happens. A hosted provider sends the diff over the network;
     a local one runs on this machine and sends nothing anywhere.
   </p>
@@ -143,7 +143,7 @@
       {#if githubStore.connected}<span class="badge preferred">Connected</span>{/if}
       {#if githubStore.status?.login}<span class="model">as {githubStore.status.login}</span>{/if}
     </div>
-    <p class="detail">A token lets Gitalia list pull requests, open one for a branch, and show whether checks passed.</p>
+    <p class="detail">A token lets Gitkeen list pull requests, open one for a branch, and show whether checks passed.</p>
     {#if settingsStore.github?.source === 'environment'}
       <p class="state">Using <code>GITHUB_TOKEN</code> from the environment.</p>
     {:else}

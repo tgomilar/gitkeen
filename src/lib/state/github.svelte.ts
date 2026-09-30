@@ -23,7 +23,7 @@ class GithubStore {
   private reading = new Set<string>();
 
   connected = $derived(!!this.status?.connected);
-  /** The repository is on GitHub, whether or not Gitalia can reach it yet. */
+  /** The repository is on GitHub, whether or not Gitkeen can reach it yet. */
   onGithub = $derived(!!this.status?.repo);
 
   async loadStatus() {

@@ -163,7 +163,7 @@ describe('the operation log', () => {
       await methods['branch.reset']({ path: repo.path, target: c1, mode: 'hard' });
       const { commits } = await methods['log.list']({ path: repo.path });
       assert.deepEqual(commits.map((c) => c.subject), ['c1'], 'the dropped commits are not drawn');
-      assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitalia'))));
+      assert.ok(commits.every((c) => c.refs.every((r) => !r.name.includes('gitkeen'))));
     });
   });
 });

@@ -2,23 +2,23 @@
  * The entry point of the desktop app's backend executable.
  *
  * One executable plays two parts. Run plainly, it is the backend server
- * (standalone.mjs). Run with `--gitalia-rebase-helper`, it is the editor Git
+ * (standalone.mjs). Run with `--gitkeen-rebase-helper`, it is the editor Git
  * calls during an interactive rebase (rebase-helper.mjs), because inside the
  * packaged app there is no separate Node or script file to run for that.
  */
 import { execFileSync } from 'node:child_process';
 
-const HELPER_FLAG = '--gitalia-rebase-helper';
+const HELPER_FLAG = '--gitkeen-rebase-helper';
 
 /**
  * An app opened from the Finder gets a bare PATH and none of the shell's
  * variables, so git-lfs, gh and a GITHUB_TOKEN set in ~/.zshrc would all be
  * missing. The login shell is asked once for PATH and for the few variables
- * Gitalia reads; nothing else is taken over.
+ * Gitkeen reads; nothing else is taken over.
  */
 const FROM_SHELL = [
   'PATH', 'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_MODEL', 'OPENAI_MODEL',
-  'OLLAMA_HOST', 'OLLAMA_MODEL', 'LMSTUDIO_HOST', 'LMSTUDIO_MODEL', 'GITALIA_CONFIG'
+  'OLLAMA_HOST', 'OLLAMA_MODEL', 'LMSTUDIO_HOST', 'LMSTUDIO_MODEL', 'GITKEEN_CONFIG'
 ];
 
 function adoptShellEnvironment() {
@@ -46,6 +46,6 @@ if (at !== -1) {
   import('./rebase-helper.mjs');
 } else {
   adoptShellEnvironment();
-  process.env.GITALIA_REBASE_EDITOR = `"${process.execPath}" ${HELPER_FLAG}`;
+  process.env.GITKEEN_REBASE_EDITOR = `"${process.execPath}" ${HELPER_FLAG}`;
   import('./standalone.mjs');
 }

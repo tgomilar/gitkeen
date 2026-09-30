@@ -25,7 +25,7 @@ async function colleague(repo) {
     const { mkdtemp } = await import('node:fs/promises');
     const { join } = await import('node:path');
     const { tmpdir } = await import('node:os');
-    return mkdtemp(join(tmpdir(), 'gitalia-other-'));
+    return mkdtemp(join(tmpdir(), 'gitkeen-other-'));
   })());
   await repo.git(['clone', '-q', repo.remote, other.path], { cwd: undefined });
   await other.git(['config', 'user.name', 'Other']);

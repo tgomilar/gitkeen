@@ -37,7 +37,7 @@ const server = createServer((req, res) => {
 let methods, parseGithubRemote;
 before(async () => {
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
-  process.env.GITALIA_GITHUB_API = `http://127.0.0.1:${server.address().port}`;
+  process.env.GITKEEN_GITHUB_API = `http://127.0.0.1:${server.address().port}`;
   process.env.GITHUB_TOKEN = 'test-token';
   ({ methods } = await import('../api.mjs'));
   ({ parseGithubRemote } = await import('../github.mjs'));

@@ -48,7 +48,7 @@ const PROVIDERS = {
   anthropic: {
     label: 'Anthropic',
     env: 'ANTHROPIC_API_KEY',
-    modelEnv: 'GITALIA_ANTHROPIC_MODEL',
+    modelEnv: 'GITKEEN_ANTHROPIC_MODEL',
     // Haiku is fast and cheap, and one line about a diff does not need more.
     model: 'claude-haiku-4-5-20251001',
     url: 'https://api.anthropic.com/v1/messages',
@@ -71,7 +71,7 @@ const PROVIDERS = {
   openai: {
     label: 'OpenAI',
     env: 'OPENAI_API_KEY',
-    modelEnv: 'GITALIA_OPENAI_MODEL',
+    modelEnv: 'GITKEEN_OPENAI_MODEL',
     model: 'gpt-4o-mini',
     url: 'https://api.openai.com/v1/chat/completions',
     headers: (key) => ({
@@ -103,7 +103,7 @@ const PROVIDERS = {
   lmstudio: {
     label: 'LM Studio',
     env: null,
-    modelEnv: 'GITALIA_LMSTUDIO_MODEL',
+    modelEnv: 'GITKEEN_LMSTUDIO_MODEL',
     model: null,
     url: (process.env.LMSTUDIO_HOST || 'http://127.0.0.1:1234').replace(/\/$/, '') + '/v1/chat/completions',
     // It ignores the key, but sending one keeps the header shape identical.
@@ -139,7 +139,7 @@ const PROVIDERS = {
   ollama: {
     label: 'Ollama',
     env: null,
-    modelEnv: 'GITALIA_OLLAMA_MODEL',
+    modelEnv: 'GITKEEN_OLLAMA_MODEL',
     model: 'llama3.2',
     url: (process.env.OLLAMA_HOST || 'http://127.0.0.1:11434').replace(/\/$/, '') + '/api/chat',
     headers: () => ({ 'content-type': 'application/json' }),
@@ -685,7 +685,7 @@ const QUESTIONS = {
  */
 export async function explain({ kind, material, stat = '', provider = null }) {
   const question = QUESTIONS[kind];
-  if (!question) throw new Error(`Gitalia cannot explain "${kind}".`);
+  if (!question) throw new Error(`Gitkeen cannot explain "${kind}".`);
   const chosen = provider || (await suggestionProviders()).preferred;
   if (!chosen) {
     throw new Error('No AI provider is configured. Add a key in Settings, or run Ollama or LM Studio locally.');

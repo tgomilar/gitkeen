@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    gitalia_lib::run()
+    gitkeen_lib::run()
 }

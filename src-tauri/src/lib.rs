@@ -1,7 +1,7 @@
-//! The desktop shell around Gitalia.
+//! The desktop shell around Gitkeen.
 //!
 //! The Git backend is the same code the development server runs, shipped as a
-//! sidecar executable (`binaries/gitalia-backend`). This file starts it with a
+//! sidecar executable (`binaries/gitkeen-backend`). This file starts it with a
 //! secret chosen for this run, learns the port it listens on, and forwards
 //! every call from the page to it. The secret never reaches the page, so only
 //! this process can drive the backend.
@@ -63,7 +63,7 @@ async fn git_call(state: tauri::State<'_, Backend>, method: String, args: Value)
     let secret = state.secret.lock().unwrap().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let reply = ureq::post(&format!("http://127.0.0.1:{port}/api/git"))
-            .set("x-gitalia-secret", &secret)
+            .set("x-gitkeen-secret", &secret)
             .timeout(Duration::from_secs(600))
             .send_json(json!({ "method": method, "args": args }));
         match reply {
@@ -99,8 +99,8 @@ pub fn run() {
 
             let (mut events, child) = app
                 .shell()
-                .sidecar("gitalia-backend")?
-                .env("GITALIA_SECRET", secret)
+                .sidecar("gitkeen-backend")?
+                .env("GITKEEN_SECRET", secret)
                 .spawn()?;
             *state.child.lock().unwrap() = Some(child);
 
@@ -111,7 +111,7 @@ pub fn run() {
                     match event {
                         CommandEvent::Stdout(line) => {
                             let text = String::from_utf8_lossy(&line);
-                            if let Some(port) = text.trim().strip_prefix("GITALIA_BACKEND_PORT=") {
+                            if let Some(port) = text.trim().strip_prefix("GITKEEN_BACKEND_PORT=") {
                                 if let Ok(port) = port.parse::<u16>() {
                                     *state.port.lock().unwrap() = Some(port);
                                     state.ready.notify_all();
@@ -122,7 +122,7 @@ pub fn run() {
                         CommandEvent::Terminated(status) => {
                             *state.port.lock().unwrap() = None;
                             *state.failed.lock().unwrap() =
-                                Some(format!("The Git backend stopped (exit code {:?}). Restart Gitalia.", status.code));
+                                Some(format!("The Git backend stopped (exit code {:?}). Restart Gitkeen.", status.code));
                             state.ready.notify_all();
                         }
                         _ => {}
@@ -132,7 +132,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building Gitalia");
+        .expect("error while building Gitkeen");
 
     app.run(|handle, event| {
         // The backend goes when the app does.

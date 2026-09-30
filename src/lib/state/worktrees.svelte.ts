@@ -70,7 +70,7 @@ class WorktreeStore {
     }
   }
 
-  /** Switch Gitalia over to another worktree's folder. */
+  /** Switch Gitkeen over to another worktree's folder. */
   open(tree: Worktree) {
     return repoStore.open(tree.path);
   }

@@ -1,7 +1,7 @@
 /**
  * Commit message rules for whatever repository is open.
  *
- * Gitalia opens other people's repositories, so the rules cannot be baked in.
+ * Gitkeen opens other people's repositories, so the rules cannot be baked in.
  * They are read from the repository itself, in the order a developer would
  * expect them to win:
  *

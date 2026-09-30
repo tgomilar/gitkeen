@@ -2,30 +2,55 @@
  * The operation log, and the recovery points that make it more than a diary.
  *
  * Before an operation rewrites or deletes history, the commit the affected
- * ref points at is saved as `refs/gitalia/recovery/<id>`. A ref is what keeps
+ * ref points at is saved as `refs/gitkeen/recovery/<id>`. A ref is what keeps
  * a commit alive: Git's garbage collector never removes anything a ref can
  * reach, so a dropped commit, a squashed run or a deleted branch can be
  * brought back for as long as its recovery point exists. The reflog does the
  * same job, but it expires, it is per ref, and a deleted branch's reflog is
  * deleted with it.
  *
- * The log itself is one JSON object per line in `<git dir>/gitalia/
+ * The log itself is one JSON object per line in `<git dir>/gitkeen/
  * operations.log`, so it belongs to the repository (and to one worktree of
- * it), not to Gitalia's own settings. Only the newest `KEEP` entries are
+ * it), not to Gitkeen's own settings. Only the newest `KEEP` entries are
  * kept, and a recovery point goes with its entry.
  */
 import { runGit, git, GitError } from './git.mjs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 
 const KEEP = 100;
-export const RECOVERY_PREFIX = 'refs/gitalia/recovery/';
+export const RECOVERY_PREFIX = 'refs/gitkeen/recovery/';
+
+// The app was called Gitalia before, and kept its log and recovery points
+// under that name.
+const LEGACY_DIR = 'gitalia';
+const LEGACY_PREFIX = 'refs/gitalia/recovery/';
+
+const exists = (p) => stat(p).then(() => true, () => false);
 
 async function logFile(path) {
   const gitDir = (await git(path, ['rev-parse', '--absolute-git-dir'])).trim();
-  const dir = join(gitDir, 'gitalia');
+  const dir = join(gitDir, 'gitkeen');
+  if (!(await exists(dir)) && (await exists(join(gitDir, LEGACY_DIR)))) await migrateLegacy(path, gitDir, dir);
   await mkdir(dir, { recursive: true });
   return join(dir, 'operations.log');
+}
+
+/**
+ * Move a log written under the old name over to the new one, with its
+ * recovery points, so the Undo panel still lists and restores them.
+ */
+async function migrateLegacy(path, gitDir, dir) {
+  await rename(join(gitDir, LEGACY_DIR), dir);
+  const { stdout } = await runGit(path, ['for-each-ref', '--format=%(refname) %(objectname)', LEGACY_PREFIX], { allowFailure: true });
+  for (const line of stdout.split('\n').filter(Boolean)) {
+    const [ref, oid] = line.split(' ');
+    await git(path, ['update-ref', RECOVERY_PREFIX + ref.slice(LEGACY_PREFIX.length), oid]);
+    await git(path, ['update-ref', '-d', ref]);
+  }
+  const file = join(dir, 'operations.log');
+  const text = await readFile(file, 'utf8').catch(() => null);
+  if (text !== null) await writeFile(file, text.split(LEGACY_PREFIX).join(RECOVERY_PREFIX));
 }
 
 async function readEntries(path) {
@@ -70,7 +95,7 @@ export async function record(path, { operation, label, target, before, after = n
   if (!before || before === after) return null;
   const id = newId();
   const ref = RECOVERY_PREFIX + id;
-  await git(path, ['update-ref', '-m', `gitalia: ${label}`, ref, before]);
+  await git(path, ['update-ref', '-m', `gitkeen: ${label}`, ref, before]);
 
   const entries = await readEntries(path);
   entries.push({ id, time: Date.now(), operation, label, target, before, after, detail, ref });
@@ -126,7 +151,7 @@ export async function restore(path, id, operationInProgress) {
     if (name === (await currentBranch(path))) {
       await git(path, ['reset', '--keep', entry.before]);
     } else {
-      await git(path, ['update-ref', '-m', `gitalia: ${label}`, ref, entry.before]);
+      await git(path, ['update-ref', '-m', `gitkeen: ${label}`, ref, entry.before]);
     }
     return { ok: true, kind, name, at: entry.before, recreated: now === null };
   }
@@ -141,7 +166,7 @@ export async function restore(path, id, operationInProgress) {
   }
 
   if (kind === 'stash') {
-    await git(path, ['stash', 'store', '-m', entry.detail || 'Restored by Gitalia', entry.before]);
+    await git(path, ['stash', 'store', '-m', entry.detail || 'Restored by Gitkeen', entry.before]);
     return { ok: true, kind, name, at: entry.before, recreated: true };
   }
 
@@ -167,5 +192,5 @@ export async function restore(path, id, operationInProgress) {
     return { ok: true, kind: 'branch', name: branch, at: entry.before, recreated: true };
   }
 
-  throw new GitError('Gitalia does not know how to restore that operation.', { command: '', stderr: '', code: 1 });
+  throw new GitError('Gitkeen does not know how to restore that operation.', { command: '', stderr: '', code: 1 });
 }

@@ -378,7 +378,7 @@
         {:else if diff.binary}
           <p class="notice">
             This is a binary file.<br />
-            <span class="faint">Gitalia can tell you it changed, but not how.</span>
+            <span class="faint">Gitkeen can tell you it changed, but not how.</span>
           </p>
         {:else if diff.lfs}
           {@const lfs = diff.lfs}

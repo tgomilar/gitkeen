@@ -37,7 +37,7 @@
     {:else if !status.connected}
       <p class="repo"><b>{status.repo.owner}/{status.repo.name}</b></p>
       <p class="note">
-        {status.error ?? 'Gitalia has no GitHub token.'} Add a token in
+        {status.error ?? 'Gitkeen has no GitHub token.'} Add a token in
         <button class="link" onclick={() => settingsStore.show()}>Settings</button>, set
         <code>GITHUB_TOKEN</code>, or sign in with the GitHub CLI (<code>gh auth login</code>).
       </p>

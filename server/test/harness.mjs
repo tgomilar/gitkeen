@@ -24,7 +24,7 @@ export class Repo {
 
   /** An empty repository on `main`, with a committer already configured. */
   static async create() {
-    const path = await mkdtemp(join(tmpdir(), 'gitalia-test-'));
+    const path = await mkdtemp(join(tmpdir(), 'gitkeen-test-'));
     const repo = new Repo(path);
     await repo.git(['init', '-q', '-b', 'main']);
     await repo.git(['config', 'user.name', 'Test']);
@@ -34,7 +34,7 @@ export class Repo {
 
   /** A bare repository this one can push to, wired up as `origin`. */
   async withRemote() {
-    const remote = await mkdtemp(join(tmpdir(), 'gitalia-remote-'));
+    const remote = await mkdtemp(join(tmpdir(), 'gitkeen-remote-'));
     await runGit(remote, ['init', '-q', '--bare'], { allowFailure: true });
     await this.git(['remote', 'add', 'origin', remote]);
     this.remote = remote;

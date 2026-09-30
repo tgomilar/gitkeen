@@ -43,10 +43,10 @@
   import { dialogs } from './lib/state/dialogs.svelte';
   import type { MenuItem } from './lib/menu';
 
-  const THEME_KEY = 'gitalia.theme';
-  const SIDEBAR_KEY = 'gitalia.sidebar-width';
-  const DETAILS_KEY = 'gitalia.details-height';
-  const DOCK_KEY = 'gitalia.dock';
+  const THEME_KEY = 'gitkeen.theme';
+  const SIDEBAR_KEY = 'gitkeen.sidebar-width';
+  const DETAILS_KEY = 'gitkeen.details-height';
+  const DOCK_KEY = 'gitkeen.dock';
 
   let theme = $state<'light' | 'dark'>(
     (localStorage.getItem(THEME_KEY) as 'light' | 'dark' | null) ?? 'dark'
@@ -102,8 +102,8 @@
       dock = 'commit';
       tick().then(() => commitPanel?.focusMessage());
     };
-    window.addEventListener('gitalia:focus-commit', focusCommit);
-    return () => window.removeEventListener('gitalia:focus-commit', focusCommit);
+    window.addEventListener('gitkeen:focus-commit', focusCommit);
+    return () => window.removeEventListener('gitkeen:focus-commit', focusCommit);
   });
 
   // Reading statistics costs a full pass over the log, so unlike the other

@@ -14,13 +14,13 @@ export interface ConsoleEntry {
   line: string;
   state: 'running' | 'confirm' | 'done' | 'failed' | 'refused' | 'cancelled' | 'note';
   result: ConsoleResult | null;
-  /** Set for a note about a button elsewhere in Gitalia, not a typed command. */
+  /** Set for a note about a button elsewhere in Gitkeen, not a typed command. */
   note?: string;
   at: number;
 }
 
-const OPEN_KEY = 'gitalia.console.open';
-const HEIGHT_KEY = 'gitalia.console.height';
+const OPEN_KEY = 'gitkeen.console.open';
+const HEIGHT_KEY = 'gitkeen.console.height';
 const HISTORY_LIMIT = 200;
 let nextId = 1;
 
@@ -67,7 +67,7 @@ class ConsoleStore {
     if (root === this.historyFor) return;
     this.historyFor = root;
     this.entries = [];
-    this.history = root ? readStored<string[]>(`gitalia.console.history:${root}`, []) : [];
+    this.history = root ? readStored<string[]>(`gitkeen.console.history:${root}`, []) : [];
   }
 
   private remember(line: string) {
@@ -75,7 +75,7 @@ class ConsoleStore {
     next.push(line);
     this.history = next.slice(-HISTORY_LIMIT);
     if (this.historyFor) {
-      try { localStorage.setItem(`gitalia.console.history:${this.historyFor}`, JSON.stringify(this.history)); } catch { /* per session only */ }
+      try { localStorage.setItem(`gitkeen.console.history:${this.historyFor}`, JSON.stringify(this.history)); } catch { /* per session only */ }
     }
   }
 
@@ -161,7 +161,7 @@ class ConsoleStore {
     return at > 0 ? line[at - 1] : null;
   }
 
-  /** Open the Gitalia editor that does what the command would have waited for. */
+  /** Open the Gitkeen editor that does what the command would have waited for. */
   follow(redirect: ConsoleRedirect) {
     if (redirect.to === 'rebase') {
       const from = this.rebaseStart(redirect.base);
@@ -169,7 +169,7 @@ class ConsoleStore {
     } else if (redirect.to === 'hunks' && redirect.file) {
       diffStore.show({ file: redirect.file, source: 'Working tree', side: 'unstaged', stageable: true });
     } else if (redirect.to === 'commit') {
-      window.dispatchEvent(new CustomEvent('gitalia:focus-commit'));
+      window.dispatchEvent(new CustomEvent('gitkeen:focus-commit'));
     }
   }
 }

@@ -3,7 +3,7 @@
  * so the console teaches the command line while the buttons are used.
  *
  * The console listens; nothing is recorded while it has no listener. The
- * command is what a person would type for the same result. Gitalia may run
+ * command is what a person would type for the same result. Gitkeen may run
  * it with more options, or as several steps.
  */
 type Args = Record<string, any>;

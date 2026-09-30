@@ -1,6 +1,6 @@
 /**
  * The rules of the smart console: which Git commands it runs, which it hands
- * to one of Gitalia's editors instead, how risky each one is, and what Git's
+ * to one of Gitkeen's editors instead, how risky each one is, and what Git's
  * common errors mean in plain words.
  *
  * The console runs `git` itself, with an argument list and no shell, so a
@@ -68,7 +68,7 @@ export function tokenize(line) {
 /**
  * Whether the console may run these arguments (without the leading `git`),
  * and if not, why. A command that would wait for an editor is answered
- * with where in Gitalia to do it instead.
+ * with where in Gitkeen to do it instead.
  */
 export function checkCommand(args) {
   if (!Array.isArray(args) || args.length === 0) return { ok: false, error: 'Type a Git command, such as status or log.' };
@@ -96,13 +96,13 @@ export function checkCommand(args) {
     if (name && !MERGE_STRATEGIES.has(name)) return { ok: false, error: `"${name}" is not one of Git's own merge strategies.` };
   }
   if (sub === 'bisect' || (sub === 'submodule' && rest[0] === 'foreach')) {
-    return { ok: false, error: 'Use the Bisect command in Gitalia, which walks you through it.' };
+    return { ok: false, error: 'Use the Bisect command in Gitkeen, which walks you through it.' };
   }
 
-  // Commands that would open an editor and wait. Gitalia has an editor for each.
+  // Commands that would open an editor and wait. Gitkeen has an editor for each.
   if (sub === 'rebase' && (has('--interactive') || hasShort('i') || rest.includes('--edit-todo'))) {
     const base = [...rest].reverse().find((a) => !a.startsWith('-'));
-    return { ok: false, redirect: { to: 'rebase', base: base ?? null }, error: 'An interactive rebase opens in Gitalia\'s rebase editor.' };
+    return { ok: false, redirect: { to: 'rebase', base: base ?? null }, error: 'An interactive rebase opens in Gitkeen\'s rebase editor.' };
   }
   const choosesHunks =
     (['add', 'checkout', 'reset', 'restore', 'stash', 'commit'].includes(sub) && has('--patch', '--interactive')) ||
@@ -111,7 +111,7 @@ export function checkCommand(args) {
     (sub === 'stash' && rest.includes('-p'));
   if (choosesHunks) {
     const file = [...rest].reverse().find((a) => !a.startsWith('-'));
-    return { ok: false, redirect: { to: 'hunks', file: file ?? null }, error: 'Choosing hunks happens in Gitalia\'s diff viewer, where you tick the ones you want.' };
+    return { ok: false, redirect: { to: 'hunks', file: file ?? null }, error: 'Choosing hunks happens in Gitkeen\'s diff viewer, where you tick the ones you want.' };
   }
   if (sub === 'commit' && !has('--message', '--file', '--reuse-message', '--no-edit', '--fixup', '--squash') && !hasShort('m') && !hasShort('F') && !hasShort('C')) {
     if (!has('--amend')) {

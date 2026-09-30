@@ -38,7 +38,7 @@ class HttpTransport implements Transport {
       payload = await res.json();
     } catch (err) {
       throw new GitCallError(
-        `Cannot reach the Gitalia backend. Is the dev server running? (${(err as Error).message})`,
+        `Cannot reach the Gitkeen backend. Is the dev server running? (${(err as Error).message})`,
         method
       );
     }

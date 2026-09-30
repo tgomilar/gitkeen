@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the Gitalia window may ask the desktop shell for.",
+  "description": "What the Gitkeen window may ask the desktop shell for.",
   "windows": ["main"],
   "permissions": [
     "core:default",

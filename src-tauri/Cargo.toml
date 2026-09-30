@@ -1,12 +1,12 @@
 [package]
-name = "gitalia"
+name = "gitkeen"
 version = "0.1.0"
 description = "A visual Git workspace"
 edition = "2021"
 rust-version = "1.80"
 
 [lib]
-name = "gitalia_lib"
+name = "gitkeen_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

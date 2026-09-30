@@ -38,7 +38,7 @@
 
   <div class="scroll">
     <p class="intro">
-      Before an operation rewrites or deletes history, Gitalia saves where things were. Restore puts
+      Before an operation rewrites or deletes history, Gitkeen saves where things were. Restore puts
       them back.
     </p>
 

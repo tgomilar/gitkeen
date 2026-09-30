@@ -13,15 +13,15 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { handleRpc } from './http.mjs';
 
-const secret = process.env.GITALIA_SECRET ?? '';
+const secret = process.env.GITKEEN_SECRET ?? '';
 if (secret.length < 32) {
-  process.stderr.write('GITALIA_SECRET must be set to at least 32 characters.\n');
+  process.stderr.write('GITKEEN_SECRET must be set to at least 32 characters.\n');
   process.exit(2);
 }
 const expected = Buffer.from(secret);
 
 function authorised(req) {
-  const given = Buffer.from(String(req.headers['x-gitalia-secret'] ?? ''));
+  const given = Buffer.from(String(req.headers['x-gitkeen-secret'] ?? ''));
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
@@ -36,7 +36,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(0, '127.0.0.1', () => {
   // The app waits for this one line to learn where to send calls.
-  process.stdout.write(`GITALIA_BACKEND_PORT=${server.address().port}\n`);
+  process.stdout.write(`GITKEEN_BACKEND_PORT=${server.address().port}\n`);
 });
 
 process.stdin.resume();

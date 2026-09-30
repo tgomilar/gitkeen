@@ -9,7 +9,7 @@
  *      is then signed again (ad hoc) so macOS will run it.
  *
  * The result lands in src-tauri/binaries/, named with the target triple as
- * Tauri expects: gitalia-backend-aarch64-apple-darwin on an Apple silicon Mac.
+ * Tauri expects: gitkeen-backend-aarch64-apple-darwin on an Apple silicon Mac.
  */
 import { build } from 'esbuild';
 import { execFileSync } from 'node:child_process';
@@ -20,7 +20,7 @@ const root = new URL('..', import.meta.url).pathname;
 const work = join(root, 'dist-sidecar');
 const triple = execFileSync('rustc', ['-vV'], { encoding: 'utf8' }).match(/^host: (.+)$/m)[1];
 const outDir = join(root, 'src-tauri', 'binaries');
-const binary = join(outDir, `gitalia-backend-${triple}${process.platform === 'win32' ? '.exe' : ''}`);
+const binary = join(outDir, `gitkeen-backend-${triple}${process.platform === 'win32' ? '.exe' : ''}`);
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(work, { recursive: true });
@@ -36,8 +36,8 @@ await build({
   format: 'cjs',
   target: 'node20',
   outfile: join(work, 'sidecar.cjs'),
-  define: { 'import.meta.url': '__gitalia_url' },
-  banner: { js: "const __gitalia_url = require('node:url').pathToFileURL(__filename).href;" },
+  define: { 'import.meta.url': '__gitkeen_url' },
+  banner: { js: "const __gitkeen_url = require('node:url').pathToFileURL(__filename).href;" },
   logLevel: 'warning'
 });
 

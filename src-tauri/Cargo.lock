@@ -1311,7 +1311,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitalia"
+name = "gitkeen"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",

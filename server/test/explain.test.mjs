@@ -1,6 +1,6 @@
 /**
  * AI explanations, against a stand-in for LM Studio's local server, so the
- * tests check what Gitalia sends and how it reads the answer without calling
+ * tests check what Gitkeen sends and how it reads the answer without calling
  * any real model.
  */
 import { test, describe, before, after } from 'node:test';

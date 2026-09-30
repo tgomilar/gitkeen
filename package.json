@@ -1,9 +1,9 @@
 {
-  "name": "gitalia",
+  "name": "gitkeen",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A standalone visual Git workspace. Your editor writes code, Gitalia manages your history.",
+  "description": "A standalone visual Git workspace. Your editor writes code, Gitkeen manages your history.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
