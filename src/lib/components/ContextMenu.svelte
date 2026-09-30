@@ -113,7 +113,11 @@
     position: fixed;
     z-index: 61;
     min-width: 210px;
-    max-width: 320px;
+    /* As wide as its longest item, so nothing is ever cut short. Only a
+       window narrower than that makes the text wrap instead. */
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     padding: 4px;
     background: var(--bg-raised);
     border: 1px solid var(--border-strong);
@@ -133,6 +137,9 @@
     border-radius: var(--radius-sm);
     text-align: left;
     white-space: nowrap;
+  }
+  @media (max-width: 520px) {
+    .item { white-space: normal; }
   }
 
   .item.active:not(:disabled) { background: var(--accent); color: var(--accent-text); }
@@ -154,9 +161,13 @@
   .item.active .glyph, .item.danger .glyph { color: inherit; }
   .item:disabled .glyph { color: var(--text-faint); }
 
-  .label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  /* Neither the label nor the hint is ever shortened: they keep their full
+     text, and the menu grows to fit them. */
+  .label { flex: 1 0 auto; }
 
   .hint {
+    flex: none;
+    margin-left: 18px;
     font-family: var(--font-mono);
     font-size: 10.5px;
     color: var(--text-faint);
