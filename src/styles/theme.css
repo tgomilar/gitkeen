@@ -40,6 +40,11 @@
 
   /* The Git orange, used only by the logo. */
   --brand: #f03c2e;
+  /* The logo's rounded square and the colours drawn on it, as in brand/logo.svg. */
+  --logo-tile: #fdeceb;
+  --logo-ink: #1c1c1f;
+  --logo-red: #f03c2e;
+  --logo-blue: #2f6fd0;
 
   --danger: #c72e0f;
   --danger-subtle: rgba(199, 46, 15, 0.08);
@@ -123,6 +128,10 @@
   --accent-subtle: rgba(0, 120, 212, 0.2);
 
   --brand: #f4553f;
+  --logo-tile: #552a26;
+  --logo-ink: #e3e3e6;
+  --logo-red: #f4553f;
+  --logo-blue: #4a8fe0;
 
   --danger: #f85149;
   --danger-subtle: rgba(248, 81, 73, 0.12);

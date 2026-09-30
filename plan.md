@@ -1050,7 +1050,7 @@ than just a Git GUI.
 
 The core principle remains:
 
-> **Your editor writes code. This app manages your history.**
+> **Your editor writes code. This app manages your commits, history and more.**
 
 ------------------------------------------------------------------------
 

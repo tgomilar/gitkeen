@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A standalone visual Git workspace. Your editor writes code, Gitkeen manages your history.",
+  "description": "A standalone visual Git workspace. Your editor writes code, Gitkeen manages your commits, history and more.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -38,14 +38,17 @@
 </script>
 
 <nav class="rail" aria-label="Tool panels">
-  <!-- The mark from the logo: a lowercase "g" drawn as a branch that forks and merges back. -->
+  <!-- The mark from brand/icon.svg: a lowercase "g" drawn as a branch that forks and merges back. -->
   <div class="mark" title="Gitkeen">
-    <svg viewBox="0 0 34 34" width="30" height="30" fill="none" stroke-width="2.6" role="img" aria-label="Gitkeen">
-      <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="#f03c2e" />
-      <path d="M24 7 H16 a7 7 0 0 0 0 14 H24" stroke="var(--text)" />
-      <circle cx="24" cy="4" r="3.4" fill="#2f6fd0" />
-      <circle cx="9" cy="14" r="3.4" fill="#f03c2e" />
-      <circle cx="8" cy="30" r="3.4" fill="#2f6fd0" />
+    <svg viewBox="0 0.68 88.51 88.51" width="30" height="30" role="img" aria-label="Gitkeen">
+      <rect x="0" y="0.68" width="88.51" height="88.51" rx="19.87" fill="var(--logo-tile)" />
+      <g transform="translate(12.80 11.52) scale(1.9658)" fill="none" stroke-width="2.2">
+        <path d="M24 4 H16 a7 7 0 0 0 0 14 H24" stroke="var(--logo-ink)" />
+        <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="var(--logo-red)" />
+      </g>
+      <path fill="var(--logo-blue)" transform="translate(59.98 19.38) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
+      <path fill="var(--logo-red)" transform="translate(30.49 33.14) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
+      <path fill="var(--logo-blue)" transform="translate(28.53 70.49) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
     </svg>
   </div>
   {#each items as item (item.id)}

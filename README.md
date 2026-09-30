@@ -1,8 +1,13 @@
-# Gitkeen
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark.svg">
+    <img src="brand/logo.svg" alt="Gitkeen" height="64">
+  </picture>
+</h1>
 
 Gitkeen is a standalone visual Git* client. It gives you the commit graph and
 the history tools that IntelliJ IDEA* offers, without asking you to change your
-editor. Your editor writes code. Gitkeen manages your history.
+editor. Your editor writes code. Gitkeen manages your commits, history and more.
 
 The plan the app is built from is `plan.md`. Today Gitkeen covers one
 workflow: open a repository*, read its history, select commits, switch
@@ -1090,6 +1095,7 @@ The user interface never builds a Git command. It calls named methods such as
 | `server/console.mjs` | The console's rules: which commands and options it runs, how risky each is, and what an error means. |
 | `src/lib/console/` | What the console knows about each command, the suggestions, and the button to command table. |
 | `src/lib/components/ConsolePanel.svelte` | The console panel. `ConsoleOutput.svelte` draws each result. |
+| `brand/` | The logo files. See [The logo](#the-logo). |
 
 ### The graph
 
@@ -1129,6 +1135,27 @@ is greyed out with a short reason the moment you select the commits. The
 backend runs all of them again before it touches anything, so a mistake in the
 screen cannot lead to a damaged repository. If a squash, move or drop fails part
 way, Gitkeen aborts it, which leaves the branch where it started.
+
+### The logo
+
+The logo is a lowercase "g", drawn as a branch that splits and joins again,
+on a soft red rounded square, followed by the word "gitkeen". Each file comes
+in two versions: one for light backgrounds, and one ending in `-dark` for dark
+backgrounds.
+
+| File | When to use it |
+|---|---|
+| `brand/logo.svg` | The full logo: the square and the word. Use it wherever there is room. |
+| `brand/wordmark.svg` | The word alone, for small sizes such as the status bar, where the square would be too small to read. |
+| `brand/icon.svg` | The square alone, for icons, such as the favicon and the top of the tool rail. |
+
+`public/favicon.svg` is the square, and changes to the dark version when the
+browser uses a dark colour scheme. `src-tauri/app-icon.svg` is the dark square
+on the canvas macOS uses for app icons. The desktop app's icons in
+`src-tauri/icons/` are made from it with `npx tauri icon src-tauri/app-icon.svg`.
+
+Inside the app, the logo takes its colours from the theme, from the
+`--logo-` values in `src/styles/theme.css`.
 
 ## Known limits
 

@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- The Gitkeen mark, a "g" drawn as a branch that forks and merges back,
-       on the rounded square macOS draws app icons in. -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="#1f1f1f" />
-  <g transform="translate(222 212) scale(17)" fill="none" stroke-width="2.6" stroke-linecap="round">
-    <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="#f4553f" />
-    <path d="M24 7 H16 a7 7 0 0 0 0 14 H24" stroke="#e3e3e6" />
-    <circle cx="24" cy="4" r="3.4" fill="#4a8fe0" stroke="none" />
-    <circle cx="9" cy="14" r="3.4" fill="#f4553f" stroke="none" />
-    <circle cx="8" cy="30" r="3.4" fill="#4a8fe0" stroke="none" />
+  <!-- The Gitkeen mark, dark, on the rounded square macOS draws app icons in. -->
+  <g transform="translate(100 93.67) scale(9.3097)">
+    <rect x="0" y="0.68" width="88.51" height="88.51" rx="19.87" fill="#552a26" />
+    <g transform="translate(12.80 11.52) scale(1.9658)" fill="none" stroke-width="2.2">
+      <path d="M24 4 H16 a7 7 0 0 0 0 14 H24" stroke="#e3e3e6" />
+      <path d="M24 4 V25 a5 5 0 0 1 -5 5 H10" stroke="#f4553f" />
+    </g>
+    <path fill="#4a8fe0" transform="translate(59.98 19.38) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
+    <path fill="#f4553f" transform="translate(30.49 33.14) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
+    <path fill="#4a8fe0" transform="translate(28.53 70.49) scale(0.7000) translate(-170.42 -8.53)" d="M170.379 16.281c-4.961 0-7.832-2.87-7.832-7.836 0-4.957 2.871-7.656 7.832-7.656 5.05 0 7.922 2.7 7.922 7.656 0 4.965-2.871 7.836-7.922 7.836Z" />
   </g>
 </svg>
