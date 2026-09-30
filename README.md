@@ -171,7 +171,7 @@ viewer follows the whole change over to the other tab by itself.
 
 Code is coloured by its language, which Gitalia reads from the file name.
 About 30 languages are known, among them TypeScript, JavaScript, Svelte, Vue,
-Python, Rust, Go, Java, Kotlin, Swift, C, C++, C#, Ruby, PHP, shell, SQL, CSS,
+Python, Rust*, Go, Java, Kotlin, Swift, C, C++, C#, Ruby, PHP, shell, SQL, CSS,
 HTML, JSON, YAML, TOML, Markdown and Dockerfiles. The colours follow the
 colour palette you chose. Each side of a hunk is coloured as one piece, so a
 comment or a string over several lines keeps its colour. The blame view is
@@ -878,7 +878,7 @@ separate program inside the app, and only the app can reach it: it listens on
 this computer alone, and answers nothing without a secret the app chooses
 each time it starts.
 
-To build it you need Rust* (install it from rustup.rs) and the Xcode command
+To build it you need Rust (install it from rustup.rs) and the Xcode command
 line tools. Then run `npm run desktop:build`. The first build takes a few
 minutes and needs about 3 GB of free disk space for Rust's build folder,
 `src-tauri/target`, which you can delete afterwards. The app lands in
