@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { CommitSignature } from '../git/types';
   import { repoStore } from '../state/repo.svelte';
   import { absoluteTime, relativeTime, initials, authorColor, pluralize } from '../format';
   import { toasts } from '../state/toasts.svelte';
@@ -52,6 +53,30 @@
       toasts.error('Could not copy to the clipboard');
     }
   }
+
+  /** The signature of the commit shown, once its details are read. */
+  const signature = $derived(repoStore.detailsFor === selected?.hash ? repoStore.details?.signature ?? null : null);
+
+  const SIGNATURE: Record<CommitSignature['status'], { label: string; tone: string }> = {
+    good: { label: 'signed, verified', tone: 'good' },
+    untrusted: { label: 'signed, key not trusted', tone: 'warn' },
+    expired: { label: 'signed, signature expired', tone: 'warn' },
+    'expired-key': { label: 'signed, key expired', tone: 'warn' },
+    revoked: { label: 'signed, key revoked', tone: 'bad' },
+    bad: { label: 'bad signature', tone: 'bad' },
+    unknown: { label: 'signed, cannot be checked', tone: 'dim' },
+    none: { label: '', tone: '' }
+  };
+
+  function signatureTitle(sig: CommitSignature) {
+    const kind = sig.format === 'ssh' ? 'an SSH key' : sig.format === 'x509' ? 'an X.509 certificate' : 'an OpenPGP key';
+    const lines = [`Signed with ${kind}.`];
+    if (sig.signer) lines.push(`Signer: ${sig.signer}`);
+    if (sig.key) lines.push(`Key: ${sig.key}`);
+    if (sig.status === 'unknown') lines.push('Git cannot check it here: the key is not known to this computer.');
+    if (sig.status === 'bad') lines.push('The commit does not match its signature. It may have been changed after it was signed.');
+    return lines.join('\n');
+  }
 </script>
 
 <section class="details">
@@ -84,6 +109,11 @@
         <button class="hash mono" onclick={copyHash} title="Copy full hash">{selected.shortHash}</button>
         {#if selected.parents.length > 1}
           <span class="badge">merge of {selected.parents.length}</span>
+        {/if}
+        {#if signature && signature.status !== 'none'}
+          <span class="badge sig {SIGNATURE[signature.status].tone}" title={signatureTitle(signature)}>
+            {SIGNATURE[signature.status].label}
+          </span>
         {/if}
         {#if selected.committer !== selected.author}
           <span class="sep">·</span>
@@ -141,6 +171,11 @@
 </section>
 
 <style>
+  .badge.sig.good { color: var(--success); }
+  .badge.sig.warn { color: var(--warning); }
+  .badge.sig.bad { color: var(--danger); }
+  .badge.sig.dim { color: var(--text-faint); }
+
   .details {
     display: flex;
     flex-direction: column;

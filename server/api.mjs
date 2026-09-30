@@ -1180,6 +1180,38 @@ function parseNumstat(stat) {
   return files;
 }
 
+/**
+ * Whether a commit is signed, and whether the signature checks out.
+ *
+ * `%G?` is Git's verdict: G good, U good but the key is not trusted, X or Y
+ * expired, R revoked key, B bad, E cannot be checked (usually the key is not
+ * known here), N not signed. Checking a signature runs gpg or ssh-keygen, so
+ * it is done for one commit at a time, when its details are opened.
+ */
+const SIGNATURE_STATES = {
+  G: 'good', U: 'untrusted', X: 'expired', Y: 'expired-key', R: 'revoked', B: 'bad', E: 'unknown', N: 'none'
+};
+
+async function readSignature(path, hash) {
+  const { stdout, code } = await runGit(path, ['log', '-1', `--format=%G?${US}%GS${US}%GK${US}%GF`, hash, '--'], { allowFailure: true });
+  if (code !== 0) return { status: 'none', signer: null, key: null };
+  const [mark, signer, key, fingerprint] = stdout.trim().split(US);
+  const { stdout: raw } = await runGit(path, ['cat-file', 'commit', hash], { allowFailure: true });
+  const format = /^gpgsig(?:-sha256)? -----BEGIN SSH SIGNATURE/m.test(raw) ? 'ssh'
+    : /^gpgsig(?:-sha256)? -----BEGIN SIGNED MESSAGE/m.test(raw) ? 'x509'
+    : /^gpgsig/m.test(raw) ? 'openpgp' : null;
+  // Without an allowed-signers file Git says N for an SSH signature it cannot
+  // check. The commit is still signed, so that is "cannot be checked".
+  let status = SIGNATURE_STATES[mark] ?? 'unknown';
+  if (status === 'none' && format) status = 'unknown';
+  return {
+    status,
+    format,
+    signer: signer || null,
+    key: fingerprint || key || null
+  };
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -1378,7 +1410,7 @@ export const methods = {
   async 'commit.details'({ path, hash }) {
     const body = await git(path, ['show', '-s', `--pretty=format:%B`, hash]);
     const stat = await git(path, ['-c', 'core.quotepath=false', 'show', '--numstat', '-z', '--pretty=format:', hash]);
-    return { body: body.trim(), files: parseNumstat(stat) };
+    return { body: body.trim(), files: parseNumstat(stat), signature: await readSignature(path, hash) };
   },
 
   async 'branch.checkout'({ path, name }) {
@@ -2979,7 +3011,7 @@ export const methods = {
    * stays out of it, on purpose. Amending with nothing staged still works: it
    * replaces the message of HEAD, whose tree is untouched.
    */
-  async 'changes.commit'({ path, paths, message, amend = false }) {
+  async 'changes.commit'({ path, paths, message, amend = false, sign = null }) {
     if (!message || !message.trim()) {
       throw new GitError('A commit message is required.', { command: '', stderr: '', code: 1 });
     }
@@ -3000,6 +3032,10 @@ export const methods = {
 
     const args = ['commit'];
     if (amend) args.push('--amend');
+    // Signing follows the repository's own setting unless the panel says
+    // otherwise for this one commit.
+    if (sign === true) args.push('-S');
+    else if (sign === false) args.push('--no-gpg-sign');
     args.push('-m', message.trim());
 
     // Nothing to undo if this fails: the commit writes no staging of its own,
@@ -3409,6 +3445,28 @@ export const methods = {
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
+};
+
+/* ------------------------------------------------------------------ *
+ * Commit signing
+ * ------------------------------------------------------------------ */
+
+/**
+ * How this repository signs commits, from Git's configuration.
+ *
+ * `available` is true when there is something to sign with: a signing key
+ * named in `user.signingkey`, or an OpenPGP setup where gpg picks the key
+ * itself from the committer's email.
+ */
+methods['commit.signing'] = async ({ path }) => {
+  const get = async (key) => {
+    const { stdout, code } = await runGit(path, ['config', '--get', key], { allowFailure: true });
+    return code === 0 ? stdout.trim() : null;
+  };
+  const format = (await get('gpg.format')) ?? 'openpgp';
+  const key = await get('user.signingkey');
+  const always = ((await get('commit.gpgsign')) ?? '').toLowerCase() === 'true';
+  return { format, key, always, available: !!key || (format === 'openpgp' && always) };
 };
 
 /* ------------------------------------------------------------------ *

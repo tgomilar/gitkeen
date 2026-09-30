@@ -15,6 +15,7 @@ import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
 import { choose, prompt } from './dialogs.svelte';
 import { toChange } from '../changes';
+import type { SigningInfo } from '../git/types';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
 import type {
@@ -254,6 +255,23 @@ class CommitStore {
    * Asked once when a repository opens. A missing key is not an error: it
    * simply means the button is never shown.
    */
+  /** How the repository signs commits, and this commit's choice. */
+  signing = $state<SigningInfo | null>(null);
+  /** Null follows the repository's setting; true or false overrides it. */
+  sign = $state<boolean | null>(null);
+  /** Whether the next commit will be signed. */
+  willSign = $derived(this.sign ?? this.signing?.always ?? false);
+
+  async loadSigning() {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    try {
+      this.signing = await repo.signing();
+    } catch {
+      this.signing = null;
+    }
+  }
+
   async loadSuggestProviders() {
     const repo = repoStore.repo;
     if (!repo) return;
@@ -379,7 +397,8 @@ class CommitStore {
     const paths = this.checkedPaths;
     const amend = this.amend;
 
-    const result = await this.run('Committing', () => repo.commit(paths, this.message, amend));
+    const sign = this.sign;
+    const result = await this.run('Committing', () => repo.commit(paths, this.message, amend, sign));
     if (!result) {
       await repoStore.refresh();
       return null;

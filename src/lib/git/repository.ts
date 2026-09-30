@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo
 } from './types';
 
 export class GitRepository {
@@ -155,8 +155,13 @@ export class GitRepository {
   }
 
   /** Commit the staged working tree: exactly the ticked files and hunks. */
-  commit(paths: string[], message: string, amend = false): Promise<CommitResult> {
-    return transport.call('changes.commit', { path: this.path, paths, message, amend });
+  /** `sign` true or false overrides the repository's signing setting for this commit. */
+  commit(paths: string[], message: string, amend = false, sign: boolean | null = null): Promise<CommitResult> {
+    return transport.call('changes.commit', { path: this.path, paths, message, amend, sign });
+  }
+
+  signing(): Promise<SigningInfo> {
+    return transport.call('commit.signing', { path: this.path });
   }
 
   /** Where each AI key comes from. Never returns a key. */

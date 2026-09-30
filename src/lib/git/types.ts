@@ -181,6 +181,26 @@ export interface CommitFileStat {
 export interface CommitDetails {
   body: string;
   files: CommitFileStat[];
+  signature?: CommitSignature;
+}
+
+/** Whether a commit is signed, and what Git made of the signature. */
+export interface CommitSignature {
+  status: 'good' | 'untrusted' | 'expired' | 'expired-key' | 'revoked' | 'bad' | 'unknown' | 'none';
+  /** The kind of key it was signed with, or null when it is not signed. */
+  format?: 'openpgp' | 'ssh' | 'x509' | null;
+  signer: string | null;
+  key: string | null;
+}
+
+/** How this repository signs commits. */
+export interface SigningInfo {
+  format: string;
+  key: string | null;
+  /** True when `commit.gpgsign` signs every commit. */
+  always: boolean;
+  /** True when there is a key to sign with. */
+  available: boolean;
 }
 
 export interface HeadCommit {

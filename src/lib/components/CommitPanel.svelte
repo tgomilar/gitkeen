@@ -47,7 +47,10 @@
    * depends on the backend's environment, not on anything on screen.
    */
   $effect(() => {
-    if (repoStore.info?.root) commitStore.loadSuggestProviders();
+    if (repoStore.info?.root) {
+      commitStore.loadSuggestProviders();
+      commitStore.loadSigning();
+    }
   });
 
   /** Every collapsible key on screen, for the collapse-all button. */
@@ -248,6 +251,18 @@
         />
         <span>Amend</span>
       </label>
+      {#if commitStore.signing?.available}
+        <label class="amend" title={commitStore.signing.always
+          ? 'This repository signs every commit (commit.gpgsign). Untick to leave this one unsigned.'
+          : `Sign this commit with your ${commitStore.signing.format === 'ssh' ? 'SSH' : commitStore.signing.format === 'x509' ? 'X.509' : 'OpenPGP'} key`}>
+          <TriCheckbox
+            checkState={commitStore.willSign ? 'all' : 'none'}
+            label="Sign the commit"
+            onchange={() => (commitStore.sign = !commitStore.willSign)}
+          />
+          <span>Sign</span>
+        </label>
+      {/if}
       {#if commitStore.amend && commitStore.head}
         <span class="amend-target" title={commitStore.head.subject}>
           replaces {commitStore.head.hash?.slice(0, 7)}

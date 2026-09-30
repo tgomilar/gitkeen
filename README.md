@@ -43,6 +43,7 @@ branches, commit your work, and change the history you already have.
 | Compare | See the commits and files that differ between two branches or commits. |
 | Worktrees | Check out another branch in a folder of its own, and switch between the folders. |
 | Submodules | See the repositories kept inside this one, check them out, and open them. |
+| Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -590,6 +591,28 @@ commit, or to copy its path or URL. Double click it, or choose **Open in
 Gitalia**, to work in it as a repository of its own. Right click the
 **Submodules** heading, or use the command palette, to update them all.
 
+## Signed commits
+
+A signed commit carries proof of who made it. Git can sign with an OpenPGP*
+key, an SSH* key or an X.509 certificate. You set this up once in Git itself,
+with `user.signingkey` and, for SSH, `gpg.format ssh`.
+
+When a signing key is set up, the commit panel shows a **Sign** box next to
+**Amend**. It starts ticked if your Git settings sign every commit
+(`commit.gpgsign`), and you can change it for one commit.
+
+The commit details show how a signed commit stands:
+
+| Label | Meaning |
+|---|---|
+| signed, verified | The signature is good, and Git trusts the key. |
+| signed, key not trusted | The signature is good, but Git has not been told to trust the key. |
+| signed, cannot be checked | This computer does not know the key. For SSH, the key is not in `gpg.ssh.allowedSignersFile`. |
+| signed, signature expired, key expired or key revoked | The signature was good once, but no longer counts. |
+| bad signature | The commit does not match its signature. It may have been changed after it was signed. |
+
+Hover over the label to see the signer and the key.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -775,6 +798,7 @@ Your own repositories are never touched.
 | `server/test/compare.test.mjs` | Comparing two branches or commits. |
 | `server/test/worktree.test.mjs` | Adding, listing, removing and pruning worktrees. |
 | `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
+| `server/test/signing.test.mjs` | Signing a commit, and reading whether a signature checks out. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
@@ -916,7 +940,14 @@ backend runs on it during development.
 **Repository**: A folder whose history Git records, together with that
 history.
 
+**OpenPGP**: A standard for signing and encrypting data with a pair of keys:
+a private key that only you hold, and a public key that others use to check
+your signature. The program gpg is the usual way to use it.
+
 **Rust**: A programming language. Tauri applications are written in it.
+
+**SSH**: Secure Shell. A way to log in to other computers safely. SSH keys can
+also sign Git commits, which is often simpler than setting up OpenPGP.
 
 **Svelte**: A tool for building web user interfaces. Gitalia's screens are
 written with it.
