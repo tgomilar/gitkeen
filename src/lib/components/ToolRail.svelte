@@ -6,9 +6,10 @@
    * Project and Commit: they share the same space rather than competing for it.
    */
   import Icon from './Icon.svelte';
+  import { githubStore } from '../state/github.svelte';
   import type { IconName } from './Icon.svelte';
 
-  export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo';
+  export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo' | 'github';
 
   interface Props {
     active: DockPanel;
@@ -23,12 +24,16 @@
 
   let { active, changeCount, onselect }: Props = $props();
 
-  const items: { id: DockPanel; label: string; icon: IconName; hint: string }[] = [
+  // GitHub joins the rail only for a repository that has a remote there.
+  const items = $derived<{ id: DockPanel; label: string; icon: IconName; hint: string }[]>([
     { id: 'branches', label: 'Branches', icon: 'branch', hint: 'Branches, remotes and tags' },
     { id: 'commit', label: 'Commit', icon: 'commit', hint: 'Changed and unversioned files' },
     { id: 'stats', label: 'Stats', icon: 'stats', hint: 'Who committed what, and when' },
-    { id: 'undo', label: 'Undo', icon: 'rollback', hint: 'Operations that changed history, and the way back' }
-  ];
+    { id: 'undo', label: 'Undo', icon: 'rollback', hint: 'Operations that changed history, and the way back' },
+    ...(githubStore.onGithub
+      ? [{ id: 'github' as const, label: 'GitHub', icon: 'pull-request' as const, hint: 'Pull requests and checks on GitHub' }]
+      : [])
+  ]);
 </script>
 
 <nav class="rail" aria-label="Tool panels">

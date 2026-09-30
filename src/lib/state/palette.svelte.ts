@@ -42,11 +42,12 @@ import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
 import { submoduleStore } from './submodules.svelte';
 import { lfsStore } from './lfs.svelte';
+import { githubStore } from './github.svelte';
 import { appearance, PALETTES, TEXT_SIZES } from './appearance.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
-  setDock(panel: 'branches' | 'commit' | 'stats' | 'undo'): void;
+  setDock(panel: 'branches' | 'commit' | 'stats' | 'undo' | 'github'): void;
   /** Focus the commit panel's message box, opening the panel first. */
   openCommit(): void;
   focusSearch(): void;
@@ -491,6 +492,18 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   add({ id: 'patch-apply', label: 'Apply a patch file…', keywords: 'patch am apply diff import', icon: 'include', group: 'History', run: () => applyPatchFile() });
   add({ id: 'bundle-export', label: 'Export a bundle', keywords: 'bundle backup offline export all branches', icon: 'copy', group: 'Branches', run: () => exportBundle() });
   add({ id: 'bundle-import', label: 'Import a bundle…', keywords: 'bundle offline import fetch', icon: 'fetch', group: 'Branches', run: () => importBundle() });
+  if (githubStore.connected) {
+    add({
+      id: 'github-pr',
+      label: branch ? `New pull request for ${branch}…` : 'New pull request…',
+      keywords: 'github pull request pr open review',
+      icon: 'pull-request',
+      group: 'Branches',
+      disabled: !branch || branch === githubStore.status?.defaultBranch,
+      run: () => githubStore.createForCurrentBranch()
+    });
+    add({ id: 'github-pulls', label: 'Show the pull requests', keywords: 'github pull requests pr list', icon: 'pull-request', group: 'View', run: () => b.setDock('github') });
+  }
   add({
     id: 'lfs',
     label: 'Git LFS…',

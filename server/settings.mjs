@@ -1,7 +1,7 @@
 /**
  * Gitalia's own settings, which are about the user rather than a repository.
  *
- * Only the AI keys live here so far. They are kept outside every repository on
+ * Only keys live here so far: the AI providers' and a GitHub token. They are kept outside every repository on
  * purpose: a key is not part of a project and must never be committed by the
  * tool whose job is committing things.
  *
@@ -23,7 +23,9 @@ const FILE = process.env.GITALIA_CONFIG || join(homedir(), '.config', 'gitalia',
 /** The providers a key can be stored for, and the variable that overrides it. */
 export const KEY_ENV = {
   anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY'
+  openai: 'OPENAI_API_KEY',
+  // Not an AI provider: the token Gitalia talks to GitHub with.
+  github: 'GITHUB_TOKEN'
 };
 
 async function readFileSettings() {

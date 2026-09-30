@@ -126,6 +126,32 @@ class DialogStore {
    * Pick one of several ways to do something, with the cost of each stated
    * next to it. Resolves with the chosen value, or null if cancelled.
    */
+  /** Some text and one choice in one dialog, such as a title and draft or ready. */
+  async form(opts: {
+    title: string;
+    message?: string;
+    facts?: DialogFact[];
+    input: DialogInput;
+    choices: DialogChoice[];
+    chosen?: string;
+    confirmLabel?: string;
+  }): Promise<{ value: string; choice: string } | null> {
+    const result = await this.open({
+      title: opts.title,
+      message: opts.message,
+      facts: opts.facts,
+      input: opts.input,
+      choices: opts.choices,
+      chosen: opts.chosen,
+      tone: 'normal',
+      confirmLabel: opts.confirmLabel ?? 'Continue',
+      cancelLabel: 'Cancel'
+    });
+    if (typeof result !== 'string') return null;
+    const cut = result.indexOf('\u0000');
+    return { choice: result.slice(0, cut), value: result.slice(cut + 1) };
+  }
+
   async choose(opts: {
     title: string;
     message?: string;
@@ -180,3 +206,4 @@ export const confirm = dialogs.confirm.bind(dialogs);
 export const prompt = dialogs.prompt.bind(dialogs);
 export const choose = dialogs.choose.bind(dialogs);
 export const confirmOr = dialogs.confirmOr.bind(dialogs);
+export const form = dialogs.form.bind(dialogs);

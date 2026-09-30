@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks
 } from './types';
 
 export class GitRepository {
@@ -91,6 +91,22 @@ export class GitRepository {
    * tree file, `side` picks one half of it: what is staged (`staged`) or what
    * still waits to be (`unstaged`).
    */
+  githubStatus(): Promise<GithubStatus> {
+    return transport.call('github.status', { path: this.path });
+  }
+
+  githubPulls(state: 'open' | 'closed' | 'all' = 'open'): Promise<{ pulls: PullRequest[] }> {
+    return transport.call('github.pulls', { path: this.path, state });
+  }
+
+  githubCreatePull(options: { branch: string; base: string; title: string; body: string; draft: boolean }): Promise<{ ok: boolean; pull: PullRequest }> {
+    return transport.call('github.createPull', { path: this.path, ...options });
+  }
+
+  githubChecks(shas: string[]): Promise<{ checks: Record<string, CommitChecks> }> {
+    return transport.call('github.checks', { path: this.path, shas });
+  }
+
   /** Ask the AI provider to explain something; nothing in the repository changes. */
   explain(kind: 'commit' | 'conflict' | 'branches' | 'operation', args: Record<string, unknown>): Promise<{ text: string; provider: string; model: string; clipped: boolean }> {
     return transport.call('ai.explain', { path: this.path, kind, ...args });

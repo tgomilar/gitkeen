@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { githubStore } from '../state/github.svelte';
   import Explain from './Explain.svelte';
   import type { CommitSignature } from '../git/types';
   import { repoStore } from '../state/repo.svelte';
@@ -78,6 +79,12 @@
     if (sig.status === 'bad') lines.push('The commit does not match its signature. It may have been changed after it was signed.');
     return lines.join('\n');
   }
+
+  // The selected commit's checks on GitHub, when the repository is there.
+  $effect(() => {
+    if (selected && githubStore.connected) githubStore.loadChecks([selected.hash]);
+  });
+  const checks = $derived(selected ? githubStore.checksFor(selected.hash) : null);
 </script>
 
 <section class="details">
@@ -138,6 +145,15 @@
         <pre class="body">{body}</pre>
       {/if}
 
+      {#if checks && checks.state !== 'none'}
+        <div class="checks">
+          <span class="checks-head">Checks on GitHub</span>
+          {#each checks.items as item (item.name + item.url)}
+            <a class="check {item.state}" href={item.url ?? undefined} target="_blank" rel="noopener"
+              title={item.detail ?? ''}>{item.state === 'success' ? '✓' : item.state === 'failure' ? '✗' : '…'} {item.name}</a>
+          {/each}
+        </div>
+      {/if}
       {#if details}
         <div class="files-head">
           <span>{pluralize(totals?.count ?? 0, 'file')} changed</span>
@@ -175,6 +191,14 @@
 </section>
 
 <style>
+  .checks { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 11.5px; }
+  .checks-head { color: var(--text-faint); }
+  .check { color: var(--text-dim); text-decoration: none; }
+  .check:hover { text-decoration: underline; }
+  .check.success { color: var(--success); }
+  .check.failure { color: var(--danger); }
+  .check.pending { color: var(--warning); }
+
   .explain-row { padding: 0 14px; }
 
   .badge.sig.good { color: var(--success); }

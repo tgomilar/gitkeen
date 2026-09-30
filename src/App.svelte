@@ -21,6 +21,8 @@
   import DiffViewer from './lib/components/DiffViewer.svelte';
   import MergeEditor from './lib/components/MergeEditor.svelte';
   import RecoveryPanel from './lib/components/RecoveryPanel.svelte';
+  import GithubPanel from './lib/components/GithubPanel.svelte';
+  import { githubStore } from './lib/state/github.svelte';
   import BlameViewer from './lib/components/BlameViewer.svelte';
   import CompareViewer from './lib/components/CompareViewer.svelte';
   import LfsPanel from './lib/components/LfsPanel.svelte';
@@ -84,6 +86,8 @@
     commitStore.reset();
     // Whether an AI provider is there decides if Explain is offered anywhere.
     if (root) commitStore.loadSuggestProviders();
+    // Whether it is on GitHub decides if the GitHub panel and checks appear.
+    if (root) githubStore.loadStatus();
     // A report describes one repository, so it goes when that one does.
     statsStore.syncRepo(root);
   });
@@ -356,6 +360,8 @@
           <StatsPanel />
         {:else if dock === 'undo'}
           <RecoveryPanel />
+        {:else if dock === 'github'}
+          <GithubPanel />
         {:else}
           <BranchSidebar />
         {/if}

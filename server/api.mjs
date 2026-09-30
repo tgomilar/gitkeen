@@ -10,6 +10,7 @@ import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders, explain } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
 import * as recovery from './recovery.mjs';
+import { githubToken, githubRepo, github, shapePull, commitChecks } from './github.mjs';
 import { access, mkdtemp, writeFile, rm, readFile, lstat, realpath } from 'node:fs/promises';
 import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -3544,6 +3545,96 @@ export const methods = {
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
+};
+
+/* ------------------------------------------------------------------ *
+ * GitHub
+ * ------------------------------------------------------------------ */
+
+/** The repository on GitHub and a token for it, or an error saying which is missing. */
+async function githubContext(path) {
+  const repo = await githubRepo(path);
+  if (!repo) throw new GitError('This repository has no remote on github.com.', { command: '', stderr: '', code: 1 });
+  const { token } = await githubToken();
+  if (!token) {
+    throw new GitError('No GitHub token. Add one in Settings, set GITHUB_TOKEN, or sign in with the GitHub CLI (gh auth login).', { command: '', stderr: '', code: 1 });
+  }
+  return { ...repo, token };
+}
+
+const asGitError = (err) => (err instanceof GitError ? err : new GitError(err.message, { command: '', stderr: '', code: 1 }));
+
+/**
+ * Whether this repository is on GitHub and Gitalia can talk to it. The page
+ * asks this first, and shows GitHub features only when both are true.
+ */
+methods['github.status'] = async ({ path }) => {
+  const repo = await githubRepo(path);
+  const { token, source } = await githubToken();
+  if (!repo || !token) return { repo, connected: false, tokenSource: source, login: null, defaultBranch: null };
+  try {
+    const [user, info] = await Promise.all([
+      github(token, 'GET', '/user').catch(() => null),
+      github(token, 'GET', `/repos/${repo.owner}/${repo.name}`)
+    ]);
+    return { repo, connected: true, tokenSource: source, login: user?.login ?? null, defaultBranch: info?.default_branch ?? null, private: !!info?.private };
+  } catch (err) {
+    return { repo, connected: false, tokenSource: source, login: null, defaultBranch: null, error: err.message };
+  }
+};
+
+/** The repository's pull requests, open ones by default, newest change first. */
+methods['github.pulls'] = async ({ path, state = 'open' }) => {
+  if (!['open', 'closed', 'all'].includes(state)) throw new GitError('Show open, closed or all pull requests.', { command: '', stderr: '', code: 1 });
+  const { owner, name, token } = await githubContext(path);
+  try {
+    const list = await github(token, 'GET', `/repos/${owner}/${name}/pulls?state=${state}&sort=updated&direction=desc&per_page=50`);
+    return { pulls: list.map(shapePull) };
+  } catch (err) {
+    throw asGitError(err);
+  }
+};
+
+/**
+ * Open a pull request for a branch of this repository.
+ *
+ * The branch must already be on GitHub with every commit pushed: a pull
+ * request is made from what GitHub has, and asking for one while commits are
+ * still only here would quietly leave them out.
+ */
+methods['github.createPull'] = async ({ path, branch, base, title, body = '', draft = false }) => {
+  const head = commitish(branch, 'the branch');
+  const into = commitish(base, 'the base branch');
+  if (typeof title !== 'string' || !title.trim()) throw new GitError('A pull request needs a title.', { command: '', stderr: '', code: 1 });
+  const { owner, name, token, remote } = await githubContext(path);
+
+  const { stdout: upstream, code } = await runGit(path, ['for-each-ref', '--format=%(upstream:short)', `refs/heads/${head}`], { allowFailure: true });
+  if (code !== 0 || !upstream.trim().startsWith(`${remote}/`)) {
+    throw new GitError(`${head} is not on ${remote} yet. Push it first, then open the pull request.`, { command: '', stderr: '', code: 1 });
+  }
+  const { stdout: ahead } = await runGit(path, ['rev-list', '--count', `${upstream.trim()}..refs/heads/${head}`], { allowFailure: true });
+  if (Number(ahead.trim() || 0) > 0) {
+    throw new GitError(`${head} has ${ahead.trim()} commits not pushed yet. Push them first, so the pull request has them.`, { command: '', stderr: '', code: 1 });
+  }
+  const remoteBranch = upstream.trim().slice(remote.length + 1);
+  try {
+    const pr = await github(token, 'POST', `/repos/${owner}/${name}/pulls`, { title: title.trim(), body, head: remoteBranch, base: into, draft: !!draft });
+    return { ok: true, pull: shapePull(pr) };
+  } catch (err) {
+    throw asGitError(err);
+  }
+};
+
+/** The checks of some commits, at most 20, by hash. */
+methods['github.checks'] = async ({ path, shas }) => {
+  if (!Array.isArray(shas) || shas.length === 0) return { checks: {} };
+  const wanted = [...new Set(shas)].slice(0, 20).map((s) => {
+    if (typeof s !== 'string' || !/^[0-9a-f]{7,40}$/i.test(s)) throw new GitError('Checks are read by commit hash.', { command: '', stderr: '', code: 1 });
+    return s;
+  });
+  const { owner, name, token } = await githubContext(path);
+  const results = await Promise.all(wanted.map((sha) => commitChecks(token, owner, name, sha)));
+  return { checks: Object.fromEntries(results.map((r) => [r.sha, r])) };
 };
 
 /* ------------------------------------------------------------------ *

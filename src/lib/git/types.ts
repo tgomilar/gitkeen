@@ -967,3 +967,38 @@ export interface ImageDiff {
   before: ImageSide | null;
   after: ImageSide | null;
 }
+
+/** Whether a repository is on GitHub, and Gitalia can talk to it. */
+export interface GithubStatus {
+  repo: { owner: string; name: string; remote: string } | null;
+  connected: boolean;
+  /** Where the token came from: Settings, GITHUB_TOKEN, or the GitHub CLI. */
+  tokenSource: 'saved' | 'environment' | 'gh' | null;
+  login: string | null;
+  defaultBranch: string | null;
+  private?: boolean;
+  error?: string;
+}
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  url: string;
+  state: 'open' | 'closed' | 'merged';
+  draft: boolean;
+  author: string | null;
+  head: string | null;
+  headSha: string | null;
+  headRepo: string | null;
+  base: string | null;
+  updated: number | null;
+  comments: number;
+}
+
+/** A commit's checks on GitHub, as one verdict and the list behind it. */
+export interface CommitChecks {
+  sha: string;
+  state: 'success' | 'failure' | 'pending' | 'none';
+  items: { name: string; state: 'success' | 'failure' | 'pending'; url: string | null; detail: string | null }[];
+  readable: boolean;
+}

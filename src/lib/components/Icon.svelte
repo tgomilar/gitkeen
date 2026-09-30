@@ -15,7 +15,7 @@
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
     | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull'
-    | 'merge' | 'move-up' | 'move-down' | 'drop' | 'rebase';
+    | 'merge' | 'move-up' | 'move-down' | 'drop' | 'rebase' | 'pull-request';
 
   interface Props {
     name: IconName;
@@ -152,6 +152,14 @@
     <path d="M3 12.8h10" />
     <path d="M5.6 5.8 10.4 10.2" />
     <path d="M10.4 5.8 5.6 10.2" />
+  {:else if name === 'pull-request'}
+    <!-- A branch reaching across to be merged: the usual pull request mark. -->
+    <circle cx="4.4" cy="3.2" r="1.6" />
+    <circle cx="4.4" cy="12.8" r="1.6" />
+    <circle cx="11.6" cy="12.8" r="1.6" />
+    <path d="M4.4 4.8v6.4" />
+    <path d="M11.6 11.2V6.2a2 2 0 0 0-2-2H7.4" />
+    <path d="M8.8 2.6 7.2 4.2l1.6 1.6" />
   {:else if name === 'merge'}
     <!-- Two lines joining into one: a side branch coming back to the trunk. -->
     <circle cx="4.4" cy="3.2" r="1.6" />

@@ -38,7 +38,13 @@
   function submit() {
     const req = dialogs.current;
     if (!req) return;
-    if (req.choices) {
+    if (req.choices && req.input) {
+      // A form: some text and one choice, answered together.
+      const trimmed = value.trim();
+      const problem = req.input.validate?.(trimmed) ?? (trimmed ? null : 'A value is required.');
+      if (problem) { error = problem; return; }
+      dialogs.settle(`${choice}\u0000${trimmed}`);
+    } else if (req.choices) {
       dialogs.settle(choice);
     } else if (req.input) {
       const trimmed = value.trim();

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Self from './BranchNode.svelte';
   import Icon from './Icon.svelte';
+  import ChecksDot from './ChecksDot.svelte';
   import type { IconName } from './Icon.svelte';
   import type { TreeNode } from '../branchTree';
   import { countBranches } from '../branchTree';
@@ -67,6 +68,7 @@
     <span class="chevron-space" aria-hidden="true"></span>
     <span class="glyph" class:current={isCurrent} aria-hidden="true"><Icon name={leafIcon} /></span>
     <span class="name">{node.name}</span>
+    {#if kind !== 'tag'}<ChecksDot sha={branch.oid} />{/if}
     {#if branch.ahead > 0 || branch.behind > 0}
       <span class="track" title="{branch.ahead} ahead, {branch.behind} behind {branch.upstream}">
         {#if branch.ahead > 0}<span class="ahead">↑{branch.ahead}</span>{/if}

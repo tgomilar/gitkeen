@@ -46,6 +46,7 @@ branches, commit your work, and change the history you already have.
 | Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
 | Git LFS* | See which files are stored in LFS, track new kinds of file, and download their content. |
 | Patches and bundles | Save commits as a patch file and apply one, or carry a whole repository in one bundle file. |
+| GitHub | List the pull requests*, open one for the current branch, and see whether checks passed. |
 | AI* help | Suggest a commit message, and explain a commit, a conflict, two branches or a risky operation in plain words. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
@@ -705,6 +706,29 @@ every branch and tag. **Import a bundle…** brings one in under a name you
 choose, so its branches arrive as `name/branch`, the way a remote's do. No
 branch of your own moves.
 
+## GitHub
+
+When a repository has a remote on github.com, **GitHub** appears in the rail
+on the left. Gitalia needs a token to reach GitHub. It uses, in this order:
+
+1. `GITHUB_TOKEN` from the environment.
+2. A token saved in Settings, under GitHub.
+3. The GitHub CLI's sign-in, if you ran `gh auth login`.
+
+A fine-grained token needs access to the repository, **Pull requests** (read
+and write), and **Commit statuses** and **Actions** (read). The token stays in
+Gitalia's backend. The page is told only whether there is one.
+
+| Where | What it shows or does |
+|---|---|
+| GitHub panel | The pull requests (open, closed or all), each with its branches, author, age and checks. Click one to open it on GitHub. |
+| GitHub panel, **New pull request for …** | Opens a pull request from the current branch into the default branch. The title and description start from the branch's commits, and you can open it as a draft. |
+| Branches panel | A dot beside each branch GitHub has: green when its checks passed, red when one failed, and amber while they run. |
+| Commit details | Each check of the selected commit, with a link to it. |
+
+A branch must be pushed, with every commit, before a pull request can be
+opened for it, because GitHub makes the pull request from what it has.
+
 ## AI help
 
 Gitalia can ask an AI model for help. It works with an Anthropic or OpenAI
@@ -911,6 +935,7 @@ Your own repositories are never touched.
 | `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
 | `server/test/signing.test.mjs` | Signing a commit, and reading whether a signature checks out. |
 | `server/test/patch.test.mjs` | Saving and applying patches, and exporting and importing bundles. |
+| `server/test/github.test.mjs` | Pull requests and checks, against a stand-in for GitHub's API. |
 | `server/test/explain.test.mjs` | What each AI explanation is shown, against a stand-in model. |
 | `server/test/lfs.test.mjs` | Tracking files in Git LFS, reading LFS diffs, and downloading content. Skipped without git-lfs. |
 
@@ -1068,6 +1093,9 @@ history.
 **OpenPGP**: A standard for signing and encrypting data with a pair of keys:
 a private key that only you hold, and a public key that others use to check
 your signature. The program gpg is the usual way to use it.
+
+**Pull request**: A request, on a site such as GitHub, to merge one branch
+into another. Others can review and discuss the change before it is merged.
 
 **Rust**: A programming language. Tauri applications are written in it.
 

@@ -7,6 +7,7 @@
  * describe the state truthfully.
  */
 import { repoStore, describe } from './repo.svelte';
+import { githubStore } from './github.svelte';
 import { toasts } from './toasts.svelte';
 import { commitStore } from './commit.svelte';
 import type { KeyStatus, SuggestProviders } from '../git/types';
@@ -93,6 +94,9 @@ class SettingsStore {
     });
   });
 
+  /** The GitHub token's state: saved here, from the environment, or neither. */
+  github = $derived(this.status?.providers['github'] ?? null);
+
   /** True when nothing is set up, so the panel can say so plainly. */
   none = $derived(this.rows.every((r) => !r.configured));
 
@@ -133,7 +137,8 @@ class SettingsStore {
       this.status = await repo.setKey(provider, key);
       this.providers = await repo.suggestProviders();
       await commitStore.loadSuggestProviders();
-      const label = CATALOGUE.find((p) => p.id === provider)?.label ?? provider;
+      if (provider === 'github') await githubStore.loadStatus();
+      const label = provider === 'github' ? 'GitHub' : CATALOGUE.find((p) => p.id === provider)?.label ?? provider;
       toasts.success(key.trim() ? `Connected ${label}` : `Disconnected ${label}`);
       return true;
     } catch (err) {

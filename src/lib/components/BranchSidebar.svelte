@@ -11,11 +11,23 @@
   } from '../actions';
   import { worktreeStore } from '../state/worktrees.svelte';
   import { submoduleStore } from '../state/submodules.svelte';
+  import { githubStore } from '../state/github.svelte';
 
   // A branch made, deleted or checked out may have changed a worktree.
   $effect(() => {
     void repoStore.branches;
     worktreeStore.load();
+  });
+
+  // The checks of every branch GitHub has: a local one with an upstream, and
+  // every remote one. Read again whenever the branches move.
+  $effect(() => {
+    if (!githubStore.connected) return;
+    const shas = [
+      ...repoStore.branches.local.filter((b) => b.upstream).map((b) => b.oid),
+      ...repoStore.branches.remote.map((b) => b.oid)
+    ].filter((s): s is string => !!s);
+    githubStore.loadChecks(shas);
   });
 
   // A checkout or pull can move what a submodule should be at.

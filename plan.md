@@ -1162,7 +1162,9 @@ product value is the **interaction model around the Git DAG**.
     side, and the files that differ since the split or tip to tip
 -   [x] Worktrees --- listed in the Branches panel, made from a branch or for
     a new one, opened, removed and pruned
--   [ ] GitHub integration
+-   [x] GitHub integration (section 8), first version: pull requests listed
+    and opened from the current branch, and checks shown on branches and
+    commits. The token comes from GITHUB_TOKEN, Settings or the GitHub CLI.
 -   [ ] GitLab integration
 -   [x] AI assistance --- commit subjects, with a suggested split when the
     change holds unrelated work, and plain-words explanations of a commit,

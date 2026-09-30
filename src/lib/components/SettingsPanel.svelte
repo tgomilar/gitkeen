@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { githubStore } from '../state/github.svelte';
   /**
    * Settings, which today means choosing where commit suggestions come from.
    *
@@ -43,7 +44,7 @@
 
 <div class="panel" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
   <header>
-    <h2>Commit message suggestions</h2>
+    <h2>AI and GitHub</h2>
     <button class="close" onclick={() => settingsStore.hide()} aria-label="Close settings">
       <Icon name="close" size={14} />
     </button>
@@ -135,6 +136,42 @@
       {/if}
     </section>
   {/each}
+
+  <section class="provider github" class:on={githubStore.connected}>
+    <div class="head">
+      <span class="name">GitHub</span>
+      {#if githubStore.connected}<span class="badge preferred">Connected</span>{/if}
+      {#if githubStore.status?.login}<span class="model">as {githubStore.status.login}</span>{/if}
+    </div>
+    <p class="detail">A token lets Gitalia list pull requests, open one for a branch, and show whether checks passed.</p>
+    {#if settingsStore.github?.source === 'environment'}
+      <p class="state">Using <code>GITHUB_TOKEN</code> from the environment.</p>
+    {:else}
+      <div class="row">
+        <input
+          type="password"
+          bind:value={drafts['github']}
+          placeholder={settingsStore.github?.saved ? 'Paste a new token to replace the saved one' : 'Paste a GitHub token'}
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="GitHub token"
+          onkeydown={(e) => e.key === 'Enter' && save('github')}
+        />
+        <button class="primary" onclick={() => save('github')} disabled={!drafts['github']?.trim() || settingsStore.busy === 'github'}>
+          {settingsStore.busy === 'github' ? 'Saving…' : 'Save'}
+        </button>
+        {#if settingsStore.github?.saved}
+          <button class="secondary" onclick={() => disconnect('github')}>Disconnect</button>
+        {/if}
+      </div>
+      <p class="hint">
+        {#if githubStore.status?.tokenSource === 'gh'}Using the GitHub CLI's sign-in for now. A token saved here takes over.{/if}
+        {#if settingsStore.github?.saved}A token is saved. It cannot be shown again.{/if}
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer noopener">Create a token</a>
+        with access to this repository and Pull requests (read and write), Commit statuses and Actions (read).
+      </p>
+    {/if}
+  </section>
 
   <footer>
     {#if settingsStore.file}
