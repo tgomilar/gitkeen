@@ -878,7 +878,7 @@ separate program inside the app, and only the app can reach it: it listens on
 this computer alone, and answers nothing without a secret the app chooses
 each time it starts.
 
-To build it you need Rust (install it from rustup.rs) and the Xcode command
+To build it you need Rust* (install it from rustup.rs) and the Xcode command
 line tools. Then run `npm run desktop:build`. The first build takes a few
 minutes and needs about 3 GB of free disk space for Rust's build folder,
 `src-tauri/target`, which you can delete afterwards. The app lands in
@@ -978,8 +978,8 @@ drop that cannot be replayed puts the branch back exactly as it was.
 
 ## How it is built
 
-Git runs in a Node.js* backend. In the browser it is reached over HTTP from
-the development server. In the desktop app, built with Rust*, the same
+Git runs in a Node.js backend. In the browser it is reached over HTTP from
+the development server. In the desktop app, built with Rust, the same
 backend runs as a separate program, and the app passes each call on to it.
 
 ```
