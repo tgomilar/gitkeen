@@ -2,6 +2,7 @@
 name = "gitkeen"
 version = "0.1.0"
 description = "A visual Git workspace"
+license = "MIT"
 edition = "2021"
 rust-version = "1.80"
 
