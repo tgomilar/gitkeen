@@ -4,14 +4,15 @@
    *
    * Each row is one stash. Opening it lists the files it holds, and clicking
    * a file shows what is in it, so a stash can be read before anything is
-   * taken out of it.
+   * taken out of it. Ticking files lets only those come back.
    */
   import Icon from './Icon.svelte';
+  import TriCheckbox from './TriCheckbox.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
   import { fileIcon } from '../changes';
   import { relativeTime, absoluteTime, pluralize } from '../format';
-  import { showStashedDiff } from '../actions';
+  import { showStashedDiff, unstashFiles } from '../actions';
   import type { Stash } from '../git/types';
 
   interface Props {
@@ -62,12 +63,21 @@
         {:else if files.length === 0}
           <p class="pending">This stash holds no files.</p>
         {:else}
+          {@const picked = commitStore.stashPicked[stash.sha] ?? []}
           {#each files as file (file.path)}
-            <button
-              class="file"
-              onclick={() => showStashedDiff(stash, file)}
-              title="{file.path}&#10;&#10;Click to see what is in it."
-            >
+            <div class="file">
+              <span class="tick">
+                <TriCheckbox
+                  checkState={picked.includes(file.path) ? 'all' : 'none'}
+                  label="Choose {file.path} to unstash on its own"
+                  onchange={() => commitStore.toggleStashFile(stash, file.path)}
+                />
+              </span>
+              <button
+                class="open"
+                onclick={() => showStashedDiff(stash, file)}
+                title="{file.path}&#10;&#10;Click to see what is in it. Tick the box to unstash only some files."
+              >
               <span class="glyph" aria-hidden="true"><Icon name={fileIcon(file.path)} size={13} /></span>
               <span class="file-name" class:untracked={file.untracked}>
                 {file.path.split('/').pop()}
@@ -79,8 +89,23 @@
                 <span class="stat add">+{file.added}</span>
                 <span class="stat del">−{file.removed}</span>
               {/if}
-            </button>
+              </button>
+            </div>
           {/each}
+          {#if picked.length > 0}
+            <div class="picked">
+              <button class="act primary" onclick={() => unstashFiles(stash, true)}>
+                Unstash {pluralize(picked.length, 'file')}
+              </button>
+              <button class="act" onclick={() => unstashFiles(stash, false)} title="Put the files back and keep the stash as it is">
+                Apply, keep stash
+              </button>
+              <button
+                class="act plain"
+                onclick={() => commitStore.pickAllStashFiles(stash, picked.length < files.length)}
+              >{picked.length < files.length ? 'All' : 'None'}</button>
+            </div>
+          {/if}
         {/if}
       {/if}
     </div>
@@ -170,15 +195,44 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    width: 100%;
     height: 21px;
-    padding: 0 8px 0 40px;
+    padding: 0 0 0 22px;
+  }
+  .file:hover { background: var(--bg-hover); }
+  .tick { flex: none; display: flex; }
+
+  .open {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 8px 0 0;
     background: none;
     border: 0;
     text-align: left;
     white-space: nowrap;
   }
-  .file:hover { background: var(--bg-hover); }
+
+  .picked {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 8px 6px 40px;
+  }
+  .act {
+    padding: 2px 9px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 11.5px;
+  }
+  .act:hover { background: var(--bg-hover); }
+  .act.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .act.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .act.plain { border-color: transparent; background: none; color: var(--text-dim); }
 
   .file-name {
     flex: none;

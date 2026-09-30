@@ -122,7 +122,7 @@ export const HELP: HelpGroup[] = [
       },
       {
         title: 'Stash',
-        text: 'Sets the ticked files aside without committing them. Take them back from Stashes at the bottom of the commit panel.',
+        text: 'Sets the ticked files aside without committing them. Take them back from Stashes at the bottom of the commit panel, all of them or only the files you tick.',
         git: 'git stash push, git stash pop',
         show: { panel: 'commit' },
         also: 'shelve set aside'

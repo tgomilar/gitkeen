@@ -651,6 +651,8 @@ export interface StashApplyResult {
   conflicted: boolean;
   dropped: boolean;
   conflicts: number;
+  /** For chosen files only: true when no file was left and the stash went. */
+  stashGone?: boolean;
 }
 
 export interface BranchInspection {

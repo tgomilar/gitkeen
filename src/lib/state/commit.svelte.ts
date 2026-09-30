@@ -60,6 +60,8 @@ class CommitStore {
   /** Stashes the user has opened, and the files each one holds. */
   stashOpen = $state<Set<string>>(new Set());
   stashFiles = $state<Record<string, StashFile[]>>({});
+  /** The files ticked inside each stash, by stash sha, to unstash only those. */
+  stashPicked = $state<Record<string, string[]>>({});
 
   head = $state<HeadCommit | null>(null);
   busy = $state<string | null>(null);
@@ -479,6 +481,53 @@ class CommitStore {
     } catch (err) {
       toasts.error('Could not read the stash', describe(err));
     }
+  }
+
+  /** Tick or untick one file inside a stash. */
+  toggleStashFile(stash: Stash, path: string) {
+    const picked = this.stashPicked[stash.sha] ?? [];
+    const next = picked.includes(path) ? picked.filter((p) => p !== path) : [...picked, path];
+    this.stashPicked = { ...this.stashPicked, [stash.sha]: next };
+  }
+
+  /** Tick every file of a stash, or none. */
+  pickAllStashFiles(stash: Stash, on: boolean) {
+    const files = this.stashFiles[stash.sha] ?? [];
+    this.stashPicked = { ...this.stashPicked, [stash.sha]: on ? files.map((f) => f.path) : [] };
+  }
+
+  /**
+   * Put back only the ticked files of a stash. `drop` also takes them out of
+   * the stash, which is written again without them.
+   */
+  async unstashFiles(stash: Stash, paths: string[], drop: boolean) {
+    const repo = repoStore.repo;
+    if (!repo) return false;
+    const result = await this.run(drop ? 'Unstashing the files' : 'Applying the files', () =>
+      repo.applyStashFiles(stash.ref, stash.sha, paths, drop)
+    );
+    await repoStore.refresh();
+    if (!result) return false;
+
+    // The stash is a new commit now, or gone, so what was read for it is stale.
+    const { [stash.sha]: _files, ...files } = this.stashFiles;
+    const { [stash.sha]: _picked, ...picked } = this.stashPicked;
+    this.stashFiles = files;
+    this.stashPicked = picked;
+
+    const what = paths.length === 1 ? paths[0].split('/').pop() : `${paths.length} files`;
+    if (result.conflicted) {
+      toasts.error(
+        `${what} did not fit cleanly`,
+        `${result.conflicts} ${result.conflicts === 1 ? 'file has' : 'files have'} conflicts. The stash is still whole, so nothing is lost. Resolve the files, then take them out of the stash yourself.`
+      );
+      return false;
+    }
+    toasts.success(
+      drop ? `Unstashed ${what}` : `Applied ${what}`,
+      drop ? (result.stashGone ? 'Nothing was left, so the stash is gone.' : 'The rest stays in the stash.') : 'The stash stays as it was.'
+    );
+    return true;
   }
 
   /** Stash the chosen files and take them out of the working tree. */

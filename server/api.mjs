@@ -519,6 +519,65 @@ function buildHunkPatch(file, hunk, side = 'unstaged') {
  * `stash@{1}` is a position, not an identity. Dropping `stash@{0}` renumbers
  * everything below it, so a screen read a moment ago can name the wrong one.
  */
+/**
+ * Write the stash at `ref` again without some files, in the same place in
+ * spirit: same message, same dates, same branch. Returns true when nothing was
+ * left, in which case the stash is dropped instead.
+ *
+ * A stash is a commit W whose parents are the base B, the index I and, when it
+ * holds untracked files, a commit U. Each tree is rebuilt in a temporary index:
+ * a tracked file is put back to how B has it, an untracked one is removed.
+ */
+async function stashWithout(path, ref, tracked, untracked) {
+  const [W, B, I, U] = (await git(path, ['rev-list', '--parents', '-n', '1', ref])).trim().split(' ');
+  const dir = await mkdtemp(join(tmpdir(), 'gitkeen-stash-'));
+  const env = { GIT_INDEX_FILE: join(dir, 'index') };
+  try {
+    const without = async (tree, remove, from) => {
+      await git(path, ['read-tree', tree], { env });
+      for (const p of remove) {
+        const entry = from ? (await git(path, ['ls-tree', from, '--', p])).trim() : '';
+        if (entry) {
+          const [mode, , oid] = entry.split(/\s+/);
+          await git(path, ['update-index', '--add', '--cacheinfo', `${mode},${oid},${p}`], { env });
+        } else {
+          await git(path, ['update-index', '--force-remove', '--', p], { env });
+        }
+      }
+      return (await git(path, ['write-tree'], { env })).trim();
+    };
+
+    const base = (await git(path, ['rev-parse', `${B}^{tree}`])).trim();
+    const wTree = await without(W, tracked, B);
+    const iTree = await without(I, tracked, B);
+    const uTree = U ? await without(U, untracked, null) : null;
+    const keepU = !!uTree && uTree !== EMPTY_TREE;
+
+    const subject = (await git(path, ['log', '-g', '-1', '--format=%gs', ref])).trim();
+    if (wTree === base && iTree === base && !keepU) {
+      await git(path, ['stash', 'drop', ref]);
+      return true;
+    }
+
+    // The new commits carry the old authors and dates, so the stash does not
+    // turn into one made "just now".
+    const commit = async (tree, parents, like) => {
+      const [an, ae, ad, cn, ce, cd, msg] = (await git(path, ['log', '-1', '--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B', like])).split('\x1f');
+      const who = { GIT_AUTHOR_NAME: an, GIT_AUTHOR_EMAIL: ae, GIT_AUTHOR_DATE: ad, GIT_COMMITTER_NAME: cn, GIT_COMMITTER_EMAIL: ce, GIT_COMMITTER_DATE: cd };
+      return (await git(path, ['commit-tree', tree, ...parents.flatMap((p) => ['-p', p]), '-m', msg.trim()], { env: who })).trim();
+    };
+    const newI = await commit(iTree, [B], I);
+    const newU = keepU ? await commit(uTree, [], U) : null;
+    const newW = await commit(wTree, [B, newI, ...(newU ? [newU] : [])], W);
+
+    await git(path, ['stash', 'drop', ref]);
+    await git(path, ['stash', 'store', '-m', subject, newW]);
+    return false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 async function verifyStash(path, ref, sha) {
   if (!sha) return;
   const { stdout, code } = await runGit(path, ['rev-parse', ref], { allowFailure: true });
@@ -2622,6 +2681,86 @@ export const methods = {
   },
 
   /**
+   * Take only some files out of a stash.
+   *
+   * Git has no command for this, so it is done in two steps. The chosen files
+   * go back first: a tracked file gets its part of the stash's change, applied
+   * the way `git stash apply` would (a three-way merge, left unstaged), and a
+   * file that was untracked comes back from the stash's third parent. With
+   * `drop`, the stash is then written again without those files, keeping its
+   * message and dates, or dropped when nothing is left in it.
+   *
+   * A chosen file with changes of its own, or an untracked file that exists
+   * again, is refused before anything moves, so no work is overwritten.
+   */
+  async 'stash.applyFiles'({ path, ref, sha, paths, drop = false }) {
+    await verifyStash(path, ref, sha);
+    if (!Array.isArray(paths) || paths.length === 0) {
+      throw new GitError('Choose at least one file from the stash.', { command: '', stderr: '', code: 1 });
+    }
+
+    const { files } = await methods['stash.files']({ path, ref });
+    const chosen = files.filter((f) => paths.includes(f.path));
+    const missing = paths.filter((p) => !files.some((f) => f.path === p));
+    if (missing.length > 0) {
+      throw new GitError(`The stash does not hold ${missing.join(', ')}. Refresh and try again.`, { command: '', stderr: '', code: 1 });
+    }
+    const tracked = chosen.filter((f) => !f.untracked);
+    const untracked = chosen.filter((f) => f.untracked);
+    const spec = tracked.flatMap((f) => (f.origPath ? [f.origPath, f.path] : [f.path]));
+
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const busy = new Set(status.files.flatMap((f) => [f.path, f.origPath].filter(Boolean)));
+    const blocked = [
+      ...tracked.filter((f) => busy.has(f.path) || (f.origPath && busy.has(f.origPath))).map((f) => f.path),
+      ...(await Promise.all(untracked.map(async (f) => ((await exists(join(path, f.path))) ? f.path : null)))).filter(Boolean)
+    ];
+    if (blocked.length > 0) {
+      throw new GitError(
+        `${blocked.join(', ')} ${blocked.length === 1 ? 'has' : 'have'} changes of ${blocked.length === 1 ? 'its' : 'their'} own in the working tree. ` +
+          'Commit or stash them first, so the stashed copy does not overwrite them.',
+        { command: '', stderr: '', code: 1 }
+      );
+    }
+
+    let conflicts = 0;
+    if (tracked.length > 0) {
+      const { stdout: patch } = await runGit(path, ['diff', '--binary', '-M', `${ref}^1`, ref, '--', ...spec], { binary: true });
+      if (patch.length > 0) {
+        const dir = await mkdtemp(join(tmpdir(), 'gitkeen-unstash-'));
+        try {
+          const file = join(dir, 'stash.patch');
+          await writeFile(file, patch);
+          const { code, stderr } = await runGit(path, ['apply', '--3way', '--whitespace=nowarn', file], { allowFailure: true });
+          const after = parseStatus(await git(path, STATUS_ARGS));
+          const unmerged = after.files.filter((f) => f.state === 'conflicted').map((f) => f.path);
+          conflicts = unmerged.length;
+          if (code !== 0 && conflicts === 0) {
+            throw new GitError(stderr.trim() || 'The files could not be taken out of the stash.', { command: 'git apply --3way', stderr, code });
+          }
+          // `apply --3way` stages what it applies. `git stash apply` leaves the
+          // change unstaged, so the clean files are unstaged again. A file with
+          // a conflict keeps its state, so it can be resolved.
+          const clean = spec.filter((p) => !unmerged.includes(p));
+          if (clean.length > 0) await runGit(path, ['reset', '-q', '--', ...clean], { allowFailure: true });
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      }
+    }
+    if (untracked.length > 0) {
+      await git(path, ['restore', `--source=${ref}^3`, '--worktree', '--', ...untracked.map((f) => f.path)]);
+    }
+
+    // A conflict keeps the stash whole, as `git stash pop` does, so nothing is
+    // lost while it is being resolved.
+    if (!drop || conflicts > 0) return { ok: true, conflicted: conflicts > 0, conflicts, dropped: false, stashGone: false };
+
+    const gone = await stashWithout(path, ref, spec, untracked.map((f) => f.path));
+    return { ok: true, conflicted: false, conflicts: 0, dropped: true, stashGone: gone };
+  },
+
+  /**
    * Everything the cherry-pick and revert dialogs need to ask, in one call.
    *
    * `hashes` arrives newest first, the order the graph shows.
@@ -4652,6 +4791,16 @@ const RECORDED = {
     const { stdout } = await runGit(path, ['log', '-1', '--format=%gs', ref], { allowFailure: true });
     return {
       operation: 'stash.drop', label: `Dropped a stash${stdout.trim() ? `: ${stdout.trim()}` : ''}`,
+      target: { kind: 'stash', name: ref }, ref: sha || ref, detail: stdout.trim() || null, fixed: true
+    };
+  },
+  // Taking files out of a stash rewrites the stash, so the whole of it is
+  // kept first: Restore puts the original back on the stash list.
+  'stash.applyFiles': async ({ path, ref, sha, drop }) => {
+    if (!drop) return null;
+    const { stdout } = await runGit(path, ['log', '-1', '--format=%gs', ref], { allowFailure: true });
+    return {
+      operation: 'stash.applyFiles', label: `Took files out of a stash${stdout.trim() ? `: ${stdout.trim()}` : ''}`,
       target: { kind: 'stash', name: ref }, ref: sha || ref, detail: stdout.trim() || null, fixed: true
     };
   },

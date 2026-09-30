@@ -184,6 +184,11 @@ export class GitRepository {
     return transport.call('stash.apply', { path: this.path, ref, sha, drop });
   }
 
+  /** Take only these files out of a stash. `drop` also removes them from it. */
+  applyStashFiles(ref: string, sha: string, paths: string[], drop: boolean): Promise<StashApplyResult> {
+    return transport.call('stash.applyFiles', { path: this.path, ref, sha, paths, drop });
+  }
+
   dropStash(ref: string, sha: string): Promise<{ ok: boolean }> {
     return transport.call('stash.drop', { path: this.path, ref, sha });
   }

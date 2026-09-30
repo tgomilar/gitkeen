@@ -1832,6 +1832,35 @@ export async function unstash(stash: Stash, drop: boolean) {
   await commitStore.unstash(stash, drop);
 }
 
+/** Put back only some files of a stash: the ones ticked in it. */
+export async function unstashFiles(stash: Stash, drop: boolean) {
+  const paths = commitStore.stashPicked[stash.sha] ?? [];
+  if (paths.length === 0) return;
+  const names = paths.map((p) => p.split('/').pop()).join(', ');
+  const total = commitStore.stashFiles[stash.sha]?.length ?? 0;
+  const all = paths.length === total;
+
+  const ok = await confirm({
+    title: drop ? `Unstash ${pluralize(paths.length, 'file')}?` : `Apply ${pluralize(paths.length, 'file')} and keep the stash?`,
+    message: drop
+      ? (all
+          ? 'These files go back into your working tree. Nothing is left in the stash, so it is removed.'
+          : 'These files go back into your working tree and are taken out of the stash. The other files stay in it.')
+      : 'These files go back into your working tree. The stash stays exactly as it is.',
+    facts: [
+      { label: 'Files', value: names },
+      { label: 'Stash', value: stash.message || '(no name)' },
+      ...(drop && !all ? [{ label: 'Left in it', value: pluralize(total - paths.length, 'file') }] : []),
+      { label: 'Your work', value: 'a chosen file with changes of its own is refused, so nothing is overwritten' },
+      ...(drop ? [{ label: 'Undo', value: 'the Undo panel can put the whole stash back' }] : [])
+    ],
+    confirmLabel: drop ? 'Unstash' : 'Apply and keep'
+  });
+  if (!ok) return;
+
+  await commitStore.unstashFiles(stash, paths, drop);
+}
+
 export async function deleteStash(stash: Stash) {
   const ok = await confirm({
     title: 'Delete this stash?',
@@ -1864,7 +1893,15 @@ export function showStashedDiff(stash: Stash, file: StashFile) {
 
 /** Context menu for a stash. */
 export function stashMenuItems(stash: Stash): MenuItem[] {
+  const picked = commitStore.stashPicked[stash.sha]?.length ?? 0;
   return [
+    ...(picked > 0
+      ? [
+          { label: `Unstash ${pluralize(picked, 'ticked file')}…`, icon: 'unstash' as const, action: () => unstashFiles(stash, true) },
+          { label: `Apply ${pluralize(picked, 'ticked file')} and keep…`, icon: 'stash' as const, action: () => unstashFiles(stash, false) },
+          SEPARATOR
+        ]
+      : []),
     { label: 'Unstash…', icon: 'unstash', hint: 'apply and remove', action: () => unstash(stash, true) },
     { label: 'Apply and keep…', icon: 'stash', action: () => unstash(stash, false) },
     SEPARATOR,
