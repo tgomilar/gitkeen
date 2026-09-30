@@ -33,20 +33,35 @@ for (const [type, title] of GROUPS) {
   if (items.length) lines.push(`### ${title}`, '', ...items, '');
 }
 
+if (lines.length) lines.unshift('## What is new', '');
 if (!previous) {
-  lines.push(
+  lines.push('## About this release', '',
     'The first release of Gitkeen, a visual Git client that works next to any editor.',
     '',
-    'See the [README](https://github.com/tgomilar/gitkeen#readme) for what it can do.',
-    ''
+    'See the [README](https://github.com/tgomilar/gitkeen#readme) for what it can do.'
   );
 }
-lines.push(
-  '### Installing',
+// The download table goes first: it is what most people open a release for.
+// The file names come from assetNamePattern in .github/workflows/release.yml.
+const file = (name) => `https://github.com/tgomilar/gitkeen/releases/download/${tag ?? 'latest'}/${name}`;
+const download = [
+  '## Download',
   '',
-  'Download the file for your system below. The app is not signed yet, so your system asks once before it opens it.',
-  'See [Installing Gitkeen](https://github.com/tgomilar/gitkeen/blob/main/docs/install.md) for the steps.',
+  '| Your system | Download |',
+  '|---|---|',
+  `| macOS on Apple silicon (M1 and newer) | [Gitkeen-macOS-Apple-silicon.dmg](${file('Gitkeen-macOS-Apple-silicon.dmg')}) |`,
+  `| macOS on Intel | [Gitkeen-macOS-Intel.dmg](${file('Gitkeen-macOS-Intel.dmg')}) |`,
+  `| Windows 10 and 11 | [Gitkeen-Windows-Installer.exe](${file('Gitkeen-Windows-Installer.exe')}) |`,
+  `| Linux | [Gitkeen-Linux.AppImage](${file('Gitkeen-Linux.AppImage')}) |`,
+  `| Debian and Ubuntu | [Gitkeen-Linux.deb](${file('Gitkeen-Linux.deb')}) |`,
   '',
-  'Gitkeen checks for new versions when it starts, and offers to update itself.'
-);
-console.log(lines.join('\n'));
+  'Not sure which Mac you have? Open the Apple menu and choose **About This Mac**. A chip named "Apple M" is Apple silicon.',
+  '',
+  'The app is not signed yet, so macOS and Windows ask once before they open it.',
+  '[Installing Gitkeen](https://github.com/tgomilar/gitkeen/blob/main/docs/install.md) shows the steps.',
+  'Gitkeen checks for new versions when it starts, and offers to update itself.',
+  '',
+  'The `.app.tar.gz` files and `latest.json` below are for those automatic updates. You do not need to download them.',
+  ''
+];
+console.log([...download, ...lines].join('\n').trim());
