@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "node --test server/test/",
+    "test": "node --test server/test/*.test.mjs",
     "sidecar": "node scripts/build-sidecar.mjs",
     "desktop:dev": "npm run sidecar && tauri dev",
     "desktop:build": "npm run sidecar && tauri build"
