@@ -48,6 +48,7 @@ branches, commit your work, and change the history you already have.
 | Patches and bundles | Save commits as a patch file and apply one, or carry a whole repository in one bundle file. |
 | GitHub | List the pull requests*, open one for the current branch, and see whether checks passed. |
 | AI* help | Suggest a commit message, and explain a commit, a conflict, two branches or a risky operation in plain words. |
+| Console | Type Git commands with suggestions from the repository, and read the result as a picture. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -749,6 +750,59 @@ An explanation names the model that wrote it. It can be wrong, so read it as
 a second opinion, not as the truth. Nothing in the repository changes when
 you ask for one.
 
+## The console
+
+The console is for people who like to type Git commands. Open it with
+**Console** in the rail on the left, or with Control and the backquote key
+(Control with \`). It opens along the bottom of the window. Drag its top edge
+to make it taller or shorter.
+
+Type a command such as `status`, `log` or `switch main`. You can leave out
+`git`. Press Tab, or use the arrows and Enter, to take a suggestion. The
+suggestions come from the open repository:
+
+| You type | Gitalia suggests |
+|---|---|
+| The start of a command | Commands, each with a short description. |
+| A `-` after a command | That command's options, each with a short description. |
+| A place that takes a branch | The branches, without the one you are on for `switch` and `merge`. |
+| A place that takes a file | The changed files. After `restore --staged`, the staged files. |
+| A place that takes a commit | The recent commits, with their subjects, and the tags. |
+| `stash pop` and similar | The stashes, with their messages. |
+
+The result is drawn where Gitalia has a picture for it. **Show raw output**
+switches to Git's own text.
+
+| Command | How the result is shown |
+|---|---|
+| `status` | The files in groups: conflicts, staged, not staged and untracked. Click a file to open its diff. |
+| `log` | A small graph with the branches and tags. Click a commit to select it in the main graph. |
+| `diff` and `show` | The change in colour, with the code in each file's colours. |
+| `branch` | Each branch, with how many commits it is ahead of and behind its upstream. |
+| `stash list` | Each stash, with its message, branch and age. |
+
+When a command fails, Gitalia says what went wrong in plain words and how to
+fix it. With an AI provider set up, **Explain this error** asks for more.
+
+### What keeps the console safe
+
+1. The console runs Git only. It does not start a shell*, so `|`, `;`, `&&`
+   and `$(…)` are refused while you type.
+2. Only everyday Git commands are allowed, and none of the options that make
+   Git start another program.
+3. A command that can lose work shows what it will do before you press Enter.
+   After Enter it asks again, with **Run it** and **Cancel**.
+4. Before such a command runs, Gitalia saves a recovery point for each branch,
+   file, tag or stash it could lose. The **Undo** panel can put them back.
+5. A command that would wait for an editor opens Gitalia's own editor instead:
+   `rebase -i` opens the rebase editor, `add -p` opens the diff viewer to
+   stage hunks, and `commit` with no message opens the commit panel.
+
+Up and Down bring back the commands you typed before, in this repository.
+Command or Control with L clears the console. When you use a button, the
+console shows the Git command that does the same, so you can learn the
+commands as you work.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -925,6 +979,10 @@ The plan asks for a keyboard first application. These keys work now.
 | Command or Control with B | Switch branch: opens the command palette with the branches listed. |
 | Command or Control with + or − | Make the text one step larger or smaller. |
 | Command or Control with 0 | Put the text size back to the default. |
+| Control with \` | Open or close the console. |
+| Tab | In the console, take the suggestion. |
+| Up and Down arrows | In the console, bring back an earlier command, or move through the suggestions. |
+| Command or Control with L | Clear the console. |
 | G | Put the keyboard on the commit graph. |
 | R | Revert the selected commits. Gitalia asks before it changes anything. |
 | S | Stage or unstage the file selected in the commit panel. In the diff viewer, stage or unstage the selected hunks. |
@@ -1029,6 +1087,9 @@ The user interface never builds a Git command. It calls named methods such as
 | `src/lib/components/StatsReport.svelte` | The report itself. |
 | `src/lib/state/stats.svelte.ts` | The filters, and the report that came back. |
 | `src/lib/state/commit.svelte.ts` | Which files are ticked, and the commit itself. |
+| `server/console.mjs` | The console's rules: which commands and options it runs, how risky each is, and what an error means. |
+| `src/lib/console/` | What the console knows about each command, the suggestions, and the button to command table. |
+| `src/lib/components/ConsolePanel.svelte` | The console panel. `ConsoleOutput.svelte` draws each result. |
 
 ### The graph
 
@@ -1133,6 +1194,10 @@ into another. Others can review and discuss the change before it is merged.
 
 **SSH**: Secure Shell. A way to log in to other computers safely. SSH keys can
 also sign Git commits, which is often simpler than setting up OpenPGP.
+
+**Shell**: The program that reads commands typed in a terminal, such as
+zsh or bash. It can run any program and join programs together, which is why
+the console does not use one.
 
 **Svelte**: A tool for building web user interfaces. Gitalia's screens are
 written with it.

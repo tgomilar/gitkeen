@@ -1183,6 +1183,13 @@ product value is the **interaction model around the Git DAG**.
 -   [x] Bisect --- started from a known good commit, answered with Good, Bad
     or Skip in the status bar, marks drawn in the graph
 -   [ ] Advanced analytics
+-   [x] Smart console --- Git commands typed with suggestions from the
+    repository (commands, options, branches, files, commits, tags, remotes,
+    stashes), drawn results for status, log, diff, show, branch and stash
+    list, errors in plain words, a preview and a question before a risky
+    command, recovery points for the Undo panel, Git only with no shell,
+    and interactive commands sent to Gitalia's own editors. Opened from the
+    rail or with Ctrl+`.
 
 Key: `[x]` done, `[~]` partly done, `[ ]` not started.
 
