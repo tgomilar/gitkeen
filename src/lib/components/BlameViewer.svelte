@@ -12,11 +12,15 @@
   import { diffStore } from '../state/diff.svelte';
   import { relativeTime, absoluteTime, authorColor } from '../format';
   import type { BlameLine } from '../git/types';
+  import { highlightBlock, languageFor } from '../syntax';
 
   const ZERO = '0'.repeat(40);
 
   const request = $derived(blameStore.request);
   const result = $derived(blameStore.result);
+  const lang = $derived(request ? languageFor(request.file) : null);
+  /** The whole file coloured at once, one entry per line, by line number. */
+  const colours = $derived(highlightBlock((result?.lines ?? []).map((l) => l.text), lang));
 
   /** Consecutive lines from the same commit, drawn as one block. */
   const groups = $derived.by(() => {
@@ -114,7 +118,8 @@
                       {/if}
                     </div>
                     <span class="num">{line.line}</span>
-                    <span class="text">{line.text}</span>
+                    <span class="text">{#each colours[line.line - 1] ?? [{ text: line.text, cls: null }] as piece}<span
+                      class={piece.cls ? `syn-${piece.cls}` : undefined}>{piece.text}</span>{/each}</span>
                   </div>
                 {/each}
               </div>

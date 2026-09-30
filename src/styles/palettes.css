@@ -420,3 +420,117 @@
   --diff-add-word: rgba(80,250,123,0.3);
   --diff-del-word: rgba(255,85,85,0.3);
 }
+
+/* Syntax colours, from each palette's own editor theme. */
+
+:root[data-palette='github'] {
+  --syn-keyword: #cf222e;
+  --syn-string: #0a3069;
+  --syn-comment: #6e7781;
+  --syn-number: #0550ae;
+  --syn-function: #8250df;
+  --syn-type: #953800;
+  --syn-variable: #953800;
+  --syn-constant: #0550ae;
+  --syn-tag: #116329;
+  --syn-attr: #0550ae;
+  --syn-regex: #116329;
+}
+
+:root[data-palette='github'][data-theme='dark'] {
+  --syn-keyword: #ff7b72;
+  --syn-string: #a5d6ff;
+  --syn-comment: #8b949e;
+  --syn-number: #79c0ff;
+  --syn-function: #d2a8ff;
+  --syn-type: #ffa657;
+  --syn-variable: #ffa657;
+  --syn-constant: #79c0ff;
+  --syn-tag: #7ee787;
+  --syn-attr: #79c0ff;
+  --syn-regex: #7ee787;
+}
+
+:root[data-palette='one'] {
+  --syn-keyword: #a626a4;
+  --syn-string: #50a14f;
+  --syn-comment: #a0a1a7;
+  --syn-number: #986801;
+  --syn-function: #4078f2;
+  --syn-type: #c18401;
+  --syn-variable: #e45649;
+  --syn-constant: #986801;
+  --syn-tag: #e45649;
+  --syn-attr: #986801;
+  --syn-regex: #0184bc;
+}
+
+:root[data-palette='one'][data-theme='dark'] {
+  --syn-keyword: #c678dd;
+  --syn-string: #98c379;
+  --syn-comment: #7f848e;
+  --syn-number: #d19a66;
+  --syn-function: #61afef;
+  --syn-type: #e5c07b;
+  --syn-variable: #e06c75;
+  --syn-constant: #d19a66;
+  --syn-tag: #e06c75;
+  --syn-attr: #d19a66;
+  --syn-regex: #56b6c2;
+}
+
+:root[data-palette='solarized'] {
+  --syn-keyword: #859900;
+  --syn-string: #2aa198;
+  --syn-comment: #93a1a1;
+  --syn-number: #d33682;
+  --syn-function: #268bd2;
+  --syn-type: #b58900;
+  --syn-variable: #268bd2;
+  --syn-constant: #cb4b16;
+  --syn-tag: #268bd2;
+  --syn-attr: #b58900;
+  --syn-regex: #dc322f;
+}
+
+:root[data-palette='solarized'][data-theme='dark'] {
+  --syn-keyword: #859900;
+  --syn-string: #2aa198;
+  --syn-comment: #586e75;
+  --syn-number: #d33682;
+  --syn-function: #268bd2;
+  --syn-type: #b58900;
+  --syn-variable: #268bd2;
+  --syn-constant: #cb4b16;
+  --syn-tag: #268bd2;
+  --syn-attr: #b58900;
+  --syn-regex: #dc322f;
+}
+
+:root[data-palette='dracula'] {
+  --syn-keyword: #a3144d;
+  --syn-string: #846e15;
+  --syn-comment: #6c664b;
+  --syn-number: #644ac9;
+  --syn-function: #14710a;
+  --syn-type: #036a96;
+  --syn-variable: #1f1f1f;
+  --syn-constant: #644ac9;
+  --syn-tag: #a3144d;
+  --syn-attr: #14710a;
+  --syn-regex: #cb3a2a;
+}
+
+:root[data-palette='dracula'][data-theme='dark'] {
+  --syn-keyword: #ff79c6;
+  --syn-string: #f1fa8c;
+  --syn-comment: #6272a4;
+  --syn-number: #bd93f9;
+  --syn-function: #50fa7b;
+  --syn-type: #8be9fd;
+  --syn-variable: #f8f8f2;
+  --syn-constant: #bd93f9;
+  --syn-tag: #ff79c6;
+  --syn-attr: #50fa7b;
+  --syn-regex: #ff5555;
+}

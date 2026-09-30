@@ -73,6 +73,19 @@
   --lane-4: #9d4edd;
   --lane-5: #994f00;
 
+  /* Syntax colours in diffs and blame: VS Code's Light Modern. */
+  --syn-keyword: #0000ff;
+  --syn-string: #a31515;
+  --syn-comment: #008000;
+  --syn-number: #098658;
+  --syn-function: #795e26;
+  --syn-type: #267f99;
+  --syn-variable: #001080;
+  --syn-constant: #0070c1;
+  --syn-tag: #800000;
+  --syn-attr: #e50000;
+  --syn-regex: #811f3f;
+
   /* Diff lines and the words changed inside them, VS Code's diff colours. */
   --diff-add-line: rgba(155, 185, 85, 0.2);
   --diff-del-line: rgba(255, 0, 0, 0.12);
@@ -140,6 +153,18 @@
   --lane-4: #b66dff;
   --lane-5: #c9853a;
 
+  --syn-keyword: #569cd6;
+  --syn-string: #ce9178;
+  --syn-comment: #6a9955;
+  --syn-number: #b5cea8;
+  --syn-function: #dcdcaa;
+  --syn-type: #4ec9b0;
+  --syn-variable: #9cdcfe;
+  --syn-constant: #4fc1ff;
+  --syn-tag: #569cd6;
+  --syn-attr: #9cdcfe;
+  --syn-regex: #d16969;
+
   --diff-add-line: rgba(155, 185, 85, 0.2);
   --diff-del-line: rgba(255, 0, 0, 0.2);
   --diff-add-word: rgba(156, 204, 44, 0.3);
@@ -198,3 +223,17 @@ input, textarea {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+
+/* Syntax colours in the diff and blame views (see src/lib/syntax.ts). Each
+   palette sets what the tokens look like. */
+.syn-keyword { color: var(--syn-keyword); }
+.syn-string { color: var(--syn-string); }
+.syn-comment { color: var(--syn-comment); font-style: italic; }
+.syn-number { color: var(--syn-number); }
+.syn-function { color: var(--syn-function); }
+.syn-type { color: var(--syn-type); }
+.syn-variable { color: var(--syn-variable); }
+.syn-constant { color: var(--syn-constant); }
+.syn-tag { color: var(--syn-tag); }
+.syn-attr { color: var(--syn-attr); }
+.syn-regex { color: var(--syn-regex); }

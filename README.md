@@ -165,6 +165,14 @@ A file with part of its change in the index and part still in the working tree
 opens on its **Working tree** half. When you stage or unstage every hunk, the
 viewer follows the whole change over to the other tab by itself.
 
+Code is coloured by its language, which Gitalia reads from the file name.
+About 30 languages are known, among them TypeScript, JavaScript, Svelte, Vue,
+Python, Rust, Go, Java, Kotlin, Swift, C, C++, C#, Ruby, PHP, shell, SQL, CSS,
+HTML, JSON, YAML, TOML, Markdown and Dockerfiles. The colours follow the
+colour palette you chose. Each side of a hunk is coloured as one piece, so a
+comment or a string over several lines keeps its colour. The blame view is
+coloured the same way, over the whole file.
+
 Both layouts mark the words that changed inside a line, so a line where one
 name was edited does not read as a line that was rewritten. When two lines have
 almost nothing in common, the whole line is marked instead, because marking
@@ -763,9 +771,8 @@ The merge editor edits the result one conflict block at a time. The text
 outside the conflicts cannot be edited there, and binary conflicts still go
 through an external editor.
 
-The diff viewer has no syntax colouring yet, and it cannot roll back a single
-hunk. Staging a hunk or a single line is built, and rolling back a hunk is the
-next step.
+The diff viewer cannot roll back a single hunk yet. Staging a hunk or a single
+line is built, and rolling back a hunk is the next step.
 
 ## Requirements
 

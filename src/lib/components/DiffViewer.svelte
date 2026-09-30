@@ -11,9 +11,29 @@
   import type { DiffHunk, DiffLine } from '../git/types';
   import TriCheckbox from './TriCheckbox.svelte';
   import { blameStore } from '../state/blame.svelte';
+  import { paint, languageFor, highlightBlock, type SyntaxPiece } from '../syntax';
 
   const request = $derived(diffStore.request);
   const diff = $derived(diffStore.diff);
+  /** The language the file's lines are coloured as, from its name. */
+  const lang = $derived(request ? languageFor(request.file) : null);
+
+  /**
+   * Each line's colours. A hunk's two sides are coloured as blocks, the old
+   * side (context and removed lines) and the new side (context and added
+   * lines), so a comment or string over several lines keeps its colour.
+   */
+  const colours = $derived.by(() => {
+    const map = new Map<DiffLine, SyntaxPiece[]>();
+    for (const hunk of limited.hunks) {
+      const before = hunk.lines.filter((l) => l.kind !== 'add');
+      const after = hunk.lines.filter((l) => l.kind !== 'del');
+      highlightBlock(before.map((l) => l.text), lang).forEach((p, i) => map.set(before[i], p));
+      highlightBlock(after.map((l) => l.text), lang).forEach((p, i) => map.set(after[i], p));
+    }
+    return map;
+  });
+  const coloursOf = (line: DiffLine) => colours.get(line) ?? [{ text: line.text, cls: null }];
   const split = $derived(diffStore.mode === 'split');
 
   const limited = $derived(
@@ -354,10 +374,8 @@
                     {/if}
                     <span class="side {row.left ? row.left.kind : 'blank'}"
                       class:out={pickable && !!row.left && row.left.kind !== 'context' && !lineIn(hunk, row.left)}>
-                      {#if segments.left}
-                        {#each segments.left as segment}<span
-                          class:word={segment.changed}>{segment.text}</span>{/each}
-                      {:else if row.left}{row.left.text}{/if}
+                      {#if row.left}{#each paint(row.left.text, coloursOf(row.left), segments.left) as piece}<span
+                          class={piece.cls ? `syn-${piece.cls}` : undefined} class:word={piece.changed}>{piece.text}</span>{/each}{/if}
                     </span>
                     {#if pickable && row.right && row.right.kind !== 'context'}
                       {@const line = row.right}
@@ -368,10 +386,8 @@
                     {/if}
                     <span class="side {row.right ? row.right.kind : 'blank'}"
                       class:out={pickable && !!row.right && row.right.kind !== 'context' && !lineIn(hunk, row.right)}>
-                      {#if segments.right}
-                        {#each segments.right as segment}<span
-                          class:word={segment.changed}>{segment.text}</span>{/each}
-                      {:else if row.right}{row.right.text}{/if}
+                      {#if row.right}{#each paint(row.right.text, coloursOf(row.right), segments.right) as piece}<span
+                          class={piece.cls ? `syn-${piece.cls}` : undefined} class:word={piece.changed}>{piece.text}</span>{/each}{/if}
                     </span>
                   </div>
                 {/each}
@@ -388,8 +404,8 @@
                     <span class="side {line.kind}" class:out={pickable && line.kind !== 'context' && !lineIn(hunk, line)}>
                       <span class="marker" aria-hidden="true"
                         >{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '}</span
-                      >{#if segments}{#each segments as segment}<span
-                        class:word={segment.changed}>{segment.text}</span>{/each}{:else}{line.text}{/if}
+                      >{#each paint(line.text, coloursOf(line), segments) as piece}<span
+                        class={piece.cls ? `syn-${piece.cls}` : undefined} class:word={piece.changed}>{piece.text}</span>{/each}
                       {#if line.noNewline}<span class="no-newline">no newline at end of file</span>{/if}
                     </span>
                   </div>
