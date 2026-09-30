@@ -53,7 +53,7 @@ branches, commit your work, and change the history you already have.
 ## How squashing works
 
 Select two or more commits that sit next to each other, then right click and
-choose **Squash Commits**. Gitalia joins their messages, oldest first, and lets
+choose **Squash commits**. Gitalia joins their messages, oldest first, and lets
 you edit the result before anything happens.
 
 Gitalia refuses to squash in these cases, and says which one applies:
@@ -186,7 +186,7 @@ of them at once.
 
 | Action | What it does |
 |---|---|
-| Cherry-Pick | Applies the commit again on top of the current branch, as a new commit with a new hash. The original stays where it is. |
+| Cherry-pick | Applies the commit again on top of the current branch, as a new commit with a new hash. The original stays where it is. |
 | Revert | Adds a new commit that undoes the change. Nothing is removed from the history. |
 | Reset Current Branch to Here | Moves the branch to this commit. |
 
@@ -301,7 +301,7 @@ it now offers to pull as the first way out.
 
 ## Rebasing a run of commits
 
-Right click a commit and choose **Rebase from Here**. Gitalia opens the todo
+Right click a commit and choose **Rebase from here**. Gitalia opens the todo
 list of `git rebase -i` as a list you edit, showing that commit and everything
 newer.
 
@@ -345,7 +345,7 @@ split the commit in two), Continue keeps them exactly as you made them and
 amends nothing. The plan is saved with the rebase, so Continue still writes
 the messages that come later in the plan after you reload Gitalia.
 
-Nothing runs until you press **Start Rebase**. Until then the plan is only a
+Nothing runs until you press **Start rebase**. Until then the plan is only a
 plan, and Cancel costs nothing. **Reset** puts every row back as it arrived.
 
 Gitalia will not start a rebase that changes nothing, that drops every commit,
@@ -366,9 +366,9 @@ Both of these rewrite history. Gitalia drives real `git rebase --interactive`
 underneath, writing the todo list for you, so the result is what Git would
 have produced had you edited that list by hand.
 
-**Move Up** and **Move Down** in a commit's menu shift it one place towards or
+**Move up** and **Move down** in a commit's menu shift it one place towards or
 away from HEAD. One step per click, so you can read the result before taking
-the next one. **Drop Commit** removes a commit and the change it made.
+the next one. **Drop commit** removes a commit and the change it made.
 
 Dropping is not reverting, and the dialog says so. A revert adds a new commit
 that undoes an old one, and the history records both. Dropping takes the
@@ -421,7 +421,7 @@ bring it back.
 ## Merging a branch into this one
 
 Right click a branch in the sidebar, in either the Local or the Remote
-section, and choose **Merge into <current branch>**. The item names the branch
+section, and choose **Merge into <current branch>…**. The item names the branch
 you are on, so it is always clear which way the merge goes.
 
 Before anything is touched, Gitalia asks Git what the merge would do and shows
@@ -464,7 +464,7 @@ it holds. Right click a stash for the rest.
 | Action | What it does |
 |---|---|
 | Unstash | Puts the change back into your working tree and removes the stash. |
-| Apply and Keep | Puts the change back and keeps the stash as well. |
+| Apply and keep | Puts the change back and keeps the stash as well. |
 | Delete | Throws the change away. It is in no commit, so this cannot be undone. |
 
 Two details worth knowing:

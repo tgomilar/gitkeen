@@ -188,7 +188,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   });
   add({
     id: 'pull',
-    label: 'Pull',
+    label: 'Pull…',
     icon: 'pull',
     hint: '⌘⇧L',
     disabled: repoStore.head?.detached === true,
@@ -196,7 +196,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   });
   add({
     id: 'push',
-    label: 'Push',
+    label: 'Push…',
     icon: 'push',
     hint: '⌘⇧U',
     disabled: !publishable,
@@ -291,7 +291,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     if (!isCurrent) {
       add({
         id: `merge-${local.name}`,
-        label: `Merge ${local.name} into ${branch ?? 'HEAD'}`,
+        label: `Merge ${local.name} into ${branch ?? 'HEAD'}…`,
         keywords: 'merge branch',
         icon: 'merge',
         group: 'Branches',
@@ -318,7 +318,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
 
   add({
     id: 'cherry-pick',
-    label: commits.length === 1 ? `Cherry-pick ${cursorCommit?.shortHash}` : 'Cherry-pick the selected commits',
+    label: commits.length === 1 ? `Cherry-pick ${cursorCommit?.shortHash}…` : 'Cherry-pick the selected commits…',
     keywords: 'apply copy commit',
     icon: 'cherry-pick',
     hint: selectedText,
@@ -328,7 +328,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   });
   add({
     id: 'revert',
-    label: commits.length === 1 ? `Revert ${cursorCommit?.shortHash}` : 'Revert the selected commits',
+    label: commits.length === 1 ? `Revert ${cursorCommit?.shortHash}…` : 'Revert the selected commits…',
     keywords: 'undo',
     icon: 'revert',
     hint: 'R',
@@ -353,7 +353,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   });
   add({
     id: 'drop',
-    label: commits.length === 1 ? `Drop ${cursorCommit?.shortHash}` : `Drop ${commits.length} commits`,
+    label: commits.length === 1 ? `Drop ${cursorCommit?.shortHash}…` : `Drop ${commits.length} commits…`,
     keywords: 'delete remove throw away',
     icon: 'drop',
     group: 'History',
@@ -363,7 +363,7 @@ function commands(b: PaletteBindings): PaletteCommand[] {
   });
   add({
     id: 'reset',
-    label: 'Reset… to the selected commit',
+    label: 'Reset to the selected commit…',
     keywords: 'undo hard soft mixed move head',
     icon: 'reset',
     group: 'History',

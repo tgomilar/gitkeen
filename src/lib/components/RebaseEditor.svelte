@@ -152,7 +152,7 @@
       onclick={() => rebaseStore.run()}
       disabled={rebaseStore.busy || rebaseStore.problems.length > 0 || !rebaseStore.changed}
     >
-      {rebaseStore.busy ? 'Rebasing…' : 'Start Rebase'}
+      {rebaseStore.busy ? 'Rebasing…' : 'Start rebase'}
     </button>
   </div>
 </div>

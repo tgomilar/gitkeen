@@ -89,8 +89,8 @@
         { label: 'Fetch all remotes', icon: 'fetch', hint: '⌘⇧F', action: () => repoStore.fetch() },
         { label: 'Command palette…', icon: 'commit', hint: '⌘⇧P', action: () => paletteStore.show() },
         { separator: true },
-        { label: 'Pull', icon: 'pull', hint: '⌘⇧L', action: () => pullBranch() },
-        { label: 'Push', icon: 'push', hint: '⌘⇧U', action: () => pushBranch() },
+        { label: 'Pull…', icon: 'pull', hint: '⌘⇧L', action: () => pullBranch() },
+        { label: 'Push…', icon: 'push', hint: '⌘⇧U', action: () => pushBranch() },
         {
           label: 'Force push…',
           icon: 'force-push',
@@ -166,7 +166,7 @@
       onclick={() => pushBranch()}
       items={[
         {
-          label: 'Force Push…',
+          label: 'Force push…',
           icon: 'force-push',
           danger: true,
           hint: 'replaces the remote branch',

@@ -334,25 +334,25 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       { label: `${selection.length} commits selected`, disabled: true },
       SEPARATOR,
       {
-        label: 'Squash Commits…',
+        label: 'Squash commits…',
         icon: 'squash',
         hint: squashable.ok ? undefined : squashable.reason,
         disabled: !squashable.ok,
         action: () => squashCommits(selected)
       },
       {
-        label: `Cherry-Pick ${selection.length} Commits…`,
+        label: `Cherry-pick ${selection.length} commits…`,
         icon: 'cherry-pick',
         action: () => cherryPickCommits(selected)
       },
       {
-        label: `Drop ${selection.length} Commits…`,
+        label: `Drop ${selection.length} commits…`,
         icon: 'drop',
         danger: true,
         action: () => dropCommits(selected)
       },
       {
-        label: `Revert ${selection.length} Commits…`,
+        label: `Revert ${selection.length} commits…`,
         icon: 'revert',
         action: () => revertCommits(selected)
       },
@@ -416,7 +416,7 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
       action: () => createTag(commit.hash, `${commit.shortHash} (${commit.subject})`)
     },
     {
-      label: 'Check out commit',
+      label: 'Check out commit…',
       icon: 'switch',
       hint: 'detached',
       action: () => checkoutCommit(commit)
@@ -430,21 +430,21 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
     },
     SEPARATOR,
     {
-      label: 'Move Up',
+      label: 'Move up',
       icon: 'move-up',
       hint: isHead ? 'already newest' : 'one place later',
       disabled: isHead || commit.parents.length > 1,
       action: () => moveCommit(commit, 'up')
     },
     {
-      label: 'Move Down',
+      label: 'Move down',
       icon: 'move-down',
       hint: 'one place earlier',
       disabled: commit.parents.length > 1,
       action: () => moveCommit(commit, 'down')
     },
     {
-      label: 'Drop Commit…',
+      label: 'Drop commit…',
       icon: 'drop',
       danger: true,
       hint: commit.parents.length > 1 ? 'a merge cannot be dropped' : undefined,
@@ -454,7 +454,7 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
     {
       // The span runs from this commit up to HEAD, which is what
       // `git rebase -i <this commit>~1` covers.
-      label: 'Rebase from Here…',
+      label: 'Rebase from here…',
       icon: 'rebase',
       hint: 'edit this and everything newer',
       disabled: commit.parents.length > 1,
@@ -462,7 +462,7 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
     },
     SEPARATOR,
     {
-      label: 'Cherry-Pick…',
+      label: 'Cherry-pick…',
       icon: 'cherry-pick',
       hint: commit.parents.length > 1 ? 'a merge cannot be copied' : 'copy onto this branch',
       disabled: commit.parents.length > 1,
@@ -470,7 +470,7 @@ export function commitMenuItems(commit: Commit, selection: string[]): MenuItem[]
     },
     { label: 'Revert…', icon: 'revert', action: () => revertCommits([commit]) },
     {
-      label: 'Reset Current Branch to Here…',
+      label: 'Reset current branch to here…',
       icon: 'reset',
       hint: isHead ? 'already here' : undefined,
       disabled: isHead,
@@ -727,7 +727,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       { label: 'Create branch from here…', icon: 'branch', action: () => createBranchFrom(branch.name, branch.name) },
       SEPARATOR,
       {
-        label: current ? `Merge into ${current}` : 'Merge into the current branch',
+        label: current ? `Merge into ${current}…` : 'Merge into the current branch…',
         icon: 'merge',
         hint: current ? undefined : 'HEAD is detached',
         disabled: !current,
@@ -753,7 +753,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       action: () => pushBranch(branch.name)
     },
     {
-      label: 'Force Push…',
+      label: 'Force push…',
       icon: 'force-push',
       danger: true,
       // Without an upstream a force is the same as an ordinary push, so
@@ -779,7 +779,7 @@ export function branchMenuItems(branch: Branch, kind: 'local' | 'remote' | 'tag'
       // so it is disabled here rather than explained in a dialog.
       label: branch.isHead
         ? 'Merge into itself'
-        : `Merge into ${current ?? 'the current branch'}`,
+        : `Merge into ${current ?? 'the current branch'}…`,
       icon: 'merge',
       hint: branch.isHead ? 'checked out' : undefined,
       disabled: branch.isHead || !current,
@@ -1156,7 +1156,7 @@ export async function pushBranch(name?: string) {
     extra: branch.upstream
       ? {
           value: 'force',
-          label: 'Force Push…',
+          label: 'Force push…',
           tone: 'danger',
           title: `Replace ${branch.upstream} with ${branch.name}. You are shown what would be lost first.`
         }
@@ -1429,7 +1429,7 @@ export function showCommitDiff(
 export function changeMenuItems(change: Change): MenuItem[] {
   const ticked = commitStore.isChecked(change.path);
   const items: MenuItem[] = [
-    { label: 'Show Diff', icon: 'diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
+    { label: 'Show diff', icon: 'diff', hint: '⏎', action: () => showWorkingTreeDiff(change) },
     ...(change.kind === 'modified' || change.kind === 'renamed'
       ? [{ label: 'Blame', icon: 'commit' as const, hint: 'who changed each line', action: () => blameStore.show(change.path) }]
       : []),
@@ -1442,13 +1442,13 @@ export function changeMenuItems(change: Change): MenuItem[] {
   if (change.kind === 'conflict') {
     items.push(
       {
-        label: 'Resolve in Merge Editor…',
+        label: 'Resolve in merge editor…',
         icon: 'merge',
         hint: 'choose a side per conflict',
         action: () => mergeStore.show(change.path, 'Merge conflict')
       },
       {
-        label: 'Mark as Resolved',
+        label: 'Mark as resolved',
         icon: 'check',
         hint: 'lets the operation continue',
         action: () => commitStore.markResolved([change.path])
@@ -1858,8 +1858,8 @@ export function showStashedDiff(stash: Stash, file: StashFile) {
 /** Context menu for a stash. */
 export function stashMenuItems(stash: Stash): MenuItem[] {
   return [
-    { label: 'Unstash', icon: 'unstash', hint: 'apply and remove', action: () => unstash(stash, true) },
-    { label: 'Apply and Keep', icon: 'stash', action: () => unstash(stash, false) },
+    { label: 'Unstash…', icon: 'unstash', hint: 'apply and remove', action: () => unstash(stash, true) },
+    { label: 'Apply and keep…', icon: 'stash', action: () => unstash(stash, false) },
     SEPARATOR,
     { label: 'Delete…', icon: 'delete', danger: true, action: () => deleteStash(stash) },
     SEPARATOR,

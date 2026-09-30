@@ -160,12 +160,12 @@
           <p class="notice">
             This is a binary conflict.<br />
             <span class="faint">Gitalia cannot edit one yet. Fix it in an external editor, then right click the file
-            and choose <strong>Mark as Resolved</strong>, or open it again here to confirm the resolution.</span>
+            and choose <strong>Mark as resolved</strong>, or open it again here to confirm the resolution.</span>
           </p>
         {:else if offer.lines === 0}
           <p class="notice">
             This file's conflict carries no text to show.<br />
-            <span class="faint">Resolve it with <strong>Mark as Resolved</strong> after dealing with it outside Gitalia.</span>
+            <span class="faint">Resolve it with <strong>Mark as resolved</strong> after dealing with it outside Gitalia.</span>
           </p>
         {:else}
           <div class="file">
