@@ -300,12 +300,13 @@
     display: flex;
     flex-direction: column;
     min-height: 140px;
-    background: var(--bg-panel);
+    /* Sunken like a terminal, so it stands apart from the details above it. */
+    background: var(--bg-sunken);
     border-top: 1px solid var(--border-strong);
     font-size: 12.5px;
   }
   .grip { position: absolute; top: -3px; left: 0; right: 0; height: 6px; cursor: row-resize; z-index: 2; }
-  header { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  header { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; background: var(--bg-raised); border-bottom: 1px solid var(--border); color: var(--text-dim); }
   .title { font-weight: 600; color: var(--text); }
   .where { color: var(--text-faint); font-size: 11px; }
   .hint { margin-left: auto; color: var(--text-faint); font-size: 11px; }
