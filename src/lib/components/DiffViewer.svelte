@@ -159,8 +159,10 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
+    // Only while open: this listener stays on the window even when the viewer
+    // is closed, and a stopped Escape would never reach a window opened later.
     // The blame viewer opens over this one and owns the keyboard while open.
-    if (blameStore.open) return;
+    if (!diffStore.open || blameStore.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();

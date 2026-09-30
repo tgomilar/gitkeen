@@ -59,6 +59,9 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
+    // Only while open: this listener stays on the window even when the editor
+    // is closed, and a stopped Escape would never reach a window opened later.
+    if (!mergeStore.open) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
