@@ -104,6 +104,7 @@ commands, options, branches and files. [The console](docs/console.md)
 
 | Key | Action |
 |---|---|
+| ? | Open Help: what Gitkeen can do, with the shortcuts. |
 | Command or Control with Shift and P | Open the command palette, which lists everything Gitkeen can do. |
 | Command or Control with K | Search the history. |
 | Command or Control with Shift and K | Write a commit message. |

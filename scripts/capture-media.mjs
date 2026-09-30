@@ -397,6 +397,15 @@ CONFIG
     await screenshot('merge-editor');
   },
 
+  async help() {
+    await openApp();
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: '?', code: 'Slash', modifiers: 8, text: '?', windowsVirtualKeyCode: 191 });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: '?', code: 'Slash', modifiers: 8, windowsVirtualKeyCode: 191 });
+    await waitText('.panel .title', 'Help');
+    await sleep(600);
+    await screenshot('help');
+  },
+
   async stats() {
     await openApp();
     await click('.rail .item', 'Stats');

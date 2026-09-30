@@ -38,7 +38,7 @@ Gitkeen also runs as a desktop app for macOS, with a folder chooser. See
 | Part | Where | What it holds |
 |---|---|---|
 | Title bar | Top | The repository and branch, Fetch, Refresh, Pull, Push, New branch, the search box, Settings and the theme menu. |
-| Rail | Left edge | Buttons for the side panels: Branches, Commit, Stats, Undo, Console and, for a GitHub repository, GitHub. |
+| Rail | Left edge | Buttons for the side panels: Branches, Commit, Stats, Undo, Console, GitHub for a GitHub repository, and Help at the bottom. |
 | Side panel | Next to the rail | The panel you chose in the rail. |
 | Graph | Middle | Every commit, with its branches, tags and merges drawn as lanes. |
 | Commit details | Below the graph | The message, the author and the changed files of the selected commit. |
@@ -54,6 +54,15 @@ Click a commit to select it and read its details. Hold Shift to select a
 range, or Command (Control on Windows and Linux) to add single commits. Right
 click a commit, or press Enter, for everything you can do with it. When you
 select several commits first, the menu acts on all of them.
+
+## Help inside the app
+
+Press **?**, or choose **Help** at the bottom of the rail. The Help panel lists
+what Gitkeen can do in short entries, grouped by task, each with its shortcut
+and the Git command it matches. Search it, and press **Show me** to go straight
+to a feature.
+
+![The Help panel, with entries grouped by task and their shortcuts](media/help.png)
 
 ## The command palette
 

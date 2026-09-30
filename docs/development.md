@@ -151,6 +151,7 @@ every time. Only that scene can reach it.
 | `console` | `console.gif` |
 | `conflict` | `merge-editor.png` |
 | `stats` | `stats.png` |
+| `help` | `help.png` |
 
 ## The logo
 

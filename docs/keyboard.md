@@ -6,6 +6,7 @@ On a Mac, use Command. On Windows and Linux, use Control.
 
 | Key | Action |
 |---|---|
+| ? | Open or close Help, with every shortcut. |
 | Command with Shift and P | Open the command palette. |
 | Command with K | Move to the search box. |
 | Command with B | Switch branch. |
