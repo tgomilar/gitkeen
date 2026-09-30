@@ -11,6 +11,8 @@ import { suggestSubject, suggestionProviders, explain } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
 import * as recovery from './recovery.mjs';
 import { githubToken, githubRepo, github, shapePull, commitChecks } from './github.mjs';
+import * as consoleRules from './console.mjs';
+import { execFile } from 'node:child_process';
 import { access, mkdtemp, writeFile, rm, readFile, lstat, realpath } from 'node:fs/promises';
 import { basename, join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -3552,6 +3554,246 @@ export const methods = {
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
+};
+
+/* ------------------------------------------------------------------ *
+ * The smart console
+ * ------------------------------------------------------------------ */
+
+const CONSOLE_OUTPUT_LIMIT = 2 * 1024 * 1024;
+const CONSOLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** The environment every console command runs in: no pager, no editor, no prompt. */
+const CONSOLE_ENV = {
+  GIT_PAGER: 'cat', PAGER: 'cat', GIT_EDITOR: 'true', GIT_SEQUENCE_EDITOR: 'true',
+  GIT_MERGE_AUTOEDIT: 'no', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never'
+};
+
+/** Arguments that are not options, after the command's own. */
+const positionals = (rest) => {
+  const out = [];
+  let paths = false;
+  for (const a of rest) {
+    if (a === '--') { paths = true; continue; }
+    if (!paths && a.startsWith('-')) continue;
+    out.push(a);
+  }
+  return out;
+};
+const pathsAfterDashes = (rest) => (rest.includes('--') ? rest.slice(rest.indexOf('--') + 1) : []);
+
+async function resolvesToCommit(path, name) {
+  if (!name) return null;
+  const { stdout, code } = await runGit(path, ['rev-parse', '--verify', '--quiet', `${name}^{commit}`], { allowFailure: true });
+  return code === 0 ? stdout.trim() : null;
+}
+
+/** Changed files among these paths, as a list: the ones a checkout would overwrite. */
+async function changedAmong(path, paths) {
+  const { stdout } = await runGit(path, ['diff', '--name-only', '-z', '--', ...(paths.length ? paths : ['.'])], { allowFailure: true });
+  return stdout.split('\0').filter(Boolean);
+}
+
+/**
+ * What a command is about to do, in a few lines, and how risky it is. This
+ * is the line under the console's input. It reads the repository but never
+ * changes it, so it can run on every key press.
+ */
+async function consolePreview(path, sub, rest) {
+  let level = consoleRules.riskOf(sub, rest);
+  const lines = [];
+  const pos = positionals(rest);
+  const branch = await recovery.currentBranch(path);
+
+  if (sub === 'reset' && level === 'danger') {
+    const target = pos[0] ?? 'HEAD';
+    const commit = await resolvesToCommit(path, target);
+    if (!commit) {
+      level = 'write';
+      lines.push(`Unstages ${pos.join(', ')}. The files keep their changes.`);
+    } else {
+      const { stdout: back } = await runGit(path, ['rev-list', '--count', `${commit}..HEAD`], { allowFailure: true });
+      const n = Number(back.trim() || 0);
+      const mode = rest.find((a) => ['--hard', '--soft', '--mixed', '--keep', '--merge'].includes(a)) ?? '--mixed';
+      lines.push(`Moves ${branch ?? 'HEAD'} to ${commit.slice(0, 7)}${n ? `, ${n} commit${n === 1 ? '' : 's'} back` : ''}.`);
+      if (mode === '--hard') {
+        const changed = await changedAmong(path, []);
+        const { stdout: staged } = await runGit(path, ['diff', '--cached', '--name-only'], { allowFailure: true });
+        const lost = new Set([...changed, ...staged.split('\n').filter(Boolean)]);
+        if (lost.size) lines.push(`Throws away your changes to ${lost.size} file${lost.size === 1 ? '' : 's'}.`);
+        else if (n === 0) level = 'write';
+      } else if (mode === '--soft') lines.push('The changes of those commits stay staged.');
+      else lines.push('The changes of those commits stay in your files, unstaged.');
+    }
+  } else if (sub === 'clean' && level === 'danger') {
+    const dry = rest.filter((a) => a !== '--force').map((a) => (/^-[a-zA-Z]+$/.test(a) ? a.replace(/f/g, '') : a)).filter((a) => a !== '-');
+    const { stdout } = await runGit(path, ['clean', '-n', ...dry], { allowFailure: true });
+    const gone = stdout.split('\n').filter((l) => l.startsWith('Would remove ')).map((l) => l.slice(13));
+    lines.push(gone.length ? `Deletes ${gone.length} untracked item${gone.length === 1 ? '' : 's'}: ${gone.slice(0, 5).join(', ')}${gone.length > 5 ? ', …' : ''}.` : 'Nothing to delete.');
+    if (!gone.length) level = 'read';
+  } else if ((sub === 'checkout' || sub === 'restore') && level === 'danger') {
+    const paths = sub === 'restore' ? pos : pathsAfterDashes(rest).length ? pathsAfterDashes(rest) : pos.filter((p) => p === '.');
+    const changed = await changedAmong(path, paths);
+    lines.push(changed.length ? `Throws away your changes to ${changed.length} file${changed.length === 1 ? '' : 's'}: ${changed.slice(0, 4).join(', ')}${changed.length > 4 ? ', …' : ''}.` : 'None of these files has changes to lose.');
+  } else if (sub === 'branch' && level === 'danger') {
+    for (const name of pos) {
+      const { stdout, code } = await runGit(path, ['rev-list', '--count', `HEAD..refs/heads/${name}`], { allowFailure: true });
+      if (code === 0) lines.push(`Deletes ${name}${Number(stdout.trim()) ? `, and its ${stdout.trim()} commits not on ${branch ?? 'HEAD'}` : ''}.`);
+    }
+  } else if (sub === 'push' && level === 'danger') {
+    const name = pos.find((p) => !p.includes('/') && p !== 'origin') ?? branch;
+    const { stdout: upstream } = await runGit(path, ['for-each-ref', '--format=%(upstream:short)', `refs/heads/${name}`], { allowFailure: true });
+    if (upstream.trim()) {
+      const { stdout: lost } = await runGit(path, ['rev-list', '--count', `refs/heads/${name}..${upstream.trim()}`], { allowFailure: true });
+      lines.push(Number(lost.trim()) ? `Replaces ${upstream.trim()}; its ${lost.trim()} commits that ${name} does not have are removed from the remote.` : `Replaces ${upstream.trim()} with ${name}.`);
+    } else lines.push('Rewrites what the remote has.');
+  } else if (sub === 'rebase' && level === 'danger') {
+    const onto = pos[0];
+    const base = onto && (await resolvesToCommit(path, onto));
+    if (base) {
+      const { stdout: n } = await runGit(path, ['rev-list', '--count', `${base}..HEAD`], { allowFailure: true });
+      lines.push(`Replays ${n.trim()} commit${n.trim() === '1' ? '' : 's'} of ${branch ?? 'HEAD'} onto ${onto}. They get new hashes.`);
+    }
+  } else if (sub === 'commit' && level === 'danger') {
+    lines.push('Replaces the last commit with a new one. If it is pushed, publishing needs a force push.');
+  } else if (sub === 'stash' && level === 'danger') {
+    lines.push(rest[0] === 'clear' ? 'Deletes every stash.' : `Deletes ${pos[1] ?? 'stash@{0}'}.`);
+  } else if (sub === 'rm' && level === 'danger') {
+    lines.push(`Deletes ${pos.join(', ')} from your files and stages the deletion.`);
+  }
+  if (level === 'danger') lines.push('A recovery point is saved first, so the Undo panel can put it back.');
+  return { level, lines };
+}
+
+/**
+ * Save what a risky command could lose, before it runs. Returns a function
+ * to call once it has run, which writes the entries to the operation log.
+ */
+async function consoleRecovery(path, sub, rest, label) {
+  const pos = positionals(rest);
+  const records = [];
+  const onRef = async (ref, target) => {
+    const before = await recovery.resolveRef(path, ref);
+    if (before) records.push({ ref, target, before });
+  };
+  const branch = await recovery.currentBranch(path);
+  if ((sub === 'reset' && (await resolvesToCommit(path, pos[0] ?? 'HEAD'))) || sub === 'rebase' || (sub === 'commit' && rest.includes('--amend'))) {
+    if (branch) await onRef(`refs/heads/${branch}`, { kind: 'branch', name: branch });
+  }
+  if (sub === 'reset' && rest.includes('--hard') || sub === 'checkout' || sub === 'restore' || sub === 'rm') {
+    const paths = sub === 'reset' ? [] : sub === 'checkout' ? pathsAfterDashes(rest) : pos;
+    if (sub !== 'checkout' || paths.length || pos.includes('.')) {
+      for (const file of (await changedAmong(path, paths)).slice(0, 100)) {
+        const blob = await saveWorkingFile(path, file);
+        if (blob) records.push({ blob, target: { kind: 'file', name: file } });
+      }
+    }
+  }
+  if (sub === 'clean') {
+    const dry = rest.map((a) => (/^-[a-zA-Z]+$/.test(a) ? a.replace(/f/g, '') : a)).filter((a) => a !== '-' && a !== '--force');
+    const { stdout } = await runGit(path, ['clean', '-n', ...dry], { allowFailure: true });
+    for (const item of stdout.split('\n').filter((l) => l.startsWith('Would remove ')).map((l) => l.slice(13)).filter((f) => !f.endsWith('/')).slice(0, 200)) {
+      const blob = await saveWorkingFile(path, item);
+      if (blob) records.push({ blob, target: { kind: 'file', name: item } });
+    }
+  }
+  if (sub === 'branch') for (const name of pos) await onRef(`refs/heads/${name}`, { kind: 'branch', name });
+  if (sub === 'tag' && (rest.includes('-d') || rest.includes('--delete'))) for (const name of pos) await onRef(`refs/tags/${name}`, { kind: 'tag', name });
+  if (sub === 'stash' && ['drop', 'clear'].includes(rest[0])) {
+    const { stdout } = await runGit(path, ['stash', 'list', '--format=%gd%x00%H%x00%gs'], { allowFailure: true });
+    for (const line of stdout.split('\n').filter(Boolean)) {
+      const [ref, sha, message] = line.split('\0');
+      if (rest[0] === 'clear' || ref === (pos[1] ?? 'stash@{0}')) records.push({ blob: sha, target: { kind: 'stash', name: ref }, detail: message });
+    }
+  }
+  if (sub === 'push') {
+    const name = pos.find((p) => !p.includes('/') && p !== 'origin') ?? branch;
+    const { stdout } = await runGit(path, ['for-each-ref', '--format=%(upstream)', `refs/heads/${name}`], { allowFailure: true });
+    if (stdout.trim()) await onRef(stdout.trim(), { kind: 'remote', name: stdout.trim().replace(/^refs\/remotes\//, '') });
+  }
+  return async () => {
+    let n = 0;
+    for (const r of records) {
+      const after = r.ref ? await recovery.resolveRef(path, r.ref) : null;
+      const before = r.before ?? r.blob;
+      if (r.ref && after === before) continue;
+      await recovery.record(path, { operation: 'console', label, target: r.target, before, after, detail: r.detail ?? null }).catch(() => {});
+      n++;
+    }
+    return n;
+  };
+}
+
+/** A read command's result as data the console can draw, where it has a picture for it. */
+async function consoleView(path, sub, rest, stdout) {
+  if (sub === 'status') return { kind: 'status', data: parseStatus(await git(path, STATUS_ARGS)) };
+  if (sub === 'log' && !rest.some((a) => /^(-p|--patch|--stat|--numstat|--shortstat|--name-only|--name-status|--format|--pretty|-L|--follow)/.test(a))) {
+    const max = rest.find((a) => /^(-n|--max-count=|-\d+$)/.test(a));
+    const args = rest.filter((a) => !['--oneline', '--graph', '--decorate', '--all'].includes(a));
+    const { stdout: out, code } = await runGit(path, [
+      'log', `--pretty=format:${LOG_FORMAT}`, '--decorate=full', ...(max ? [] : ['-n', '50']),
+      ...(rest.includes('--all') ? ['--exclude=refs/stash', `--exclude=${recovery.RECOVERY_PREFIX}*`, '--all'] : []), ...args
+    ], { allowFailure: true, env: CONSOLE_ENV });
+    if (code === 0) return { kind: 'log', data: { commits: parseLog(out), limited: !max } };
+  }
+  if (sub === 'branch' && consoleRules.riskOf(sub, rest) === 'read' && !rest.includes('--show-current')) {
+    return { kind: 'branches', data: await methods['branches.list']({ path }) };
+  }
+  if (sub === 'stash' && rest[0] === 'list') return { kind: 'stashes', data: await methods['stash.list']({ path }) };
+  if ((sub === 'diff' || sub === 'show') && /^diff --git /m.test(stdout)) return { kind: 'patch', data: null };
+  return { kind: 'text', data: null };
+}
+
+methods['console.preview'] = async ({ path, line }) => {
+  const { args, error } = consoleRules.tokenize(String(line ?? ''));
+  if (!args) return { ok: false, error };
+  const args2 = args[0] === 'git' ? args.slice(1) : args;
+  const check = consoleRules.checkCommand(args2);
+  if (!check.ok) return { ok: false, error: check.error, redirect: check.redirect ?? null };
+  return { ok: true, ...(await consolePreview(path, check.sub, check.rest)) };
+};
+
+/**
+ * Run one Git command typed in the console.
+ *
+ * Nothing risky runs unconfirmed: the first call answers with what it would
+ * do, and the page runs it again with `confirmed` once the user agrees.
+ * Before a risky command runs, what it could lose is saved for the Undo
+ * panel. A command that shows something comes back as data too, so the
+ * console can draw it rather than print it.
+ */
+methods['console.run'] = async ({ path, line, confirmed = false }) => {
+  const typed = String(line ?? '').trim();
+  const { args, error } = consoleRules.tokenize(typed);
+  if (!args) return { ok: false, error };
+  const argv = args[0] === 'git' ? args.slice(1) : args;
+  const check = consoleRules.checkCommand(argv);
+  if (!check.ok) return { ok: false, error: check.error, redirect: check.redirect ?? null };
+  const { sub, rest } = check;
+
+  const preview = await consolePreview(path, sub, rest);
+  if (preview.level === 'danger' && !confirmed) return { ok: false, needsConfirm: true, preview };
+
+  const label = `Console: git ${argv.join(' ')}`.slice(0, 120);
+  const finish = preview.level === 'danger' ? await consoleRecovery(path, sub, rest, label) : null;
+
+  const started = Date.now();
+  const { stdout, stderr, code } = await new Promise((done) => {
+    execFile('git', argv, {
+      cwd: path, env: { ...process.env, ...CONSOLE_ENV }, maxBuffer: CONSOLE_OUTPUT_LIMIT,
+      timeout: CONSOLE_TIMEOUT_MS, windowsHide: true
+    }, (err, out, errOut) => done({
+      stdout: String(out ?? ''), stderr: String(errOut ?? '') + (err?.killed ? '\nThe command took too long and was stopped.' : err?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? '\nThe output was too long, so it was cut.' : ''),
+      code: err ? (typeof err.code === 'number' ? err.code : 1) : 0
+    }));
+  });
+  const recorded = code === 0 && finish ? await finish() : 0;
+  const view = code === 0 ? await consoleView(path, sub, rest, stdout) : { kind: 'text', data: null };
+  return {
+    ok: code === 0, code, stdout, stderr, ms: Date.now() - started, level: preview.level,
+    changed: preview.level !== 'read', recorded, ...view,
+    explanation: code === 0 ? null : consoleRules.explainError(`${stderr}\n${stdout}`)
+  };
 };
 
 /* ------------------------------------------------------------------ *
