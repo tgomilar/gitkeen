@@ -188,6 +188,7 @@ every time. Only that scene can reach it.
 | `overview` | `overview-dark.png`, `overview-light.png` |
 | `commit` | `commit-lines.gif` |
 | `suggest` | `suggest.gif` |
+| `stash` | `stash-files.gif` |
 | `squash` | `squash.gif` |
 | `rebase` | `rebase.gif` |
 | `undo` | `undo.gif` |

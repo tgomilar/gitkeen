@@ -293,6 +293,30 @@ CONFIG
     }
   },
 
+  async stash() {
+    await openApp({ setup: `
+      printf 'Ideas: export to PDF.\n' > notes.txt
+      printf '\nexport const DEBUG = true;\n' >> src/notes.js
+      printf '\n.note { color: red; }\n' >> styles.css
+      printf 'export function experiment() {}\n' > src/experiment.js
+      git stash push -q --include-untracked -m "an experiment I set aside"` });
+    await record('stash-files', async () => {
+      await click('.rail .item', 'Commit', { wait: 700 });
+      await waitText('.disclosure', '1 change');
+      // The group may start open or closed; open it only if it is closed.
+      if (await js(`document.querySelector('.disclosure[aria-expanded="false"] .title')?.textContent === 'Stashes'`)) {
+        await click('.disclosure', 'Stashes', { wait: 600 });
+      }
+      await click('.stash .row', 'an experiment', { wait: 900 });
+      await click('.file', 'notes.js', { child: '.box', wait: 500 });
+      await click('.file', 'experiment.js', { child: '.box', wait: 800 });
+      await click('.picked .act.primary', null, { wait: 1000 });
+      await click('.dialog .btn.primary', null, { wait: 300 });
+      await waitFor(() => js(`[...document.querySelectorAll('.row .name')].some((n) => n.textContent.includes('experiment.js'))`), 'the files to come back');
+      await sleep(1800);
+    });
+  },
+
   async squash() {
     await openApp();
     await record('squash', async () => {

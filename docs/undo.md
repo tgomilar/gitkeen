@@ -15,7 +15,7 @@ puts things back the way they were before the operation:
 | Reset, squash, drop, move, rebase or amend | Moves the branch back to its old commit. |
 | Delete a branch | Creates the branch again at its old commit. |
 | Delete a tag | Creates the tag again, if no other tag has taken its name. |
-| Drop a stash | Puts the stash back on the stash list. |
+| Drop a stash, or unstash some of its files | Puts the whole stash back on the stash list. |
 | Force push | Creates a local branch `recovered/<branch>` at the commit the remote had. Push it yourself to put the remote back. |
 | Roll back a file, a hunk or a line | Writes back what the file held before. |
 

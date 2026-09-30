@@ -150,6 +150,14 @@ stash for these actions:
 | Apply and keep | Puts the change back and keeps the stash. |
 | Delete | Throws the change away. The Undo panel can put the stash back. |
 
+To take back only some files, open the stash and tick them. **Unstash** puts
+those files back and takes them out of the stash, and the other files stay in
+it. **Apply, keep stash** puts them back and leaves the stash as it is. A
+chosen file that has changes of its own is refused, so nothing is overwritten,
+and the Undo panel can put the whole stash back.
+
+![Ticking two files in a stash and unstashing only those](media/stash-files.gif)
+
 An unversioned file that you stash is removed from disk until you unstash it.
 The dialog says so before it runs. If a stash does not fit your files any more,
 Git leaves conflicts to resolve and keeps the stash, so nothing is lost.
