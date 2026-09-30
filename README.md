@@ -48,7 +48,7 @@ branches, commit your work, and change the history you already have.
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
-| Themes | Switch between a dark and a light theme. Both use the colours of VS Code's default themes, Dark Modern and Light Modern. |
+| Themes | Switch between a dark and a light theme, in one of five well-known colour palettes. |
 
 ## How squashing works
 
@@ -636,6 +636,24 @@ Tracking a pattern changes `.gitattributes`. Commit that file, so that other
 people store the same files in LFS. In the commit panel, right click a file to
 store every file of its kind in LFS. The diff viewer shows a change to an LFS
 file as its size and content before and after, not as the pointer lines.
+
+## Themes and colour palettes
+
+Click **◐** at the right of the title bar to choose light or dark, and the
+colour palette. Light or dark and the palette are chosen apart, so every
+palette comes in both:
+
+| Palette | Light | Dark |
+|---|---|---|
+| VS Code (the default) | Light Modern | Dark Modern |
+| GitHub | GitHub Light | GitHub Dark |
+| One | One Light | One Dark |
+| Solarized | Solarized Light | Solarized Dark |
+| Dracula | Alucard | Dracula |
+
+The command palette lists each palette too. Gitalia remembers your choice. The
+graph lanes, the branch and tag labels, the file states and the diff colours
+all follow the palette. The Git orange of the logo stays the same.
 
 ## Undoing an operation
 

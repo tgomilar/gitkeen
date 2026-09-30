@@ -38,6 +38,7 @@ import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
 import { submoduleStore } from './submodules.svelte';
 import { lfsStore } from './lfs.svelte';
+import { appearance, PALETTES } from './appearance.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -448,6 +449,18 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       icon: 'refresh',
       group: 'Branches',
       run: () => submoduleStore.update(null)
+    });
+  }
+  for (const p of PALETTES) {
+    add({
+      id: `palette-${p.id}`,
+      label: `Colour palette: ${p.name}`,
+      keywords: `theme colours colors palette ${p.light} ${p.dark}`,
+      icon: appearance.palette === p.id ? 'check' : null,
+      hint: `${p.light} / ${p.dark}`,
+      group: 'View',
+      disabled: appearance.palette === p.id,
+      run: () => appearance.setPalette(p.id)
     });
   }
   add({

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import { appearance, PALETTES } from '../state/appearance.svelte';
   import SplitButton from './SplitButton.svelte';
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
@@ -54,6 +55,28 @@
         ];
 
     menu = { x: rect.left, y: rect.bottom + 2, items };
+  }
+
+  /** Light or dark, and which well-known palette the colours follow. */
+  function openAppearanceMenu(event: MouseEvent) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const pick = (mode: 'light' | 'dark') => () => { if (theme !== mode) ontheme(); };
+    menu = {
+      x: Math.max(8, rect.right - 230),
+      y: rect.bottom + 2,
+      items: [
+        { label: 'Light', icon: theme === 'light' ? 'check' : undefined, action: pick('light') },
+        { label: 'Dark', icon: theme === 'dark' ? 'check' : undefined, action: pick('dark') },
+        { separator: true },
+        { label: 'Colour palette', disabled: true },
+        ...PALETTES.map((p) => ({
+          label: p.name,
+          hint: theme === 'dark' ? p.dark : p.light,
+          icon: appearance.palette === p.id ? ('check' as const) : undefined,
+          action: () => appearance.setPalette(p.id)
+        }))
+      ]
+    };
   }
 
   function openRepoMenu(event: MouseEvent) {
@@ -186,7 +209,9 @@
     <Icon name="ai" size={14} />
   </button>
 
-  <button class="theme" onclick={ontheme} title="Switch theme" aria-label="Switch theme">
+  <button class="theme" onclick={openAppearanceMenu}
+    title="Theme: {theme === 'dark' ? appearance.current.dark : appearance.current.light}. Click to change light or dark, and the colour palette."
+    aria-label="Theme and colour palette">
     {theme === 'dark' ? '◑' : '◐'}
   </button>
 </header>
