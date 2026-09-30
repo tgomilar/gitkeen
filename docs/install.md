@@ -4,15 +4,16 @@ You also need Git 2.30 or newer on your computer.
 
 ## Which file to download
 
-Choose the file for your system. Each link always gives the newest version.
+Download Gitkeen from the [Releases page](https://github.com/tgomilar/gitkeen/releases).
+Open the newest release, and under **Assets** choose the file for your system:
 
-| Your system | Download |
+| Your system | File |
 |---|---|
-| macOS on Apple silicon (M1 and newer) | [Gitkeen-macOS-Apple-silicon.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Apple-silicon.dmg) |
-| macOS on Intel | [Gitkeen-macOS-Intel.dmg](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-macOS-Intel.dmg) |
-| Windows 10 and 11 | [Gitkeen-Windows-Installer.exe](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Windows-Installer.exe) |
-| Linux | [Gitkeen-Linux.AppImage](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.AppImage) |
-| Debian and Ubuntu | [Gitkeen-Linux.deb](https://github.com/tgomilar/gitkeen/releases/latest/download/Gitkeen-Linux.deb) |
+| macOS on Apple silicon (M1 and newer) | `Gitkeen-macOS-Apple-silicon.dmg` |
+| macOS on Intel | `Gitkeen-macOS-Intel.dmg` |
+| Windows 10 and 11 | `Gitkeen-Windows-Installer.exe` |
+| Linux | `Gitkeen-Linux.AppImage` |
+| Debian and Ubuntu | `Gitkeen-Linux.deb` |
 
 On Fedora, openSUSE and other Linux systems, use the AppImage.
 
@@ -66,6 +67,10 @@ sudo apt install ./Gitkeen-Linux.deb
 ```
 
 ## Updates
+
+Gitkeen is a pre-release for now, and pre-releases do not update themselves.
+To move to a newer pre-release, download and install it from the Releases page.
+From the first full release on, updates work as described here.
 
 Gitkeen checks for a new version a few seconds after it starts. When there is
 one, a message offers **Update and restart**. The update is downloaded, its

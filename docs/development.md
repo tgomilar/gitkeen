@@ -136,6 +136,13 @@ Windows and Linux, and attached to a draft release on GitHub.
 3. When the four builds are green, open the draft on the Releases page, read
    the notes, and press **Publish**.
 
+Gitkeen is in pre-release for now, so the README and `docs/install.md` send
+people to the Releases page. GitHub leaves pre-releases out of "latest", so
+links to `releases/latest/download/…` would not work, and the app's update
+check (which reads `releases/latest/download/latest.json`) skips them too. With
+the first full release, the download tables can link to
+`releases/latest/download/<file>` directly, and updates start to arrive.
+
 The workflow can also be started by hand from the Actions tab. It then makes a
 draft for the version already in `package.json`.
 
