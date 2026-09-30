@@ -4,6 +4,7 @@
    *
    * Only one panel is open at a time, which is what IntelliJ IDEA does with
    * Project and Commit: they share the same space rather than competing for it.
+   * Choosing the open panel again closes it, as IntelliJ IDEA's tool windows do.
    */
   import Icon from './Icon.svelte';
   import { githubStore } from '../state/github.svelte';
@@ -13,13 +14,15 @@
   export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo' | 'github';
 
   interface Props {
-    active: DockPanel;
+    /** The open panel, or null when the dock is closed. */
+    active: DockPanel | null;
     /**
      * Shown on the Commit button, so pending work is visible from anywhere.
      * Tracked changes only: unversioned files are not in the next commit by
      * default, and counting them would overstate what is waiting.
      */
     changeCount: number;
+    /** Called with the panel chosen; the caller opens it, or closes it if it is the open one. */
     onselect: (panel: DockPanel) => void;
   }
 
@@ -68,7 +71,7 @@
       <span class="label">{item.label}</span>
     </button>
     {#if item.id === 'undo'}
-      <!-- The console opens along the bottom, beside whichever panel is docked, so it toggles on its own. -->
+      <!-- The console opens along the bottom, beside whichever panel is docked, so it toggles on its own state. -->
       <button
         class="item"
         class:active={consoleStore.open}

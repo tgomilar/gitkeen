@@ -19,6 +19,7 @@ branches, commit your work, and change the history you already have.
 |---|---|
 | Repository | Open any folder inside a repository. Gitkeen finds the root itself. |
 | Current branch | See the branch you are on, pinned above the branch list. |
+| Side panels | Open a panel from the rail on the left. Choose it again to close it and give the graph the full width. |
 | Recent list | Reopen a repository you used before. |
 | Graph | Read the full commit graph with lanes, merges, branches and tags. |
 | Selection | Select one commit, several commits, or a range. |

@@ -47,6 +47,7 @@
   const SIDEBAR_KEY = 'gitkeen.sidebar-width';
   const DETAILS_KEY = 'gitkeen.details-height';
   const DOCK_KEY = 'gitkeen.dock';
+  const DOCK_OPEN_KEY = 'gitkeen.dock-open';
 
   let theme = $state<'light' | 'dark'>(
     (localStorage.getItem(THEME_KEY) as 'light' | 'dark' | null) ?? 'dark'
@@ -56,6 +57,21 @@
   let dock = $state<DockPanel>(
     (localStorage.getItem(DOCK_KEY) as DockPanel | null) ?? 'branches'
   );
+  // Every panel in the rail toggles: choosing the open one again closes the
+  // dock and gives the graph the width. `dock` remembers the last panel either way.
+  let dockOpen = $state(localStorage.getItem(DOCK_OPEN_KEY) !== 'false');
+  /** The panel on screen, or null when the dock is closed. */
+  const shown = $derived<DockPanel | null>(dockOpen ? dock : null);
+
+  function showDock(panel: DockPanel) {
+    dock = panel;
+    dockOpen = true;
+  }
+
+  function toggleDock(panel: DockPanel) {
+    if (dockOpen && dock === panel) dockOpen = false;
+    else showDock(panel);
+  }
 
   let titleBar = $state<ReturnType<typeof TitleBar> | null>(null);
   let graphView = $state<ReturnType<typeof GraphView> | null>(null);
@@ -69,6 +85,7 @@
 
   $effect(() => {
     localStorage.setItem(DOCK_KEY, dock);
+    localStorage.setItem(DOCK_OPEN_KEY, String(dockOpen));
   });
 
   // Keep the cursor visible whenever it moves for any reason.
@@ -99,7 +116,7 @@
   // `git commit` with no message in the console opens the commit box instead.
   $effect(() => {
     const focusCommit = () => {
-      dock = 'commit';
+      showDock('commit');
       tick().then(() => commitPanel?.focusMessage());
     };
     window.addEventListener('gitkeen:focus-commit', focusCommit);
@@ -111,7 +128,7 @@
   // filters change. `ensure` reads the filters, so this effect re-runs when
   // they do and the report follows the form without a button to press.
   $effect(() => {
-    if (dock === 'stats' && repoStore.repo) statsStore.ensure();
+    if (shown === 'stats' && repoStore.repo) statsStore.ensure();
   });
 
   function toggleTheme() {
@@ -121,9 +138,9 @@
   // The palette drives things that live on this screen, so it is told how.
   // The assignment is one-way: the palette stays a store, not an outlet.
   paletteStore.bind({
-    setDock: (panel) => (dock = panel),
+    setDock: (panel) => showDock(panel),
     openCommit: () => {
-      dock = 'commit';
+      showDock('commit');
       // The panel may not be mounted yet, so wait for the render it triggers.
       tick().then(() => commitPanel?.focusMessage());
     },
@@ -232,7 +249,7 @@
       event.preventDefault(); // a page reload would throw the repository away
       // Refresh what is actually on screen. The report is read separately
       // from the rest of the repository, so it needs asking for by name.
-      if (dock === 'stats') statsStore.load();
+      if (shown === 'stats') statsStore.load();
       else repoStore.refresh();
       return;
     }
@@ -245,7 +262,7 @@
     // ⌘K is taken by the graph search, so the commit box gets ⌘⇧K.
     if (mod && event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
-      dock = 'commit';
+      showDock('commit');
       // The panel may not be mounted yet, so wait for the render it triggers.
       tick().then(() => commitPanel?.focusMessage());
       return;
@@ -303,7 +320,7 @@
       if (key === 's') {
         // Stage or unstage the file selected in the commit panel.
         const change = commitStore.all.find((c) => c.path === commitStore.selected);
-        if (dock === 'commit' && change) {
+        if (shown === 'commit' && change) {
           event.preventDefault();
           commitStore.toggle(change);
         }
@@ -370,39 +387,41 @@
 
     <div class="body">
       <ToolRail
-        active={dock}
+        active={shown}
         changeCount={repoStore.dirtyFileCount}
-        onselect={(panel) => (dock = panel)}
+        onselect={toggleDock}
       />
 
-      <div class="sidebar" style="width: {sidebarWidth}px">
-        {#if dock === 'commit'}
-          <CommitPanel bind:this={commitPanel} />
-        {:else if dock === 'stats'}
-          <StatsPanel />
-        {:else if dock === 'undo'}
-          <RecoveryPanel />
-        {:else if dock === 'github'}
-          <GithubPanel />
-        {:else}
-          <BranchSidebar />
-        {/if}
-      </div>
+      {#if shown}
+        <div class="sidebar" style="width: {sidebarWidth}px">
+          {#if shown === 'commit'}
+            <CommitPanel bind:this={commitPanel} />
+          {:else if shown === 'stats'}
+            <StatsPanel />
+          {:else if shown === 'undo'}
+            <RecoveryPanel />
+          {:else if shown === 'github'}
+            <GithubPanel />
+          {:else}
+            <BranchSidebar />
+          {/if}
+        </div>
 
-      <div
-        class="divider vertical"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize side panel"
-        use:resizer={{
-          axis: 'x',
-          apply: (d) => (sidebarWidth = Math.min(560, Math.max(190, sidebarWidth + d))),
-          commit: () => localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
-        }}
-      ></div>
+        <div
+          class="divider vertical"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize side panel"
+          use:resizer={{
+            axis: 'x',
+            apply: (d) => (sidebarWidth = Math.min(560, Math.max(190, sidebarWidth + d))),
+            commit: () => localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
+          }}
+        ></div>
+      {/if}
 
       <main class="main">
-        {#if dock === 'stats'}
+        {#if shown === 'stats'}
           <!-- A report is read at width, so it takes the whole main area
                rather than sharing it with the graph. -->
           <StatsReport />
