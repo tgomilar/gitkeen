@@ -978,9 +978,9 @@ drop that cannot be replayed puts the branch back exactly as it was.
 
 ## How it is built
 
-The plan asks for Tauri* and Rust*. Rust is not installed on this machine, so
-Git runs in a small Node.js backend for now. Everything above that backend is
-already the final design, so the change to Tauri later is contained.
+Git runs in a Node.js* backend. In the browser it is reached over HTTP from
+the development server. In the desktop app, built with Rust*, the same
+backend runs as a separate program, and the app passes each call on to it.
 
 ```
 Svelte user interface
@@ -989,19 +989,20 @@ Svelte user interface
         |
     Transport                (src/lib/git/transport.ts)
         |
-   +----+----------------+
-   |                     |
-HttpTransport      TauriTransport
-   |                     |
-Node backend         Rust commands
-   |                     |
-  Git command line executable
+   +----+-----------------------+
+   |                            |
+HttpTransport              TauriTransport
+   |                            |
+development server         the app's Rust shell (src-tauri/src/lib.rs)
+   |                            |
+   +------ Node backend --------+    (server/, the same code for both)
+                |
+   Git command line executable
 ```
 
 The user interface never builds a Git command. It calls named methods such as
-`branch.checkout` and `log.list`. The Node backend answers those names today.
-Rust will answer the same names later. Only `transport.ts` knows which one is
-in use.
+`branch.checkout` and `log.list`, and the Node backend answers them. Only
+`transport.ts` knows how the call travels.
 
 ### Where the code lives
 
