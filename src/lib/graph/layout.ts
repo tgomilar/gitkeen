@@ -128,12 +128,12 @@ export function layoutGraph(commits: Commit[], above?: GraphLayout): GraphLayout
   return { rows, open: lanes, laneCount, index };
 }
 
-/** Lane colours. Deliberately desaturated so the graph never shouts. */
-export const LANE_COLORS = [
-  '#5b9dd9', '#c98a4b', '#7fb069', '#b07ac9', '#d4707f',
-  '#4fa8a0', '#c4a94b', '#8a8ed4', '#c97fa8', '#6fa3bd'
-];
+/**
+ * Lane colours, as theme tokens (`--lane-0` to `--lane-5` in theme.css), so
+ * each theme can pick shades that read on its own background.
+ */
+export const LANE_COUNT = 6;
 
 export function laneColor(lane: number): string {
-  return LANE_COLORS[lane % LANE_COLORS.length];
+  return `var(--lane-${lane % LANE_COUNT})`;
 }

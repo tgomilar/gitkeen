@@ -48,7 +48,7 @@ branches, commit your work, and change the history you already have.
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
-| Themes | Switch between a dark and a light theme. |
+| Themes | Switch between a dark and a light theme. Both use the colours of VS Code's default themes, Dark Modern and Light Modern. |
 
 ## How squashing works
 

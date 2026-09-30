@@ -483,7 +483,7 @@
     font-weight: 600;
   }
   .status.modified, .status.renamed { background: var(--ref-local-bg); color: var(--ref-local-text); }
-  .status.added { background: rgba(99, 177, 117, 0.18); color: var(--success); }
+  .status.added { background: var(--success-subtle); color: var(--success); }
   .status.deleted { background: var(--bg-sunken); color: var(--text-dim); }
 
   .sub {
@@ -638,13 +638,13 @@
 
   .marker { display: inline-block; width: 1.2ch; user-select: none; }
 
-  .side.add { background: rgba(99, 177, 117, 0.13); }
-  .side.del { background: rgba(224, 106, 92, 0.13); }
+  .side.add { background: var(--diff-add-line); }
+  .side.del { background: var(--diff-del-line); }
   .side.blank { background: var(--bg-sunken); }
 
   /* The words that actually differ, inside a line that mostly did not. */
-  .add .word { background: rgba(99, 177, 117, 0.34); border-radius: 2px; }
-  .del .word { background: rgba(224, 106, 92, 0.32); border-radius: 2px; }
+  .add .word { background: var(--diff-add-word); border-radius: 2px; }
+  .del .word { background: var(--diff-del-word); border-radius: 2px; }
 
   .no-newline {
     margin-left: 10px;

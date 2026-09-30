@@ -581,7 +581,7 @@
     font-family: var(--font-ui);
     font-weight: 600;
   }
-  .conflict.done .badge { background: rgba(99, 177, 117, 0.15); color: var(--success); }
+  .conflict.done .badge { background: var(--success-subtle); color: var(--success); }
   .state { color: var(--text-dim); }
   .state b { color: var(--text); font-family: var(--font-mono); font-size: 10.5px; }
 

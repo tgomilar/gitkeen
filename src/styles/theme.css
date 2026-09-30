@@ -1,6 +1,8 @@
 /* Gitalia design tokens.
    Dense, quiet, high-contrast where it matters. Colour is reserved for the
-   graph, refs and state, so the chrome never competes with the history. */
+   graph, refs and state, so the chrome never competes with the history.
+   The palette follows VS Code's default themes, Light Modern and Dark
+   Modern, which are the colours most developers already work in. */
 
 :root {
   --font-ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -12,111 +14,141 @@
   --radius-sm: 3px;
   --radius-md: 5px;
 
-  /* Light theme */
-  --bg-app: #f4f4f5;
+  /* Light theme: VS Code's Light Modern, the default most developers look
+     at every day, so Gitalia sits beside their editor without a jolt. */
+  --bg-app: #f8f8f8;
   --bg-panel: #ffffff;
   --bg-raised: #ffffff;
-  --bg-sunken: #ebebed;
-  --bg-hover: rgba(0, 0, 0, 0.045);
-  --bg-active: rgba(0, 0, 0, 0.08);
-  --bg-selected: #dbe8f6;
-  --bg-selected-inactive: #e6e6e9;
+  --bg-sunken: #f3f3f3;
+  --bg-hover: #f2f2f2;
+  --bg-active: #e8e8e8;
+  --bg-selected: #e4e6f1;
+  --bg-selected-inactive: #ececec;
 
-  --border: #d9d9dd;
-  --border-strong: #c2c2c8;
+  --border: #e5e5e5;
+  --border-strong: #cecece;
 
-  --text: #1c1c1f;
-  --text-dim: #63636b;
-  --text-faint: #8d8d96;
+  --text: #3b3b3b;
+  --text-dim: #616161;
+  --text-faint: #767676;
   --text-inverted: #ffffff;
 
-  --accent: #2f6fd0;
-  --accent-hover: #2a62b8;
+  --accent: #005fb8;
+  --accent-hover: #0258a8;
   --accent-text: #ffffff;
-  --accent-subtle: rgba(47, 111, 208, 0.12);
+  --accent-subtle: rgba(0, 95, 184, 0.1);
 
   /* The Git orange, used only by the logo. */
   --brand: #f03c2e;
 
-  --danger: #c0392b;
-  --danger-subtle: rgba(192, 57, 43, 0.1);
-  --warning: #9a6a00;
-  --warning-subtle: rgba(200, 145, 0, 0.14);
-  --success: #2f7d43;
+  --danger: #c72e0f;
+  --danger-subtle: rgba(199, 46, 15, 0.08);
+  --warning: #9a6700;
+  --warning-subtle: rgba(191, 136, 3, 0.12);
+  --success: #388a34;
 
-  --ref-local-bg: #e2edf9;
-  --ref-local-text: #1c4f8f;
-  --ref-remote-bg: #efe8f7;
-  --ref-remote-text: #5b3a8a;
-  --ref-tag-bg: #fdf0da;
-  --ref-tag-text: #7a5410;
-  --ref-head-bg: #2f6fd0;
+  --ref-local-bg: #dcebfa;
+  --ref-local-text: #005fb8;
+  --ref-remote-bg: #efe6f8;
+  --ref-remote-text: #6f42c1;
+  --ref-tag-bg: #fcf0d4;
+  --ref-tag-text: #7d5300;
+  --ref-head-bg: #005fb8;
   --ref-head-text: #ffffff;
 
-  /* File status colours in the commit panel. They carry meaning, so they are
-     the one place outside the graph where colour is allowed to speak. */
-  --change-modified: #1a56b8;
-  --change-added: #2f7d43;
-  --change-deleted: #7c7c85;
-  --change-renamed: #1a56b8;
-  --change-conflict: #c0392b;
-  --change-unversioned: #8a5a2b;
+  /* File status colours, as VS Code's Source Control view shows them. */
+  --change-modified: #895503;
+  --change-added: #587c0c;
+  --change-deleted: #ad0707;
+  --change-renamed: #007100;
+  --change-conflict: #ad0707;
+  --change-unversioned: #007100;
 
-  --shadow-menu: 0 6px 20px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.28);
-  --scrim: rgba(0, 0, 0, 0.35);
+  /* Graph lanes: VS Code's source control graph colours, an IBM palette
+     that stays apart for colour-blind eyes. Lane 0 is the ref blue. */
+  --lane-0: #1a85ff;
+  --lane-1: #d18c00;
+  --lane-2: #dc267f;
+  --lane-3: #2c978e;
+  --lane-4: #9d4edd;
+  --lane-5: #994f00;
+
+  /* Diff lines and the words changed inside them, VS Code's diff colours. */
+  --diff-add-line: rgba(155, 185, 85, 0.2);
+  --diff-del-line: rgba(255, 0, 0, 0.12);
+  --diff-add-word: rgba(156, 204, 44, 0.4);
+  --diff-del-word: rgba(255, 0, 0, 0.25);
+  --success-subtle: rgba(56, 138, 52, 0.12);
+
+  --shadow-menu: 0 2px 8px rgba(0, 0, 0, 0.16);
+  --shadow-modal: 0 8px 28px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.3);
 }
 
 :root[data-theme='dark'] {
-  --bg-app: #1a1b1e;
-  --bg-panel: #202125;
-  --bg-raised: #292a2f;
-  --bg-sunken: #161719;
-  --bg-hover: rgba(255, 255, 255, 0.055);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --bg-selected: #294a70;
-  --bg-selected-inactive: #303136;
+  /* Dark theme: VS Code's Dark Modern. */
+  --bg-app: #181818;
+  --bg-panel: #1f1f1f;
+  --bg-raised: #252526;
+  --bg-sunken: #181818;
+  --bg-hover: #2a2d2e;
+  --bg-active: #37373d;
+  --bg-selected: #04395e;
+  --bg-selected-inactive: #37373d;
 
-  --border: #33343a;
-  --border-strong: #45464e;
+  --border: #2b2b2b;
+  --border-strong: #3c3c3c;
 
-  --text: #e3e3e6;
-  --text-dim: #9b9ba4;
-  --text-faint: #6d6e77;
-  --text-inverted: #16171a;
+  --text: #cccccc;
+  --text-dim: #9d9d9d;
+  --text-faint: #7a7a7a;
+  --text-inverted: #1f1f1f;
 
-  --accent: #4a8fe0;
-  --accent-hover: #5c9be6;
-  --accent-text: #0f1114;
-  --accent-subtle: rgba(74, 143, 224, 0.16);
+  --accent: #0078d4;
+  --accent-hover: #026ec1;
+  --accent-text: #ffffff;
+  --accent-subtle: rgba(0, 120, 212, 0.2);
 
   --brand: #f4553f;
 
-  --danger: #e06a5c;
-  --danger-subtle: rgba(224, 106, 92, 0.14);
-  --warning: #d9a441;
-  --warning-subtle: rgba(217, 164, 65, 0.15);
-  --success: #63b175;
+  --danger: #f85149;
+  --danger-subtle: rgba(248, 81, 73, 0.12);
+  --warning: #cca700;
+  --warning-subtle: rgba(204, 167, 0, 0.14);
+  --success: #73c991;
 
-  --ref-local-bg: #23415f;
-  --ref-local-text: #b9d6f5;
-  --ref-remote-bg: #3b2f52;
-  --ref-remote-text: #d3c2ee;
-  --ref-tag-bg: #4a3b1c;
-  --ref-tag-text: #f0d9a6;
-  --ref-head-bg: #4a8fe0;
-  --ref-head-text: #11151a;
+  --ref-local-bg: #0e3a5c;
+  --ref-local-text: #9cdcfe;
+  --ref-remote-bg: #3a2b52;
+  --ref-remote-text: #d7baff;
+  --ref-tag-bg: #473a14;
+  --ref-tag-text: #e2c08d;
+  --ref-head-bg: #0078d4;
+  --ref-head-text: #ffffff;
 
-  --change-modified: #6c9fe8;
-  --change-added: #63b175;
-  --change-deleted: #85868f;
-  --change-renamed: #6c9fe8;
-  --change-conflict: #e06a5c;
-  --change-unversioned: #c08457;
+  --change-modified: #e2c08d;
+  --change-added: #81b88b;
+  --change-deleted: #c74e39;
+  --change-renamed: #73c991;
+  --change-conflict: #e4676b;
+  --change-unversioned: #73c991;
 
-  --shadow-menu: 0 8px 26px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.7);
-  --scrim: rgba(0, 0, 0, 0.55);
+  --lane-0: #59a4f9;
+  --lane-1: #ffb000;
+  --lane-2: #dc267f;
+  --lane-3: #40b0a6;
+  --lane-4: #b66dff;
+  --lane-5: #c9853a;
+
+  --diff-add-line: rgba(155, 185, 85, 0.2);
+  --diff-del-line: rgba(255, 0, 0, 0.2);
+  --diff-add-word: rgba(156, 204, 44, 0.3);
+  --diff-del-word: rgba(255, 0, 0, 0.3);
+  --success-subtle: rgba(115, 201, 145, 0.14);
+
+  --shadow-menu: 0 2px 8px rgba(0, 0, 0, 0.36);
+  --shadow-modal: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.5);
 }
 
 * { box-sizing: border-box; }
