@@ -31,14 +31,21 @@ jobs:
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
+        # The id comes from the answer to the create request itself. Listing the
+        # releases straight after creating one can miss the new draft, and an
+        # empty id makes the builds skip every upload.
         run: |
           version=$(node -p "require('./package.json').version")
           tag="v$version"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq "map(select(.tag_name == \"$tag\")) | .[0].id // empty")
+          if [ -z "$id" ]; then
             node scripts/release-notes.mjs "$tag" > notes.md
-            gh release create "$tag" --draft --title "Gitkeen $version" --notes-file notes.md --target "$GITHUB_SHA"
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" \
+              -f name="Gitkeen $version" -F draft=true -F body=@notes.md --jq .id)
           fi
-          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -1)" >> "$GITHUB_OUTPUT"
+          if [ -z "$id" ]; then echo "::error::Could not find or create the draft release for $tag"; exit 1; fi
+          echo "Uploading to release $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
     needs: draft
