@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Explain from './Explain.svelte';
   import type { CommitSignature } from '../git/types';
   import { repoStore } from '../state/repo.svelte';
   import { absoluteTime, relativeTime, initials, authorColor, pluralize } from '../format';
@@ -128,6 +129,9 @@
         </div>
       {/if}
     </header>
+    <div class="explain-row">
+      <Explain kind="commit" args={{ hash: selected.hash }} subject={selected.hash} label="Explain this commit" />
+    </div>
 
     <div class="scroll">
       {#if body}
@@ -171,6 +175,8 @@
 </section>
 
 <style>
+  .explain-row { padding: 0 14px; }
+
   .badge.sig.good { color: var(--success); }
   .badge.sig.warn { color: var(--warning); }
   .badge.sig.bad { color: var(--danger); }

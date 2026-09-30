@@ -8,6 +8,7 @@
    * in the diff viewer between the same two commits.
    */
   import { compareStore } from '../state/compare.svelte';
+  import Explain from './Explain.svelte';
   import { diffStore } from '../state/diff.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { relativeTime, absoluteTime, pluralize } from '../format';
@@ -137,6 +138,10 @@
             {@render commitList(result.onlyInBase.commits, result.onlyInBase.truncated, request.baseLabel, request.targetLabel)}
           </div>
           <section class="files">
+            <div class="explain-row">
+              <Explain kind="branches" args={{ base: request.base, target: request.target }}
+                subject={`${request.base}..${request.target}`} label="Explain how they differ" />
+            </div>
             <h3>
               {pluralize(result.files.length, 'file')} differ
               <span class="stat add">+{totals.added.toLocaleString()}</span>
@@ -170,6 +175,8 @@
 {/if}
 
 <style>
+  .explain-row { padding: 6px 12px 0; }
+
   .scrim {
     position: fixed;
     inset: 0;

@@ -7,7 +7,7 @@
  */
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
-import { suggestSubject, suggestionProviders } from './suggest.mjs';
+import { suggestSubject, suggestionProviders, explain } from './suggest.mjs';
 import { keyStatus, writeKey } from './settings.mjs';
 import * as recovery from './recovery.mjs';
 import { access, mkdtemp, writeFile, rm, readFile, lstat, realpath } from 'node:fs/promises';
@@ -3469,6 +3469,103 @@ export const methods = {
     const onRemote = remoteRefs.split('\n').map((s) => s.trim()).filter((r) => r.endsWith(`/${name}`));
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
+  }
+};
+
+/* ------------------------------------------------------------------ *
+ * AI explanations
+ * ------------------------------------------------------------------ */
+
+const subjectOf = async (path, rev) => {
+  const { stdout, code } = await runGit(path, ['log', '-1', '--format=%h %s', rev, '--'], { allowFailure: true });
+  return code === 0 ? stdout.trim() : null;
+};
+
+/**
+ * What the model is shown for each kind of explanation, gathered here so the
+ * page never builds it and a model only ever sees this repository's history.
+ */
+const EXPLAIN_MATERIAL = {
+  /** A commit: its full message, the files it touched, and its diff. */
+  async commit({ path, hash }) {
+    const rev = commitish(hash, 'the commit');
+    const stat = await git(path, ['-c', 'core.quotepath=false', 'show', '--stat', '--format=', rev, '--']);
+    const shown = await git(path, ['-c', 'core.quotepath=false', 'show', '--format=fuller', '--patch', '--find-renames', rev, '--']);
+    return { material: shown, stat };
+  },
+
+  /**
+   * A conflicted file: which two commits are being combined, and each
+   * conflict block with the lines on either side.
+   */
+  async conflict({ path, file }) {
+    const offer = await methods['conflicts.read']({ path, file });
+    const operation = await detectOperation(path);
+    const incoming = { merge: 'MERGE_HEAD', 'cherry-pick': 'CHERRY_PICK_HEAD', revert: 'REVERT_HEAD' }[operation];
+    let theirs = incoming ? await subjectOf(path, incoming) : null;
+    if (operation === 'rebase') {
+      const stop = await rebaseStopInfo(path);
+      if (stop.sha) theirs = await subjectOf(path, stop.sha);
+    }
+    const lines = [
+      `Operation: ${operation ?? 'unknown'}${operation === 'rebase' ? ' (ours is the branch being rebased onto, theirs is the commit being replayed)' : ''}`,
+      `File: ${file}`,
+      `Ours: ${await subjectOf(path, 'HEAD') ?? 'HEAD'}`,
+      `Theirs: ${theirs ?? 'the incoming side'}`,
+      ''
+    ];
+    let n = 0;
+    for (const section of offer.sections) {
+      if (section.type !== 'conflict') continue;
+      n++;
+      lines.push(`Conflict ${n}:`, '<ours>', section.ours.join('').trimEnd(), '</ours>', '<theirs>', section.theirs.join('').trimEnd(), '</theirs>', '');
+    }
+    if (offer.base) lines.push('The common ancestor of the file:', '<base>', offer.base.join('').trimEnd(), '</base>');
+    return { material: lines.join('\n'), stat: `${file}: ${n} conflict ${n === 1 ? 'block' : 'blocks'}` };
+  },
+
+  /** Two branches: where they split, the commits each made, and what changed since. */
+  async branches({ path, base, target }) {
+    const r = await methods['compare.refs']({ path, base, target, mode: 'split' });
+    // The names people use: `main`, not `refs/heads/main`.
+    const short = (ref) => ref.replace(/^refs\/(heads|remotes|tags)\//, '');
+    base = short(base);
+    target = short(target);
+    const list = (side) => side.commits.slice(0, 60).map((c) => `- ${c.shortHash} ${c.subject} (${c.author})`).join('\n') || '- none';
+    const stat = r.files.map((f) => `${f.path} +${f.added ?? '?'} -${f.removed ?? '?'}`).join('\n');
+    const diff = await git(path, ['-c', 'core.quotepath=false', 'diff', '--find-renames', r.from, r.to, '--']);
+    return {
+      material: [
+        `First side: ${base}. Second side: ${target}.`,
+        r.mergeBase ? `They split at ${await subjectOf(path, r.mergeBase)}.` : 'They share no history.',
+        `Commits only on ${target}:`, list(r.onlyInTarget),
+        `Commits only on ${base}:`, list(r.onlyInBase),
+        `What ${target} changed since the split:`, diff
+      ].join('\n'),
+      stat
+    };
+  },
+
+  /** A confirmation dialog, as the page showed it. */
+  async operation({ path, text }) {
+    if (typeof text !== 'string' || !text.trim()) throw new GitError('Nothing to explain.', { command: '', stderr: '', code: 1 });
+    const branch = await runGit(path, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowFailure: true });
+    return { material: `${text.slice(0, 4000)}\n\nCurrent branch: ${branch.stdout.trim() || 'detached HEAD'}`, stat: '' };
+  }
+};
+
+/**
+ * Ask the configured AI provider to explain a commit, a conflict, two
+ * branches, or an operation about to run. Nothing in the repository changes.
+ */
+methods['ai.explain'] = async (args) => {
+  const gather = EXPLAIN_MATERIAL[args.kind];
+  if (!gather) throw new GitError(`Gitalia cannot explain "${args.kind}".`, { command: '', stderr: '', code: 1 });
+  const { material, stat } = await gather(args);
+  try {
+    return await explain({ kind: args.kind, material, stat, provider: args.provider ?? null });
+  } catch (err) {
+    throw new GitError(err.message, { command: '', stderr: '', code: 1 });
   }
 };
 

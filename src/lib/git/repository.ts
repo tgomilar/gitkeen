@@ -91,6 +91,11 @@ export class GitRepository {
    * tree file, `side` picks one half of it: what is staged (`staged`) or what
    * still waits to be (`unstaged`).
    */
+  /** Ask the AI provider to explain something; nothing in the repository changes. */
+  explain(kind: 'commit' | 'conflict' | 'branches' | 'operation', args: Record<string, unknown>): Promise<{ text: string; provider: string; model: string; clipped: boolean }> {
+    return transport.call('ai.explain', { path: this.path, kind, ...args });
+  }
+
   createPatch(hashes: string[]): Promise<{ name: string; content: string; commits: number }> {
     return transport.call('patch.create', { path: this.path, hashes });
   }

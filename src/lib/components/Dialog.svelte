@@ -1,5 +1,6 @@
 <script lang="ts">
   import { dialogs } from '../state/dialogs.svelte';
+  import Explain from './Explain.svelte';
 
   let value = $state('');
   let choice = $state('');
@@ -97,6 +98,13 @@
           <dd class:warn={fact.tone === 'warning'} class:bad={fact.tone === 'danger'}>{fact.value}</dd>
         {/each}
       </dl>
+    {/if}
+
+    {#if request.tone !== 'normal' && !request.input}
+      <!-- An operation that warns or can lose work can be explained in plain
+           words, from exactly what this dialog says. -->
+      <Explain kind="operation" subject={String(request.id)} label="Explain in plain words"
+        args={{ text: [request.title, request.message ?? '', ...(request.facts ?? []).map((f) => `${f.label}: ${f.value}`)].join('\n') }} />
     {/if}
 
     {#if request.choices}

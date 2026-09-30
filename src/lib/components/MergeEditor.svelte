@@ -11,6 +11,7 @@
    * refuses to stage.
    */
   import { mergeStore } from '../state/merge.svelte';
+  import Explain from './Explain.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { previewText, choiceText } from '../merge';
   import { pluralize } from '../format';
@@ -181,6 +182,7 @@
                 During a rebase, <b>ours</b> is the branch you are rebasing onto and <b>theirs</b> is your own commit being replayed.
               {/if}
             </p>
+            <Explain kind="conflict" args={{ file: offer.path }} subject={offer.path} label="Explain this conflict" />
 
             {#if mergeStore.showBase && offer.base}
               <div class="base-pane">

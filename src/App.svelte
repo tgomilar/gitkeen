@@ -82,6 +82,8 @@
     if (root === dockedRoot) return;
     dockedRoot = root;
     commitStore.reset();
+    // Whether an AI provider is there decides if Explain is offered anywhere.
+    if (root) commitStore.loadSuggestProviders();
     // A report describes one repository, so it goes when that one does.
     statsStore.syncRepo(root);
   });

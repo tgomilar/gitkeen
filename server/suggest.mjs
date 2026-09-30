@@ -437,7 +437,14 @@ function cleanSubject(raw) {
   return text.trim();
 }
 
-async function askProvider(name, system, user) {
+/**
+ * One request to a provider, and the text it answered.
+ *
+ * Shared by the commit subject and the explanations: the key, the model, the
+ * time limit and the errors a person can act on are the same for both. What
+ * the answer should look like is the caller's business.
+ */
+async function requestProvider(name, system, user, maxTokens) {
   const provider = PROVIDERS[name];
   const apiKey = await key(name);
   if (!apiKey) {
@@ -459,7 +466,7 @@ async function askProvider(name, system, user) {
       method: 'POST',
       headers: provider.headers(apiKey),
       body: JSON.stringify(
-        provider.body(model, system, user, LOCAL_PROBE[name] ? MAX_TOKENS_LOCAL : MAX_TOKENS)
+        provider.body(model, system, user, maxTokens)
       ),
       signal: abort
     });
@@ -503,7 +510,12 @@ async function askProvider(name, system, user) {
     throw new Error(`${provider.label} returned ${res.status}: ${detail}`);
   }
 
-  const raw = provider.read(json);
+  return { raw: provider.read(json) ?? '', model, json };
+}
+
+async function askProvider(name, system, user) {
+  const provider = PROVIDERS[name];
+  const { raw, model, json } = await requestProvider(name, system, user, LOCAL_PROBE[name] ? MAX_TOKENS_LOCAL : MAX_TOKENS);
   const subject = cleanSubject(raw);
 
   // A model cut off mid-sentence has not written a subject, whatever text came
@@ -638,4 +650,57 @@ export async function suggestSubject({ diff, stat, rules, provider, validate, pa
     ok: check.blocking.length === 0,
     groups: usableGroups(groups, paths)
   };
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Explanations
+ * ------------------------------------------------------------------ */
+
+const EXPLAIN_TOKENS = 700;
+const EXPLAIN_TOKENS_LOCAL = 2_000;
+
+const EXPLAIN_SYSTEM = [
+  'You explain Git history to a developer who is looking at it in a Git client.',
+  'Write plain English for a reader whose first language may not be English: short sentences, common words, no idioms.',
+  'Start with the answer, in one or two sentences. Then give the detail as a few short points, each on its own line starting with "- ".',
+  'Stay under 150 words. Use only what is in the material given; if something cannot be known from it, say so rather than guess.',
+  'Name files, functions and branches exactly as they appear. Do not repeat the question, and do not add a greeting or a closing line.'
+].join(' ');
+
+const QUESTIONS = {
+  commit: 'Explain what this commit changed, and why it probably matters.',
+  conflict: 'Explain why these two changes conflict, what each side was trying to do, and what a good resolution would keep.',
+  branches: 'Explain how these two branches differ and why they diverged: what each side did after they split.',
+  operation: 'Explain in plain words what this Git operation will do, what could be lost, and how it could be undone.'
+};
+
+/**
+ * Explain a commit, a conflict, two diverged branches or an operation.
+ *
+ * `material` is what the caller gathered from the repository, as text. It is
+ * clipped to what the provider can read, the same way a diff for a subject
+ * is, so a large commit is explained from its beginning and its file list.
+ */
+export async function explain({ kind, material, stat = '', provider = null }) {
+  const question = QUESTIONS[kind];
+  if (!question) throw new Error(`Gitalia cannot explain "${kind}".`);
+  const chosen = provider || (await suggestionProviders()).preferred;
+  if (!chosen) {
+    throw new Error('No AI provider is configured. Add a key in Settings, or run Ollama or LM Studio locally.');
+  }
+  if (!PROVIDERS[chosen]) throw new Error(`Unknown provider "${chosen}".`);
+  const local = !!LOCAL_PROBE[chosen];
+  const { text, clipped } = clipDiff(material, stat, local ? MAX_DIFF_LOCAL : MAX_DIFF);
+  const { raw, model, json } = await requestProvider(
+    chosen, EXPLAIN_SYSTEM, `${question}\n\n<material>\n${text}\n</material>`,
+    local ? EXPLAIN_TOKENS_LOCAL : EXPLAIN_TOKENS
+  );
+  // A reasoning model can wrap its thinking in <think> tags before the answer.
+  const answer = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  if (!answer) {
+    const cut = json?.choices?.[0]?.finish_reason === 'length';
+    throw new Error(`${PROVIDERS[chosen].label} ${cut ? 'ran out of answer budget before' : 'returned nothing when'} explaining it.`);
+  }
+  return { text: answer, provider: chosen, model, clipped };
 }

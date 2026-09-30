@@ -46,6 +46,7 @@ branches, commit your work, and change the history you already have.
 | Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
 | Git LFS* | See which files are stored in LFS, track new kinds of file, and download their content. |
 | Patches and bundles | Save commits as a patch file and apply one, or carry a whole repository in one bundle file. |
+| AI* help | Suggest a commit message, and explain a commit, a conflict, two branches or a risky operation in plain words. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -702,6 +703,26 @@ every branch and tag. **Import a bundle…** brings one in under a name you
 choose, so its branches arrive as `name/branch`, the way a remote's do. No
 branch of your own moves.
 
+## AI help
+
+Gitalia can ask an AI model for help. It works with an Anthropic or OpenAI
+key, which you add in Settings (the sparkle button in the title bar), or with
+a model running on your own computer in LM Studio* or Ollama*. A local model
+sends nothing off your computer. When no provider is set up, none of these
+buttons appear.
+
+| Where | What it does |
+|---|---|
+| Commit panel, the sparkle button | Writes a commit subject from the staged change, following this repository's commit rules. |
+| Commit details, **Explain this commit** | Says what the commit changed and why it probably matters. |
+| Merge editor, **Explain this conflict** | Says what each side was trying to do, and what a good resolution would keep. |
+| Compare view, **Explain how they differ** | Says what each branch did after the two split. |
+| A warning dialog, **Explain in plain words** | Says what the operation will do, what could be lost, and how to undo it. |
+
+An explanation names the model that wrote it. It can be wrong, so read it as
+a second opinion, not as the truth. Nothing in the repository changes when
+you ask for one.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -890,6 +911,7 @@ Your own repositories are never touched.
 | `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
 | `server/test/signing.test.mjs` | Signing a commit, and reading whether a signature checks out. |
 | `server/test/patch.test.mjs` | Saving and applying patches, and exporting and importing bundles. |
+| `server/test/explain.test.mjs` | What each AI explanation is shown, against a stand-in model. |
 | `server/test/lfs.test.mjs` | Tracking files in Git LFS, reading LFS diffs, and downloading content. Skipped without git-lfs. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
@@ -1011,6 +1033,9 @@ way, Gitalia aborts it, which leaves the branch where it started.
 
 Every term marked with an asterisk (*) in this document is explained here.
 
+**AI**: Artificial intelligence. Here, a language model that reads the change
+and writes about it in words.
+
 **Git**: A program that records every change made to a set of files, so that
 people can see the history, work in parallel and combine their work.
 
@@ -1030,11 +1055,15 @@ around it. A file with changes in two separate places has two hunks.
 **IDEA**: IntelliJ IDEA, a code editor made by the company JetBrains. Its Git
 tools are the model for Gitalia.
 
+**LM Studio**: A program that runs AI language models on your own computer.
+
 **Node.js**: A program that runs JavaScript outside a web browser. Gitalia's
 backend runs on it during development.
 
 **Repository**: A folder whose history Git records, together with that
 history.
+
+**Ollama**: A program that runs AI language models on your own computer.
 
 **OpenPGP**: A standard for signing and encrypting data with a pair of keys:
 a private key that only you hold, and a public key that others use to check

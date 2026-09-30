@@ -1163,7 +1163,9 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] GitHub integration
 -   [ ] GitLab integration
 -   [x] AI assistance --- commit subjects, with a suggested split when the
-    change holds unrelated work. Anthropic, OpenAI, LM Studio or Ollama.
+    change holds unrelated work, and plain-words explanations of a commit,
+    a conflict, two branches and a risky operation (section 9). Anthropic,
+    OpenAI, LM Studio or Ollama.
 -   [x] Git LFS --- tracked patterns, the LFS files and whether their content
     is here, per-repository setup, track and untrack, download, and diffs
     that read the pointers
