@@ -59,9 +59,9 @@ const download = [
   '',
   'The app is not signed yet, so macOS and Windows ask once before they open it.',
   '[Installing Gitkeen](https://github.com/tgomilar/gitkeen/blob/main/docs/install.md) shows the steps.',
-  'Gitkeen checks for new versions when it starts, and offers to update itself.',
+  'A full release updates itself: Gitkeen checks for a new version when it starts. A pre-release does not, so install a newer one from the Releases page.',
   '',
-  'The `.app.tar.gz` files and `latest.json` below are for those automatic updates. You do not need to download them.',
+  'The `.app.tar.gz` files and `latest.json` below are for automatic updates. You do not need to download them.',
   ''
 ];
 console.log([...download, ...lines].join('\n').trim());
