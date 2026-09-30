@@ -11,6 +11,8 @@
   import type { DiffHunk, DiffLine } from '../git/types';
   import TriCheckbox from './TriCheckbox.svelte';
   import { blameStore } from '../state/blame.svelte';
+  import { repoStore, describe } from '../state/repo.svelte';
+  import type { ImageDiff } from '../git/types';
   import { paint, languageFor, highlightBlock, type SyntaxPiece } from '../syntax';
 
   const request = $derived(diffStore.request);
@@ -34,6 +36,27 @@
     return map;
   });
   const coloursOf = (line: DiffLine) => colours.get(line) ?? [{ text: line.text, cls: null }];
+
+  /** Pictures are shown, not described, when the changed file is an image. */
+  const isImage = $derived(!!request && /\.(png|jpe?g|gif|webp|bmp|ico|avif)$/i.test(request.file));
+  let image = $state.raw<ImageDiff | null>(null);
+  let imageError = $state<string | null>(null);
+  /** Each side's pixel size, known once the picture has loaded. */
+  let sizes = $state<Record<string, string>>({});
+
+  $effect(() => {
+    image = null;
+    imageError = null;
+    sizes = {};
+    const req = request;
+    const repo = repoStore.repo;
+    if (!req || !repo || !diff?.binary || !isImage) return;
+    let live = true;
+    repo.imageDiff({ file: req.file, origPath: req.origPath ?? null, hash: req.hash ?? null, base: req.base ?? null, side: req.side ?? null })
+      .then((result) => { if (live) image = result; })
+      .catch((err) => { if (live) imageError = describe(err); });
+    return () => { live = false; };
+  });
   const split = $derived(diffStore.mode === 'split');
 
   const limited = $derived(
@@ -318,11 +341,39 @@
           <p class="notice bad">{diffStore.error}</p>
         {:else if !diff}
           <p class="notice">Nothing to show.</p>
+        {:else if diff.binary && isImage}
+          <div class="image-diff">
+            {#if imageError}
+              <p class="notice bad">{imageError}</p>
+            {:else if !image}
+              <p class="notice">Reading the image…</p>
+            {:else}
+              {#each [['Before', image.before], ['After', image.after]] as const as [title, side] (title)}
+                <figure class="image-side">
+                  <figcaption>
+                    <b>{title}</b>
+                    {#if side && !side.tooLarge}
+                      <span class="faint">{sizes[title] ? `${sizes[title]} · ` : ''}{sizeOf(side.bytes)}</span>
+                    {/if}
+                  </figcaption>
+                  {#if !side}
+                    <p class="faint">{title === 'Before' ? 'The image is new.' : 'The image was deleted.'}</p>
+                  {:else if side.tooLarge}
+                    <p class="faint">{sizeOf(side.bytes)} is too large to show here.</p>
+                  {:else}
+                    <div class="checker">
+                      <img src={side.url} alt="{title}: {request.file}"
+                        onload={(e) => { const img = e.currentTarget as HTMLImageElement; sizes = { ...sizes, [title]: `${img.naturalWidth} × ${img.naturalHeight} px` }; }} />
+                    </div>
+                  {/if}
+                </figure>
+              {/each}
+            {/if}
+          </div>
         {:else if diff.binary}
           <p class="notice">
             This is a binary file.<br />
-            <span class="faint">Gitalia can tell you it changed, but not how. An image and file
-            comparison comes later.</span>
+            <span class="faint">Gitalia can tell you it changed, but not how.</span>
           </p>
         {:else if diff.lfs}
           {@const lfs = diff.lfs}
@@ -431,6 +482,29 @@
 {/if}
 
 <style>
+  .image-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  .image-side { margin: 0; min-width: 0; }
+  .image-side figcaption { display: flex; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+  .image-side .faint { color: var(--text-faint); }
+  /* A checkerboard behind the picture, so transparent parts show as such. */
+  .checker {
+    display: grid;
+    place-items: center;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-panel);
+    background-image:
+      linear-gradient(45deg, var(--bg-sunken) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--bg-sunken) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--bg-sunken) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--bg-sunken) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  .checker img { max-width: 100%; max-height: 60vh; image-rendering: auto; }
+
   .lfs-note p { margin: 0 0 10px; }
   .lfs-note th { padding: 2px 12px 2px 0; color: var(--text-faint); font-weight: 500; text-align: left; }
   .lfs-note td { font-family: var(--font-mono); font-size: 12px; }

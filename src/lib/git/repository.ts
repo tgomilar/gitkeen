@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff
 } from './types';
 
 export class GitRepository {
@@ -91,6 +91,11 @@ export class GitRepository {
    * tree file, `side` picks one half of it: what is staged (`staged`) or what
    * still waits to be (`unstaged`).
    */
+  /** Both versions of an image file, for the same sides `fileDiff` compares. */
+  imageDiff(options: { file: string; origPath?: string | null; hash?: string | null; base?: string | null; side?: 'staged' | 'unstaged' | null }): Promise<ImageDiff> {
+    return transport.call('diff.image', { path: this.path, ...options });
+  }
+
   fileDiff(options: {
     file: string;
     origPath?: string | null;

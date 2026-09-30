@@ -183,7 +183,8 @@ Gitalia handles these cases and says which one applies:
 | Case | What you see |
 |---|---|
 | A renamed file | The old name in the header. If only the name changed, the viewer says so. |
-| A binary file | A note that the file changed. Comparing images and other binary files comes later. |
+| An image | The picture before and after, side by side on a checkerboard so transparent parts show, with each one's size in pixels and in bytes. PNG, JPEG, GIF, WebP, BMP, ICO and AVIF are shown. |
+| Another binary file | A note that the file changed. Gitalia cannot show how. |
 | A permission change | A note that Git recorded a change although the text is the same. |
 | A very large file | The first 800 lines, with a button to draw more. Above 20000 lines the rest is not read at all. |
 

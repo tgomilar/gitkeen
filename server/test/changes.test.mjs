@@ -327,3 +327,46 @@ describe('staging single lines', () => {
     });
   });
 });
+
+describe('image diffs', () => {
+  // A 1x1 PNG, and another with a different colour.
+  const red = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+  const blue = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==', 'base64');
+  const bytesOf = (side) => Buffer.from(side.url.split(',')[1], 'base64');
+
+  test('the two versions of a changed image come back byte for byte', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'logo.png': red });
+      repo.write('logo.png', blue);
+      const image = await methods['diff.image']({ path: repo.path, file: 'logo.png' });
+      assert.equal(image.type, 'image/png');
+      assert.deepEqual(bytesOf(image.before), red);
+      assert.deepEqual(bytesOf(image.after), blue);
+
+      const commit = await repo.commit('change', { 'logo.png': blue });
+      const shown = await methods['diff.image']({ path: repo.path, file: 'logo.png', hash: commit });
+      assert.deepEqual(bytesOf(shown.before), red, 'a commit is shown against its parent');
+      assert.deepEqual(bytesOf(shown.after), blue);
+    });
+  });
+
+  test('a new image has no before, and a deleted one no after', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'a.txt': 'a\n' });
+      const added = await repo.commit('add', { 'new.png': red });
+      assert.equal((await methods['diff.image']({ path: repo.path, file: 'new.png', hash: added })).before, null);
+      await repo.git(['rm', '-q', 'new.png']);
+      const gone = await methods['diff.image']({ path: repo.path, file: 'new.png', side: 'staged' });
+      assert.equal(gone.after, null);
+      assert.ok(gone.before);
+    });
+  });
+
+  test('refuses a file that is not an image, or outside the repository', async () => {
+    await withRepo(async (repo) => {
+      await repo.commit('base', { 'a.txt': 'a\n' });
+      await assert.rejects(() => methods['diff.image']({ path: repo.path, file: 'a.txt' }), /not an image/);
+      await assert.rejects(() => methods['diff.image']({ path: repo.path, file: '../x.png' }), /Unsafe/);
+    });
+  });
+});

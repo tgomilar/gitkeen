@@ -3473,6 +3473,61 @@ export const methods = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Image diffs
+ * ------------------------------------------------------------------ */
+
+const IMAGE_TYPES = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  bmp: 'image/bmp', ico: 'image/x-icon', avif: 'image/avif', svg: 'image/svg+xml'
+};
+const IMAGE_LIMIT = 20 * 1024 * 1024;
+
+/** The picture a blob holds, or null when there is no such blob. */
+async function imageBlob(path, spec) {
+  const { stdout, code } = await runGit(path, ['cat-file', 'blob', spec], { allowFailure: true, binary: true });
+  return code === 0 ? stdout : null;
+}
+
+/**
+ * The two versions of an image, for the diff viewer to show side by side.
+ *
+ * The same four cases as `diff.file`: a commit against its parent (or `base`),
+ * the index against HEAD (`staged`), the working tree against the index
+ * (`unstaged`), and an untracked file, which has no before. Each side is a
+ * data URL, or null when that side has no file. A side too large to send
+ * says so instead.
+ */
+methods['diff.image'] = async ({ path, file, origPath = null, hash = null, base = null, side = null }) => {
+  const ext = /\.([a-z0-9]+)$/i.exec(file)?.[1]?.toLowerCase();
+  const type = ext && IMAGE_TYPES[ext];
+  if (!type) throw new GitError(`${file} is not an image Gitalia can show.`, { command: '', stderr: '', code: 1 });
+  const target = workPath(path, file);
+  const oldName = origPath ?? file;
+
+  let before = null, after = null;
+  if (hash) {
+    const parent = base ?? (await firstParentOf(path, hash));
+    before = parent === hash ? null : await imageBlob(path, `${parent}:${oldName}`);
+    after = await imageBlob(path, `${hash}:${file}`);
+  } else if (side === 'staged') {
+    before = await imageBlob(path, `HEAD:${oldName}`);
+    after = await imageBlob(path, `:${file}`);
+  } else {
+    // The working tree against the index, or against HEAD when nothing of it
+    // is staged; an untracked file has only the working-tree side.
+    before = (await imageBlob(path, `:${oldName}`)) ?? (await imageBlob(path, `HEAD:${oldName}`));
+    after = await readFile(target).catch(() => null);
+  }
+
+  const encode = (buffer) => {
+    if (!buffer) return null;
+    if (buffer.length > IMAGE_LIMIT) return { tooLarge: true, bytes: buffer.length, url: null };
+    return { tooLarge: false, bytes: buffer.length, url: `data:${type};base64,${buffer.toString('base64')}` };
+  };
+  return { file, type, before: encode(before), after: encode(after) };
+};
+
+/* ------------------------------------------------------------------ *
  * Git LFS
  * ------------------------------------------------------------------ */
 

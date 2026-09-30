@@ -21,18 +21,24 @@ export class GitError extends Error {
   }
 }
 
-/** Run a git command inside `cwd` and resolve with its stdout. */
-export function runGit(cwd, args, { allowFailure = false, env = null } = {}) {
+/**
+ * Run a git command inside `cwd` and resolve with its stdout.
+ *
+ * `binary` returns stdout as a Buffer, for file content that is not text: an
+ * image read as text would be mangled by the decoding.
+ */
+export function runGit(cwd, args, { allowFailure = false, env = null, binary = false } = {}) {
   const options = {
     cwd,
     maxBuffer: MAX_BUFFER,
     windowsHide: true,
-    env: env ? { ...process.env, ...env } : process.env
+    env: env ? { ...process.env, ...env } : process.env,
+    ...(binary ? { encoding: 'buffer' } : {})
   };
   return new Promise((res, rej) => {
     execFile('git', args, options, (err, stdout, stderr) => {
       if (err && !allowFailure) {
-        const detail = (stderr || err.message || '').trim();
+        const detail = (stderr.toString() || err.message || '').trim();
         rej(new GitError(detail || `git ${args[0]} failed`, {
           command: `git ${args.join(' ')}`,
           stderr: detail,
@@ -40,7 +46,8 @@ export function runGit(cwd, args, { allowFailure = false, env = null } = {}) {
         }));
         return;
       }
-      res({ stdout, stderr, code: err ? err.code ?? 1 : 0 });
+      // Only stdout is ever wanted as bytes; stderr is Git's message.
+      res({ stdout, stderr: stderr.toString(), code: err ? err.code ?? 1 : 0 });
     });
   });
 }

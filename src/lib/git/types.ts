@@ -951,3 +951,19 @@ export interface LfsChange {
   before: { oid: string; size: number | null } | null;
   after: { oid: string; size: number | null } | null;
 }
+
+/** One side of an image diff: the picture, or why it is not shown. */
+export interface ImageSide {
+  bytes: number;
+  tooLarge: boolean;
+  /** A data URL of the picture, or null when it is too large to send. */
+  url: string | null;
+}
+
+/** The two versions of an image. A side is null when that version has no file. */
+export interface ImageDiff {
+  file: string;
+  type: string;
+  before: ImageSide | null;
+  after: ImageSide | null;
+}
