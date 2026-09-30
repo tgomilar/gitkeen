@@ -2,9 +2,9 @@
   /**
    * The commit panel.
    *
-   * Two groups: files Git already tracks, and files it has never seen. Tracked
-   * changes arrive ticked, unversioned files arrive unticked, and ticking a
-   * box writes nothing to Git. Only the Commit button does.
+   * Two groups: files Git already tracks, and files it has never seen. A tick
+   * is the index: ticking a box stages the file, unticking unstages it, and a
+   * file arrives ticked only if it is already staged.
    */
   import Icon from './Icon.svelte';
   import TriCheckbox from './TriCheckbox.svelte';
