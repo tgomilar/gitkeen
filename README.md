@@ -44,7 +44,7 @@ branches, commit your work, and change the history you already have.
 | Worktrees | Check out another branch in a folder of its own, and switch between the folders. |
 | Submodules | See the repositories kept inside this one, check them out, and open them. |
 | Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
-| Git LFS | See which files are stored in LFS, track new kinds of file, and download their content. |
+| Git LFS* | See which files are stored in LFS, track new kinds of file, and download their content. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -616,7 +616,7 @@ Hover over the label to see the signer and the key.
 
 ## Git LFS: large files
 
-Git LFS* keeps large files, such as images, videos and builds, outside the
+Git LFS keeps large files, such as images, videos and builds, outside the
 repository. Git commits a small pointer to each one, and the content is
 downloaded when it is needed. Gitalia needs the `git-lfs` program for this. On
 a Mac, install it with `brew install git-lfs`.
