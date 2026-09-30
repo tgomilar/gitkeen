@@ -3412,6 +3412,80 @@ export const methods = {
 };
 
 /* ------------------------------------------------------------------ *
+ * Submodules
+ * ------------------------------------------------------------------ */
+
+/**
+ * The submodules this repository records, and how each one stands.
+ *
+ * `git submodule status` marks each line: `-` not checked out yet, `+` checked
+ * out at a commit other than the one recorded, `U` in a merge conflict, and
+ * a space when it is at the recorded commit. The URL and branch come from
+ * `.gitmodules`, which is what a fresh clone would use.
+ */
+async function listSubmodules(path) {
+  const { stdout: config } = await runGit(path, ['config', '-f', '.gitmodules', '-z', '--get-regexp', '^submodule\\.'], { allowFailure: true });
+  const byName = {};
+  for (const entry of config.split('\0').filter(Boolean)) {
+    const nl = entry.indexOf('\n');
+    const key = entry.slice(0, nl), value = entry.slice(nl + 1);
+    const m = /^submodule\.(.*)\.(path|url|branch)$/.exec(key);
+    if (m) (byName[m[1]] ??= {})[m[2]] = value;
+  }
+  const byPath = Object.fromEntries(Object.entries(byName).map(([name, v]) => [v.path, { name, ...v }]));
+
+  const { stdout } = await runGit(path, ['submodule', 'status'], { allowFailure: true });
+  const out = [];
+  for (const line of stdout.split('\n').filter(Boolean)) {
+    const m = /^([ +\-U])([0-9a-f]{40}) (.+?)(?: \((.*)\))?$/.exec(line);
+    if (!m) continue;
+    const [, mark, commit, subPath, describe] = m;
+    const info = byPath[subPath] ?? {};
+    out.push({
+      path: subPath,
+      name: info.name ?? subPath,
+      url: info.url ?? null,
+      branch: info.branch ?? null,
+      /** The commit this repository records for it. */
+      recorded: mark === '+' ? null : commit,
+      /** The commit checked out in it, when it is checked out. */
+      checkedOut: mark === '-' ? null : commit,
+      state: { '-': 'not-initialized', '+': 'moved', 'U': 'conflicted', ' ': 'clean' }[mark],
+      describe: describe ?? null
+    });
+  }
+  // For a moved submodule the status line shows the checked-out commit; the
+  // recorded one is in the index.
+  for (const sub of out) {
+    if (sub.state !== 'moved') continue;
+    const { stdout: staged } = await runGit(path, ['ls-files', '-s', '--', sub.path], { allowFailure: true });
+    sub.recorded = staged.split(' ')[1] ?? null;
+  }
+  return out;
+}
+
+methods['submodule.list'] = async ({ path }) => ({ submodules: await listSubmodules(path) });
+
+/**
+ * Check submodules out at the commits this repository records, cloning any
+ * that are not there yet. With `paths`, only those; otherwise all of them.
+ * Nested submodules are updated too.
+ */
+methods['submodule.update'] = async ({ path, paths = null }) => {
+  const known = new Set((await listSubmodules(path)).map((s) => s.path));
+  const wanted = Array.isArray(paths) ? paths : [];
+  for (const p of wanted) {
+    if (!known.has(p)) throw new GitError(`${p} is not a submodule of this repository.`, { command: '', stderr: '', code: 1 });
+  }
+  const args = ['submodule', 'update', '--init', '--recursive', '--', ...wanted];
+  const { code, stderr } = await runGit(path, args, { allowFailure: true });
+  if (code !== 0) {
+    throw new GitError(stderr.trim() || 'Git could not update the submodules.', { command: `git ${args.join(' ')}`, stderr, code });
+  }
+  return { ok: true, submodules: await listSubmodules(path) };
+};
+
+/* ------------------------------------------------------------------ *
  * Worktrees
  * ------------------------------------------------------------------ */
 

@@ -7,14 +7,22 @@
   import { buildBranchTree } from '../branchTree';
   import {
     branchMenuItems, switchToBranch, checkoutRemoteBranch, createBranchFrom, createTag,
-    worktreeMenuItems, newWorktree
+    worktreeMenuItems, newWorktree, submoduleMenuItems, describeSubmodule
   } from '../actions';
   import { worktreeStore } from '../state/worktrees.svelte';
+  import { submoduleStore } from '../state/submodules.svelte';
 
   // A branch made, deleted or checked out may have changed a worktree.
   $effect(() => {
     void repoStore.branches;
     worktreeStore.load();
+  });
+
+  // A checkout or pull can move what a submodule should be at.
+  $effect(() => {
+    void repoStore.head?.oid;
+    void repoStore.status;
+    submoduleStore.load();
   });
 
   const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
@@ -216,6 +224,36 @@
       </section>
     {/each}
 
+    {#if submoduleStore.list.length > 0}
+      <!-- Submodules: other repositories kept inside this one. -->
+      <section>
+        <button class="section-head" onclick={() => toggleSection('submodules')}
+                oncontextmenu={(e) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY, items: [
+                  { label: 'Update all to their recorded commits', icon: 'refresh', action: () => submoduleStore.update(null) }
+                ] }; }}
+                aria-expanded={!sectionsClosed.has('submodules')}>
+          <span class="chevron" class:open={!sectionsClosed.has('submodules')} aria-hidden="true">›</span>
+          <Icon name="folder" size={12} />
+          <span class="section-title">SUBMODULES</span>
+          <span class="section-count">{submoduleStore.list.length}</span>
+        </button>
+        {#if !sectionsClosed.has('submodules')}
+          {#each submoduleStore.list as sub (sub.path)}
+            <button
+              class="node worktree submodule {sub.state}"
+              title={describeSubmodule(sub)}
+              ondblclick={() => sub.state !== 'not-initialized' && submoduleStore.open(sub)}
+              oncontextmenu={(e) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY, items: submoduleMenuItems(sub) }; }}
+            >
+              <span class="glyph" aria-hidden="true"><Icon name="folder" /></span>
+              <span class="name">{sub.path}</span>
+              <span class="wt-branch">{sub.state === 'clean' ? (sub.checkedOut?.slice(0, 7) ?? '') : sub.state === 'moved' ? 'moved' : sub.state === 'conflicted' ? 'conflict' : 'not checked out'}</span>
+            </button>
+          {/each}
+        {/if}
+      </section>
+    {/if}
+
     <!-- Worktrees: other folders of this repository, each with its own branch. -->
     <section>
       <button class="section-head" onclick={() => toggleSection('worktrees')}
@@ -264,6 +302,9 @@
   .node.worktree.current .name { font-weight: 600; }
   .node.worktree.gone { opacity: 0.5; text-decoration: line-through; }
   .wt-branch { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; color: var(--text-faint); font-size: 11px; }
+  .submodule.moved .wt-branch { color: var(--warning); }
+  .submodule.conflicted .wt-branch { color: var(--danger); }
+  .submodule.not-initialized .name { color: var(--text-faint); }
   .none.add { display: block; width: 100%; background: none; border: 0; text-align: left; cursor: pointer; }
   .none.add:hover { color: var(--accent); }
 

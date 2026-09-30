@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule
 } from './types';
 
 export class GitRepository {
@@ -207,6 +207,15 @@ export class GitRepository {
   /** Which commit last changed each line of a file, at `rev` or in the working tree. */
   blame(file: string, rev: string | null = null): Promise<BlameResult> {
     return transport.call('blame.file', { path: this.path, file, rev });
+  }
+
+  submodules(): Promise<{ submodules: Submodule[] }> {
+    return transport.call('submodule.list', { path: this.path });
+  }
+
+  /** Check submodules out at their recorded commits; all of them without `paths`. */
+  updateSubmodules(paths: string[] | null = null): Promise<{ ok: boolean; submodules: Submodule[] }> {
+    return transport.call('submodule.update', { path: this.path, paths });
   }
 
   worktrees(): Promise<{ worktrees: Worktree[] }> {

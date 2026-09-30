@@ -36,6 +36,7 @@ import {
 } from '../actions';
 import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
+import { submoduleStore } from './submodules.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -436,6 +437,16 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       group: 'History',
       disabled: !cursorCommit || !!repoStore.status?.operation || cursorCommit.hash === repoStore.head?.oid,
       run: () => startBisect(cursorCommit!)
+    });
+  }
+  if (submoduleStore.list.length > 0) {
+    add({
+      id: 'submodules-update',
+      label: 'Update the submodules',
+      keywords: 'submodule update init checkout recorded',
+      icon: 'refresh',
+      group: 'Branches',
+      run: () => submoduleStore.update(null)
     });
   }
   add({

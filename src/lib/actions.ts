@@ -12,7 +12,8 @@ import { blameStore } from './state/blame.svelte';
 import { bisectStore } from './state/bisect.svelte';
 import { compareStore } from './state/compare.svelte';
 import { worktreeStore } from './state/worktrees.svelte';
-import type { Worktree } from './git/types';
+import { submoduleStore } from './state/submodules.svelte';
+import type { Worktree, Submodule } from './git/types';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
 import { pluralize, relativeTime } from './format';
@@ -2010,5 +2011,50 @@ export function worktreeMenuItems(tree: Worktree): MenuItem[] {
           disabled: tree.main || tree.current,
           action: () => removeWorktree(tree)
         }])
+  ];
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Submodules
+ * ------------------------------------------------------------------ */
+
+const SUBMODULE_STATE: Record<Submodule['state'], string> = {
+  clean: 'at the recorded commit',
+  moved: 'checked out at another commit',
+  'not-initialized': 'not checked out yet',
+  conflicted: 'in a merge conflict'
+};
+
+export function describeSubmodule(sub: Submodule): string {
+  return [
+    sub.path,
+    sub.url ? `from ${sub.url}` : null,
+    SUBMODULE_STATE[sub.state],
+    sub.recorded ? `recorded: ${sub.recorded.slice(0, 7)}` : null,
+    sub.checkedOut && sub.checkedOut !== sub.recorded ? `checked out: ${sub.checkedOut.slice(0, 7)}` : null
+  ].filter(Boolean).join('\n');
+}
+
+/** Context menu for a submodule in the Branches panel. */
+export function submoduleMenuItems(sub: Submodule): MenuItem[] {
+  return [
+    {
+      label: 'Open in Gitalia',
+      icon: 'switch',
+      hint: sub.state === 'not-initialized' ? 'update it first' : undefined,
+      disabled: sub.state === 'not-initialized',
+      action: () => submoduleStore.open(sub)
+    },
+    {
+      label: sub.state === 'not-initialized' ? 'Check out' : 'Update to the recorded commit',
+      icon: 'refresh',
+      hint: sub.state === 'clean' ? 'already there' : undefined,
+      disabled: sub.state === 'clean' || sub.state === 'conflicted',
+      action: () => submoduleStore.update([sub.path])
+    },
+    SEPARATOR,
+    { label: 'Copy path', icon: 'copy', action: () => copy(sub.path, 'path') },
+    ...(sub.url ? [{ label: 'Copy URL', icon: 'copy' as const, action: () => copy(sub.url!, 'URL') }] : [])
   ];
 }

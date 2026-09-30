@@ -42,6 +42,7 @@ branches, commit your work, and change the history you already have.
 | Bisect | Find the commit that broke something by testing a few commits in between. |
 | Compare | See the commits and files that differ between two branches or commits. |
 | Worktrees | Check out another branch in a folder of its own, and switch between the folders. |
+| Submodules | See the repositories kept inside this one, check them out, and open them. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -571,6 +572,24 @@ and its commits. Git refuses to remove a folder with uncommitted changes
 unless you choose to throw them away. A branch can be checked out in only one
 folder at a time, so its menu offers **Open its worktree** instead.
 
+## Submodules
+
+A submodule is another repository kept inside this one. This repository
+records which commit of it to use. When a repository has submodules, the
+Branches panel lists them under **Submodules**, each with its state:
+
+| State | Meaning |
+|---|---|
+| A short hash | Checked out at the commit this repository records. |
+| not checked out | Not cloned yet, as after a fresh clone. |
+| moved | Checked out at a different commit than the one recorded. |
+| conflict | A merge left two different commits recorded for it. |
+
+Right click a submodule to **Check out** or **Update** it to the recorded
+commit, or to copy its path or URL. Double click it, or choose **Open in
+Gitalia**, to work in it as a repository of its own. Right click the
+**Submodules** heading, or use the command palette, to update them all.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -755,6 +774,7 @@ Your own repositories are never touched.
 | `server/test/bisect.test.mjs` | Finding the first bad commit with bisect. |
 | `server/test/compare.test.mjs` | Comparing two branches or commits. |
 | `server/test/worktree.test.mjs` | Adding, listing, removing and pruning worktrees. |
+| `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that

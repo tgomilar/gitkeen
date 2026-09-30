@@ -898,3 +898,17 @@ export interface Worktree {
   /** The one Gitalia has open. */
   current: boolean;
 }
+
+/** A repository kept inside this one, pinned at a recorded commit. */
+export interface Submodule {
+  path: string;
+  name: string;
+  url: string | null;
+  branch: string | null;
+  /** The commit this repository records for it. */
+  recorded: string | null;
+  /** The commit checked out in it, or null when it is not checked out. */
+  checkedOut: string | null;
+  state: 'clean' | 'moved' | 'not-initialized' | 'conflicted';
+  describe: string | null;
+}

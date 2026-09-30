@@ -1158,7 +1158,8 @@ product value is the **interaction model around the Git DAG**.
 -   [x] AI assistance --- commit subjects, with a suggested split when the
     change holds unrelated work. Anthropic, OpenAI, LM Studio or Ollama.
 -   [ ] Git LFS
--   [ ] Submodules
+-   [x] Submodules --- listed with their state, checked out or updated to
+    the recorded commit, and opened as repositories of their own
 -   [x] Blame --- per line, grouped by commit, with "Before this" to follow a
     line back through its history
 -   [x] Bisect --- started from a known good commit, answered with Good, Bad
