@@ -8,6 +8,8 @@ knowledge?
 
 The report reads the log and counts. It never changes anything.
 
+![The Stats report: headline numbers, commits over time, and the contributors](media/stats.png)
+
 ## What the report holds
 
 | Part | What it answers |

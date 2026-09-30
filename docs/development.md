@@ -121,6 +121,37 @@ cases, among others:
 2. A rewrite across a merge is refused.
 3. A failed move or drop puts the branch back as it was.
 
+## Screenshots and GIFs
+
+The pictures in `docs/media` are made by scripts, so they can be made again
+after the interface changes.
+
+| Script | What it does |
+|---|---|
+| `scripts/demo-repo.sh <folder>` | Builds the demo repository: a small notes app with four contributors, merged branches, tags, a remote and a branch that conflicts with main. |
+| `scripts/capture-media.mjs [scene …]` | Opens the demo repository in Gitkeen in a headless Chrome, drives the app, and writes the screenshots and GIFs. With no scene names, it makes all of them. |
+
+The capture script needs Node.js 22 or newer, Google Chrome and ffmpeg. It
+runs the app with no AI keys, no GitHub token and no saved settings, so the
+pictures show what a new user sees. Headless Chrome draws no mouse pointer, so
+the script adds one to the page.
+
+The `suggest` scene needs an AI model. The script starts a small stand-in for
+LM Studio that always answers with the same subject, so the GIF is the same
+every time. Only that scene can reach it.
+
+| Scene | Writes |
+|---|---|
+| `overview` | `overview-dark.png`, `overview-light.png` |
+| `commit` | `commit-lines.gif` |
+| `suggest` | `suggest.gif` |
+| `squash` | `squash.gif` |
+| `rebase` | `rebase.gif` |
+| `undo` | `undo.gif` |
+| `console` | `console.gif` |
+| `conflict` | `merge-editor.png` |
+| `stats` | `stats.png` |
+
 ## The logo
 
 The logo is a lowercase "g", drawn as a branch that splits and joins again, on

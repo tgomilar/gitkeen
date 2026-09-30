@@ -12,6 +12,11 @@ You see the whole commit graph, commit exactly the lines you want, and change
 history with a few clicks. Before anything risky happens, Gitkeen tells you
 what it will do, and afterwards the Undo panel can put it back.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/overview-dark.png">
+  <img src="docs/media/overview-light.png" alt="The Gitkeen window: the branches panel, the commit graph with its lanes, and the details of the selected commit">
+</picture>
+
 ## Why Gitkeen
 
 | | |
@@ -47,10 +52,20 @@ right click shows everything you can do with them.
 single hunks and lines. Amend the last commit, sign it, or set work aside in a
 stash. [Committing](docs/committing.md)
 
+![Leaving a debug line out of the commit in the diff viewer, then staging the rest](docs/media/commit-lines.gif)
+
+**Commit messages.** Gitkeen reads the repository's commitlint rules and names
+each broken rule while you type. **Suggest** writes a subject that follows them,
+with an AI model of your choice. [Commit messages](docs/committing.md#commit-messages)
+
+![A message that breaks the rules, the problems named below it, then Suggest writing a subject that follows them](docs/media/suggest.gif)
+
 **The rebase editor.** Right click a commit and choose **Rebase from here**. Drag
 commits into a new order, and choose pick, reword, edit, squash, fixup or drop
 for each one. Nothing runs until you press **Start rebase**.
 [Changing history](docs/history.md)
+
+![Dragging a commit to the top of the rebase editor, folding a fix into the commit before it, and starting the rebase](docs/media/rebase.gif)
 
 **The merge editor.** When a merge, pull or rebase stops on a conflict, resolve
 each block by keeping ours, theirs or both, or edit the result by hand.
@@ -59,8 +74,12 @@ each block by keeping ours, theirs or both, or edit the result by hand.
 **The Undo panel.** Every reset, squash, rebase, drop, deleted branch and force
 push is listed. **Restore** puts things back as they were. [Undo](docs/undo.md)
 
+![Dropping a commit, then bringing it back from the Undo panel](docs/media/undo.gif)
+
 **The console.** Type `status`, `log` or `switch main`, with suggestions for
 commands, options, branches and files. [The console](docs/console.md)
+
+![Typing git switch with suggestions for the command and the branch, then git log drawn as a small graph](docs/media/console.gif)
 
 ## Documentation
 

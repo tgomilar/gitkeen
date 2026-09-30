@@ -33,6 +33,8 @@ Gitkeen also runs as a desktop app for macOS, with a folder chooser. See
 
 ## The window
 
+![The Gitkeen window](media/overview-dark.png)
+
 | Part | Where | What it holds |
 |---|---|---|
 | Title bar | Top | The repository and branch, Fetch, Refresh, Pull, Push, New branch, the search box, Settings and the theme menu. |

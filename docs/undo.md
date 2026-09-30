@@ -8,6 +8,8 @@ graph.
 Choose **Undo** in the rail to see these operations, newest first. **Restore**
 puts things back the way they were before the operation:
 
+![Dropping a commit, then bringing it back from the Undo panel](media/undo.gif)
+
 | Operation | What Restore does |
 |---|---|
 | Reset, squash, drop, move, rebase or amend | Moves the branch back to its old commit. |

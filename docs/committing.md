@@ -7,13 +7,14 @@ This page covers the commit panel, the diff viewer, stashes and signed commits.
 Choose **Commit** in the rail. The panel lists everything in your working tree
 that differs from the last commit, in two groups:
 
-| Group | What it holds | Ticked at the start |
-|---|---|---|
-| Changes | Files Git already tracks: edited, added, deleted or renamed. | Yes |
-| Unversioned Files | Files Git has never seen. | No |
+| Group | What it holds |
+|---|---|
+| Changes | Files Git already tracks: edited, added, deleted or renamed. |
+| Unversioned Files | Files Git has never seen. |
 
-Unversioned files start unticked on purpose. A build folder or an editor
-settings file should never join a commit because you did not notice it.
+A file starts ticked only if it is already staged. Nothing else joins a commit
+until you tick it, so a build folder or an editor settings file never ends up
+in a commit because you did not notice it.
 
 ### A tick is a real stage
 
@@ -65,6 +66,30 @@ deletes a file. The [Undo panel](undo.md) can bring the changes back.
 The toolbar above the list groups the files by folder, opens and closes those
 folders, and reads the working tree again.
 
+## Commit messages
+
+Gitkeen checks the message as you type, against the rules of the repository
+you opened. It looks for them in this order:
+
+| The repository has | What Gitkeen does |
+|---|---|
+| A commitlint config, such as `commitlint.config.js` or `.commitlintrc` | Shows the format under the message box, and names each broken rule as you type. **Commit** stays off until the message follows every rule that commitlint would reject. |
+| A commit-msg hook, in `.husky/commit-msg` or `.git/hooks/commit-msg` | Says that the hook runs when you commit. Its rules cannot be read in advance, so Git reports a refusal only when you commit. |
+| Neither | Offers the Conventional Commits format as a hint. Nothing is blocked. |
+
+Gitkeen checks the commitlint rules that people meet most often, such as the
+type, the scope, the subject and the length of the first line. It ignores a
+rule it does not know, so it never blocks a commit that commitlint would allow.
+
+### Suggest
+
+**Suggest** writes the subject for you from the ticked files, with an AI model,
+and follows the same rules. See [AI help](github-and-ai.md#ai-help) to set up a
+model. Without one, the button reads **Suggest…** and opens Settings to connect
+one.
+
+![A message that breaks the rules, the problems named below it, then Suggest writing a subject that follows them](media/suggest.gif)
+
 ## The diff viewer
 
 There are two ways to open it:
@@ -90,6 +115,8 @@ Press Escape to close it.
 
 When you stage or unstage every hunk, the viewer moves to the other tab by
 itself.
+
+![Leaving a debug line out of the commit, then staging the rest of the file](media/commit-lines.gif)
 
 Both layouts mark the words that changed inside a line, so a line where one
 name changed does not look rewritten. Code is coloured by its language, which

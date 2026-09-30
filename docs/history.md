@@ -69,6 +69,8 @@ the later commits on top of the combined one. Those later commits get new
 hashes, and the dialog says so before you agree. If the commits are already on
 a remote, the dialog warns that a force push is needed.
 
+![Selecting three commits, squashing them, and writing one message for the result](media/squash.gif)
+
 ## The rebase editor
 
 Right click a commit and choose **Rebase from here**. Gitkeen opens the todo
@@ -90,6 +92,8 @@ opposite of the graph, and the heading says so.
 Drag a row by its grip (⋮⋮) to move it, or use the arrows on the row. A dropped
 row stays in the list, greyed and struck through, so the list does not jump
 while you work. A folded row is indented under the commit it joins.
+
+![Dragging a commit to the top of the list, folding a fix into the commit before it, and starting the rebase](media/rebase.gif)
 
 Nothing runs until you press **Start rebase**. **Cancel** costs nothing, and
 **Reset** puts every row back as it was. Gitkeen will not start a rebase that

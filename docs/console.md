@@ -7,6 +7,8 @@ height.
 
 ## Typing commands
 
+![Typing git switch with suggestions, then git log drawn as a small graph](media/console.gif)
+
 Type a command such as `status`, `log` or `switch main`. You can leave out
 `git`. Press Tab, or use the arrow keys and Enter, to take a suggestion. The
 suggestions come from the open repository:

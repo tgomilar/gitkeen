@@ -112,6 +112,8 @@ The editor shows each conflict in three columns: **Ours** on the left,
 by hand, and **Undo edits** goes back to the side you chose. **Show base**
 shows the version both sides started from.
 
+![The merge editor with one conflict: ours on the left, theirs on the right, and the result in the middle](media/merge-editor.png)
+
 | Side | In a merge, cherry-pick or revert | In a rebase |
 |---|---|---|
 | Ours | The branch you are on. | The branch you are rebasing onto. |
