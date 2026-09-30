@@ -3965,6 +3965,11 @@ const EXPLAIN_MATERIAL = {
     if (typeof text !== 'string' || !text.trim()) throw new GitError('Nothing to explain.', { command: '', stderr: '', code: 1 });
     const branch = await runGit(path, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { allowFailure: true });
     return { material: `${text.slice(0, 4000)}\n\nCurrent branch: ${branch.stdout.trim() || 'detached HEAD'}`, stat: '' };
+  },
+
+  /** A console command that failed, with what Git said. */
+  async error(args) {
+    return EXPLAIN_MATERIAL.operation(args);
   }
 };
 

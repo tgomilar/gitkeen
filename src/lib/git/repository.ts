@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
 } from './types';
 
 export class GitRepository {
@@ -91,6 +91,16 @@ export class GitRepository {
    * tree file, `side` picks one half of it: what is staged (`staged`) or what
    * still waits to be (`unstaged`).
    */
+  /** Run one Git command typed in the console; a risky one needs `confirmed`. */
+  consoleRun(line: string, confirmed = false): Promise<ConsoleResult> {
+    return transport.call('console.run', { path: this.path, line, confirmed });
+  }
+
+  /** What a console command would do, without running it. */
+  consolePreview(line: string): Promise<ConsolePreview> {
+    return transport.call('console.preview', { path: this.path, line });
+  }
+
   githubStatus(): Promise<GithubStatus> {
     return transport.call('github.status', { path: this.path });
   }
@@ -108,7 +118,7 @@ export class GitRepository {
   }
 
   /** Ask the AI provider to explain something; nothing in the repository changes. */
-  explain(kind: 'commit' | 'conflict' | 'branches' | 'operation', args: Record<string, unknown>): Promise<{ text: string; provider: string; model: string; clipped: boolean }> {
+  explain(kind: 'commit' | 'conflict' | 'branches' | 'operation' | 'error', args: Record<string, unknown>): Promise<{ text: string; provider: string; model: string; clipped: boolean }> {
     return transport.call('ai.explain', { path: this.path, kind, ...args });
   }
 

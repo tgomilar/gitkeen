@@ -10,6 +10,7 @@ import { repoStore } from './repo.svelte';
 import { commitStore } from './commit.svelte';
 import { settingsStore } from './settings.svelte';
 import { rebaseStore } from './rebase.svelte';
+import { consoleStore } from './console.svelte';
 import type { Commit } from '../git/types';
 import type { IconName } from '../components/Icon.svelte';
 import { toasts } from './toasts.svelte';
@@ -223,6 +224,14 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     icon: 'settings',
     group: 'Repository',
     run: () => settingsStore.show()
+  });
+  add({
+    id: 'console',
+    label: consoleStore.open ? 'Close the console' : 'Open the console',
+    keywords: 'terminal git command line shell',
+    icon: 'console',
+    group: 'Repository',
+    run: () => consoleStore.toggle()
   });
   add({
     id: 'theme',

@@ -672,11 +672,12 @@ const QUESTIONS = {
   commit: 'Explain what this commit changed, and why it probably matters.',
   conflict: 'Explain why these two changes conflict, what each side was trying to do, and what a good resolution would keep.',
   branches: 'Explain how these two branches differ and why they diverged: what each side did after they split.',
-  operation: 'Explain in plain words what this Git operation will do, what could be lost, and how it could be undone.'
+  operation: 'Explain in plain words what this Git operation will do, what could be lost, and how it could be undone.',
+  error: 'Explain in plain words why this Git command failed, and what to type or do to fix it.'
 };
 
 /**
- * Explain a commit, a conflict, two diverged branches or an operation.
+ * Explain a commit, a conflict, two diverged branches, an operation or a failed command.
  *
  * `material` is what the caller gathered from the repository, as text. It is
  * clipped to what the provider can read, the same way a diff for a subject

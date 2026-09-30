@@ -7,6 +7,7 @@
    */
   import Icon from './Icon.svelte';
   import { githubStore } from '../state/github.svelte';
+  import { consoleStore } from '../state/console.svelte';
   import type { IconName } from './Icon.svelte';
 
   export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo' | 'github';
@@ -53,6 +54,19 @@
       </span>
       <span class="label">{item.label}</span>
     </button>
+    {#if item.id === 'undo'}
+      <!-- The console opens along the bottom, beside whichever panel is docked, so it toggles on its own. -->
+      <button
+        class="item"
+        class:active={consoleStore.open}
+        onclick={() => consoleStore.toggle()}
+        aria-pressed={consoleStore.open}
+        title="Git console, with suggestions as you type (Ctrl+`)"
+      >
+        <span class="glyph"><Icon name="console" size={17} /></span>
+        <span class="label">Console</span>
+      </button>
+    {/if}
   {/each}
 </nav>
 

@@ -11,7 +11,7 @@
   import { repoStore, describe } from '../state/repo.svelte';
 
   interface Props {
-    kind: 'commit' | 'conflict' | 'branches' | 'operation';
+    kind: 'commit' | 'conflict' | 'branches' | 'operation' | 'error';
     args: Record<string, unknown>;
     /** The button's words, such as "Explain this commit". */
     label?: string;

@@ -26,6 +26,8 @@
   import BlameViewer from './lib/components/BlameViewer.svelte';
   import CompareViewer from './lib/components/CompareViewer.svelte';
   import LfsPanel from './lib/components/LfsPanel.svelte';
+  import ConsolePanel from './lib/components/ConsolePanel.svelte';
+  import { consoleStore } from './lib/state/console.svelte';
   import { lfsStore } from './lib/state/lfs.svelte';
   import { appearance, uiScale } from './lib/state/appearance.svelte';
   import { compareStore } from './lib/state/compare.svelte';
@@ -90,6 +92,18 @@
     if (root) githubStore.loadStatus();
     // A report describes one repository, so it goes when that one does.
     statsStore.syncRepo(root);
+    // Console history is kept per repository.
+    consoleStore.syncRepo(root);
+  });
+
+  // `git commit` with no message in the console opens the commit box instead.
+  $effect(() => {
+    const focusCommit = () => {
+      dock = 'commit';
+      tick().then(() => commitPanel?.focusMessage());
+    };
+    window.addEventListener('gitalia:focus-commit', focusCommit);
+    return () => window.removeEventListener('gitalia:focus-commit', focusCommit);
   });
 
   // Reading statistics costs a full pass over the log, so unlike the other
@@ -200,6 +214,14 @@
     // The palette owns the keyboard while it is open, arrows and Escape
     // included. Everything below this point is for the graph and the bar.
     if (paletteStore.open) return;
+
+    // Ctrl+` opens and closes the console, as in an editor. It works from the
+    // console's own input too, so it can be closed without the mouse.
+    if (event.ctrlKey && !event.metaKey && event.code === 'Backquote') {
+      event.preventDefault();
+      if (!overlaid()) consoleStore.toggle();
+      return;
+    }
 
     if (mod && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault();
@@ -401,6 +423,7 @@
 
           <div class="details" style="height: {detailsHeight}px"><CommitDetails /></div>
         {/if}
+        {#if consoleStore.open}<ConsolePanel />{/if}
       </main>
     </div>
 

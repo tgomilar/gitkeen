@@ -1002,3 +1002,38 @@ export interface CommitChecks {
   items: { name: string; state: 'success' | 'failure' | 'pending'; url: string | null; detail: string | null }[];
   readable: boolean;
 }
+
+/** What a console command is about to do, and how risky it is. */
+export interface ConsolePreview {
+  ok: boolean;
+  error?: string;
+  redirect?: ConsoleRedirect | null;
+  level?: 'read' | 'write' | 'danger';
+  lines?: string[];
+}
+
+/** Where a command that would open an editor goes in Gitalia instead. */
+export type ConsoleRedirect =
+  | { to: 'rebase'; base: string | null }
+  | { to: 'hunks'; file: string | null }
+  | { to: 'commit' };
+
+/** The answer to one console command. */
+export interface ConsoleResult {
+  ok: boolean;
+  error?: string;
+  redirect?: ConsoleRedirect | null;
+  needsConfirm?: boolean;
+  preview?: { level: 'read' | 'write' | 'danger'; lines: string[] };
+  code?: number;
+  stdout?: string;
+  stderr?: string;
+  ms?: number;
+  level?: 'read' | 'write' | 'danger';
+  changed?: boolean;
+  /** How many recovery points were saved before it ran. */
+  recorded?: number;
+  kind?: 'status' | 'log' | 'branches' | 'stashes' | 'patch' | 'text';
+  data?: any;
+  explanation?: { what: string; fix: string | null } | null;
+}
