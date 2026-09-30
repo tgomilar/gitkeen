@@ -3,8 +3,8 @@
    * The diff of one file, over the whole window.
    *
    * It covers the application rather than taking a share of the layout,
-   * because a side-by-side diff needs every pixel of width it can get. This is
-   * what IntelliJ IDEA's Show Diff window does, and Escape closes it.
+   * because a side-by-side diff needs every pixel of width it can get. Escape
+   * closes it.
    */
   import { diffStore, INITIAL_LINES } from '../state/diff.svelte';
   import { pairLines, rowSegments, unifiedSegments, limitHunks } from '../diff';

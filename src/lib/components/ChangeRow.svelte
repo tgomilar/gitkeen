@@ -2,9 +2,9 @@
   /**
    * One changed file.
    *
-   * The box and the name do different things, as they do in IntelliJ IDEA. The
-   * box decides whether the file joins the commit. The name selects the file,
-   * and opens its diff on a double click or on Enter.
+   * The box and the name do different things. The box decides whether the
+   * file joins the commit. The name selects the file, and opens its diff on a
+   * double click or on Enter.
    *
    * The colour of the name carries the file's state: blue for edited, green
    * for new, grey and struck through for deleted, brown for a file Git has

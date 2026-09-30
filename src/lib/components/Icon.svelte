@@ -259,7 +259,7 @@
       <path d="M5.2 9h5.6" />
       <path d="M5.2 11.4h3.6" />
     {:else if name === 'markup'}
-      <!-- The angle brackets of a tag, the way IntelliJ marks markup files. -->
+      <!-- The angle brackets of a tag, for markup files. -->
       <path d="M6.4 8.9 5 10.4l1.4 1.5" />
       <path d="M9.6 8.9 11 10.4l-1.4 1.5" />
     {:else if name === 'code'}

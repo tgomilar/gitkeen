@@ -240,8 +240,8 @@ function seedMessage(messages: { hash: string; message: string }[], order: strin
 }
 
 /**
- * Squash a run of commits into one, as IntelliJ IDEA does: combine the
- * messages, let the user edit the result, then rewrite the history.
+ * Squash a run of commits into one: combine the messages, let the user edit
+ * the result, then rewrite the history.
  */
 export async function squashCommits(commits: Commit[]) {
   const local = canSquash(commits);

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The commit tool window, built to work the way IntelliJ IDEA's does.
+   * The commit panel.
    *
    * Two groups: files Git already tracks, and files it has never seen. Tracked
    * changes arrive ticked, unversioned files arrive unticked, and ticking a
@@ -82,7 +82,7 @@
     menu = { x: event.clientX, y: event.clientY, items: stashMenuItems(stash) };
   }
 
-  /** ⌘⏎ commits, the shortcut IntelliJ uses from the message box. */
+  /** ⌘⏎ commits from the message box. */
   function onMessageKey(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();

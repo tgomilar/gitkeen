@@ -1,6 +1,6 @@
 /**
  * Branch names are paths, so show them as one. `feature/login` and
- * `feature/ui` collapse under a `feature` folder, the way IntelliJ groups them.
+ * `feature/ui` collapse under a `feature` folder.
  */
 import type { Branch } from './git/types';
 

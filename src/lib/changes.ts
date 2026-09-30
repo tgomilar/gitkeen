@@ -1,7 +1,7 @@
 /**
  * Turning `git status` rows into the two lists the commit panel shows.
  *
- * IntelliJ IDEA splits the working tree in two: "Changes", meaning files Git
+ * The panel splits the working tree in two: "Changes", meaning files Git
  * already tracks, and "Unversioned Files", meaning files it has never seen.
  * The split matters because the second group is unticked by default, so a
  * stray build artefact never rides along in a commit.
@@ -31,8 +31,7 @@ export interface Change {
  *
  * porcelain v2 gives two letters: the index against HEAD, then the working
  * tree against the index. A file can be both, so the more structural change
- * wins, which is what IntelliJ shows too: a deleted-then-edited file reads
- * as deleted, not as modified.
+ * wins: a deleted-then-edited file reads as deleted, not as modified.
  */
 export function changeKind(file: StatusFile): ChangeKind {
   if (file.state === 'untracked') return 'unversioned';
@@ -169,7 +168,7 @@ function flattenSingles(node: ChangeNode) {
   });
 }
 
-/** Nest changes under their directories, the way IntelliJ groups by folder. */
+/** Nest changes under their directories, for the group by folder view. */
 export function buildChangeTree(changes: Change[]): ChangeNode[] {
   const root: ChangeNode = { name: '', path: '', children: [] };
   for (const change of changes) insert(root, change);

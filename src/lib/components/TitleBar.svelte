@@ -162,9 +162,9 @@
       <Icon name="pull" />Pull
     </button>
     <!--
-      Push, with force push behind the caret: the IntelliJ arrangement. The
-      rarer action that can destroy work is one step further in, and still
-      states what it would remove before it does anything.
+      Push, with force push behind the caret. The rarer action that can
+      destroy work is one step further in, and still states what it would
+      remove before it does anything.
     -->
     <SplitButton
       label="Push"

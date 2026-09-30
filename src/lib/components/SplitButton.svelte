@@ -2,9 +2,9 @@
   /**
    * A button with a second, rarer action behind a caret.
    *
-   * The pattern IntelliJ uses for Push: the ordinary action stays one click
-   * away, and the one that can destroy work is deliberately a click further,
-   * where it still has to be found rather than stumbled into.
+   * Used for Push: the ordinary action stays one click away, and the one that
+   * can destroy work is deliberately a click further, where it still has to be
+   * found rather than stumbled into.
    */
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';

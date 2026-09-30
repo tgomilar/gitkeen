@@ -1,11 +1,10 @@
 /**
  * State behind the commit panel.
  *
- * The tick boxes follow IntelliJ IDEA: ticking a file stages it, the way
- * `git add` and `git reset` do. A partially staged file can only live in the
- * index, so the tick stopped being paper the moment the panel could stage
- * hunks. The box is a Git command; the list it sits in is the record of
- * what those commands left behind.
+ * Ticking a file stages it, the way `git add` and `git reset` do. A
+ * partially staged file can only live in the index, so the tick stopped being
+ * paper the moment the panel could stage hunks. The box is a Git command; the
+ * list it sits in is the record of what those commands left behind.
  *
  * What is ticked is therefore read from the status: a file whose index entry
  * differs from HEAD is ticked, and anything the index does not hold stays out

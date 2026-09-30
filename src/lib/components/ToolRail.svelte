@@ -2,9 +2,8 @@
   /**
    * The rail down the left edge, naming what the dock beside it can hold.
    *
-   * Only one panel is open at a time, which is what IntelliJ IDEA does with
-   * Project and Commit: they share the same space rather than competing for it.
-   * Choosing the open panel again closes it, as IntelliJ IDEA's tool windows do.
+   * Only one panel is open at a time: the panels share the same space rather
+   * than competing for it. Choosing the open panel again closes it.
    */
   import Icon from './Icon.svelte';
   import { githubStore } from '../state/github.svelte';
