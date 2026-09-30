@@ -332,7 +332,8 @@ Each row takes one command:
 | Fixup | Fold into the commit above, throwing this message away. |
 | Drop | Remove the commit and the change it made. |
 
-The arrows on each row move it earlier or later. A dropped row stays in place,
+Drag a row by its grip (⋮⋮) to another place, or use the arrows on each row
+to move it one place earlier or later. A dropped row stays in place,
 greyed and struck through, so the list never jumps under the pointer while you
 are working in it. A folded row is indented under the one it joins.
 
@@ -815,7 +816,6 @@ it rather than the 25 the screen shows.
 The merge editor edits the result one conflict block at a time. The text
 outside the conflicts cannot be edited there, and binary conflicts still go
 through an external editor.
-
 
 ## Requirements
 

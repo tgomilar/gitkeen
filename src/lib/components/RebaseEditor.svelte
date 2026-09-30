@@ -31,6 +31,47 @@
       rebaseStore.close();
     }
   }
+
+  /*
+   * Drag and drop. Only the grip starts a drag, so the command menu and the
+   * message field in the same row keep working as they are. The line above
+   * or below the row under the pointer shows where the dragged row will land.
+   */
+  let armed = $state<string | null>(null);
+  let dragged = $state<string | null>(null);
+  let target = $state<{ index: number; above: boolean } | null>(null);
+
+  function startDrag(event: DragEvent, hash: string) {
+    if (armed !== hash) { event.preventDefault(); return; }
+    dragged = hash;
+    event.dataTransfer?.setData('text/plain', hash);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  function overRow(event: DragEvent, index: number) {
+    if (!dragged) return;
+    event.preventDefault();
+    const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    target = { index, above: event.clientY < box.top + box.height / 2 };
+  }
+
+  function dropOn(event: DragEvent) {
+    event.preventDefault();
+    if (dragged && target) {
+      const from = rows.findIndex((r) => r.hash === dragged);
+      let to = target.above ? target.index : target.index + 1;
+      // Taking the row out first shifts everything after it up by one.
+      if (from < to) to -= 1;
+      if (to !== from) rebaseStore.moveTo(dragged, to);
+    }
+    endDrag();
+  }
+
+  function endDrag() {
+    armed = null;
+    dragged = null;
+    target = null;
+  }
 </script>
 
 <div class="scrim" role="presentation" onmousedown={() => rebaseStore.close()}></div>
@@ -63,7 +104,29 @@
 
   <ol class="rows">
     {#each rows as row, i (row.hash)}
-      <li class="row" class:dropped={row.command === 'drop'} class:folded={row.command === 'squash' || row.command === 'fixup'} class:pause={row.command === 'edit'}>
+      <li
+        class="row"
+        class:dropped={row.command === 'drop'}
+        class:folded={row.command === 'squash' || row.command === 'fixup'}
+        class:pause={row.command === 'edit'}
+        class:dragging={dragged === row.hash}
+        class:drop-above={target?.index === i && target.above}
+        class:drop-below={target?.index === i && !target.above}
+        draggable={armed === row.hash}
+        ondragstart={(e) => startDrag(e, row.hash)}
+        ondragover={(e) => overRow(e, i)}
+        ondrop={(e) => dropOn(e)}
+        ondragend={endDrag}
+      >
+        <span
+          class="grip"
+          role="button"
+          tabindex="-1"
+          aria-label="Drag {row.shortHash} to another place"
+          title="Drag to reorder"
+          onpointerdown={() => (armed = row.hash)}
+          onpointerup={() => { if (!dragged) armed = null; }}
+        >⋮⋮</span>
         <div class="order">
           <button
             class="step"
@@ -158,6 +221,20 @@
 </div>
 
 <style>
+  .grip {
+    flex: none;
+    width: 12px;
+    color: var(--text-faint);
+    font-size: 11px;
+    letter-spacing: -2px;
+    cursor: grab;
+    user-select: none;
+  }
+  .grip:hover { color: var(--text); }
+  .row.dragging { opacity: 0.4; }
+  .row.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+  .row.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+
   .scrim {
     position: fixed;
     inset: 0;

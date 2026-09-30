@@ -133,6 +133,16 @@ class RebaseStore {
     this.rows = next;
   }
 
+  /** Move a row to a place in the list, as a drag and drop does. */
+  moveTo(hash: string, index: number) {
+    const at = this.rows.findIndex((r) => r.hash === hash);
+    if (at === -1) return;
+    const next = [...this.rows];
+    const [row] = next.splice(at, 1);
+    next.splice(Math.max(0, Math.min(next.length, index)), 0, row);
+    this.rows = next;
+  }
+
   /** Put every row back as it arrived, order included. */
   reset() {
     const byHash = new Map(this.rows.map((r) => [r.hash, r]));
