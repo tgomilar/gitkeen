@@ -38,7 +38,7 @@ import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
 import { submoduleStore } from './submodules.svelte';
 import { lfsStore } from './lfs.svelte';
-import { appearance, PALETTES } from './appearance.svelte';
+import { appearance, PALETTES, TEXT_SIZES } from './appearance.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -461,6 +461,18 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       group: 'View',
       disabled: appearance.palette === p.id,
       run: () => appearance.setPalette(p.id)
+    });
+  }
+  for (const t of TEXT_SIZES) {
+    add({
+      id: `text-size-${t.scale}`,
+      label: `Text size: ${t.name} (${Math.round(t.scale * 100)}%)`,
+      keywords: 'font zoom bigger smaller larger text size scale',
+      icon: appearance.textSize === t.scale ? 'check' : null,
+      hint: t.scale === 1 ? '⌘0' : '',
+      group: 'View',
+      disabled: appearance.textSize === t.scale,
+      run: () => appearance.setTextSize(t.scale)
     });
   }
   add({

@@ -48,7 +48,7 @@ branches, commit your work, and change the history you already have.
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
-| Themes | Switch between a dark and a light theme, in one of five well-known colour palettes. |
+| Themes | Switch between a dark and a light theme, in one of five well-known colour palettes, and make the text larger or smaller. |
 
 ## How squashing works
 
@@ -637,7 +637,7 @@ people store the same files in LFS. In the commit panel, right click a file to
 store every file of its kind in LFS. The diff viewer shows a change to an LFS
 file as its size and content before and after, not as the pointer lines.
 
-## Themes and colour palettes
+## Themes, colour palettes and text size
 
 Click **◐** at the right of the title bar to choose light or dark, and the
 colour palette. Light or dark and the palette are chosen apart, so every
@@ -654,6 +654,23 @@ palette comes in both:
 The command palette lists each palette too. Gitalia remembers your choice. The
 graph lanes, the branch and tag labels, the file states and the diff colours
 all follow the palette. The Git orange of the logo stays the same.
+
+The same menu sets the text size, from 85% to 140%:
+
+| Size | Scale |
+|---|---|
+| Smallest | 85% |
+| Smaller | 90% |
+| Default | 100% |
+| Larger | 110% |
+| Large | 125% |
+| Largest | 140% |
+
+Command or Control with + makes the text one step larger, with − one step
+smaller, and with 0 puts it back to the default. These keys also work on the
+welcome screen. The whole interface scales together, the way an editor zooms,
+so rows, spacing and text keep their proportions and nothing is cut off.
+Gitalia remembers the size.
 
 ## Undoing an operation
 
@@ -801,6 +818,8 @@ The plan asks for a keyboard first application. These keys work now.
 | Escape | Close the diff viewer. |
 | Command or Control with Shift and B | Create a branch at the selected commit. |
 | Command or Control with B | Switch branch: opens the command palette with the branches listed. |
+| Command or Control with + or − | Make the text one step larger or smaller. |
+| Command or Control with 0 | Put the text size back to the default. |
 | G | Put the keyboard on the commit graph. |
 | R | Revert the selected commits. Gitalia asks before it changes anything. |
 | S | Stage or unstage the file selected in the commit panel. In the diff viewer, stage or unstage the selected hunks. |

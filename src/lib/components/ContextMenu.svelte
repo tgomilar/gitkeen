@@ -2,6 +2,7 @@
   /** A fast, keyboard-navigable context menu. No animation by design. */
   import type { MenuItem } from '../menu';
   import Icon from './Icon.svelte';
+  import { uiScale } from '../state/appearance.svelte';
 
   interface Props {
     x: number;
@@ -17,13 +18,13 @@
   /** Measured once the menu is in the DOM, so it can be kept on screen. */
   let size = $state({ w: 0, h: 0 });
 
-  const pos = $derived({
-    x: size.w && x + size.w > window.innerWidth - 8
-      ? Math.max(8, window.innerWidth - size.w - 8)
-      : x,
-    y: size.h && y + size.h > window.innerHeight - 8
-      ? Math.max(8, window.innerHeight - size.h - 8)
-      : y
+  // `x`, `y`, the measured size and the window are all in screen pixels;
+  // the menu is placed in the page's own, which differ when it is scaled.
+  const pos = $derived.by(() => {
+    const scale = uiScale();
+    const left = size.w && x + size.w > window.innerWidth - 8 ? Math.max(8, window.innerWidth - size.w - 8) : x;
+    const top = size.h && y + size.h > window.innerHeight - 8 ? Math.max(8, window.innerHeight - size.h - 8) : y;
+    return { x: left / scale, y: top / scale };
   });
 
   function firstEnabled() {

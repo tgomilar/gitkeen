@@ -25,6 +25,7 @@
   import CompareViewer from './lib/components/CompareViewer.svelte';
   import LfsPanel from './lib/components/LfsPanel.svelte';
   import { lfsStore } from './lib/state/lfs.svelte';
+  import { appearance, uiScale } from './lib/state/appearance.svelte';
   import { compareStore } from './lib/state/compare.svelte';
   import { blameStore } from './lib/state/blame.svelte';
   import { tick } from 'svelte';
@@ -124,7 +125,8 @@
     }
     function move(event: PointerEvent) {
       const current = options.axis === 'x' ? event.clientX : event.clientY;
-      options.apply(current - start);
+      // The mouse moves in screen pixels; the panel sizes are the page's own.
+      options.apply((current - start) / uiScale());
       start = current;
     }
     function up() {
@@ -162,6 +164,24 @@
   function onkeydown(event: KeyboardEvent) {
     const mod = event.metaKey || event.ctrlKey;
     const typing = isTyping(event.target);
+
+    // Text size, as in an editor: ⌘+ and ⌘− step it, ⌘0 puts it back. They
+    // work on the welcome screen too, so it can be read before anything opens.
+    if (mod && !event.altKey && (event.key === '=' || event.key === '+')) {
+      event.preventDefault();
+      appearance.stepTextSize(1);
+      return;
+    }
+    if (mod && !event.altKey && (event.key === '-' || event.key === '_')) {
+      event.preventDefault();
+      appearance.stepTextSize(-1);
+      return;
+    }
+    if (mod && !event.altKey && event.key === '0') {
+      event.preventDefault();
+      appearance.setTextSize(1);
+      return;
+    }
 
     // With no repository open there is nothing to drive, so leave every
     // shortcut to the browser. Reload in particular must keep working here.

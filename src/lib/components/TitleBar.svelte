@@ -1,7 +1,7 @@
 <script lang="ts">
   import { repoStore } from '../state/repo.svelte';
   import ContextMenu from './ContextMenu.svelte';
-  import { appearance, PALETTES } from '../state/appearance.svelte';
+  import { appearance, PALETTES, TEXT_SIZES } from '../state/appearance.svelte';
   import SplitButton from './SplitButton.svelte';
   import Icon from './Icon.svelte';
   import { settingsStore } from '../state/settings.svelte';
@@ -74,6 +74,14 @@
           hint: theme === 'dark' ? p.dark : p.light,
           icon: appearance.palette === p.id ? ('check' as const) : undefined,
           action: () => appearance.setPalette(p.id)
+        })),
+        { separator: true },
+        { label: 'Text size', disabled: true },
+        ...TEXT_SIZES.map((t) => ({
+          label: t.name,
+          hint: `${Math.round(t.scale * 100)}%${t.scale === 1 ? '  ⌘0' : ''}`,
+          icon: appearance.textSize === t.scale ? ('check' as const) : undefined,
+          action: () => appearance.setTextSize(t.scale)
         }))
       ]
     };
