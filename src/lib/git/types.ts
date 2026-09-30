@@ -394,6 +394,8 @@ export interface FileDiff {
   added: number;
   removed: number;
   hunks: DiffHunk[];
+  /** Set when the file is stored in Git LFS: the diff is of two pointers. */
+  lfs?: LfsChange | null;
 }
 
 /**
@@ -931,4 +933,21 @@ export interface Submodule {
   checkedOut: string | null;
   state: 'clean' | 'moved' | 'not-initialized' | 'conflicted';
   describe: string | null;
+}
+
+/** How a repository uses Git LFS. */
+export interface LfsStatus {
+  /** git-lfs is on this computer. */
+  installed: boolean;
+  version: string | null;
+  /** Its filters are set up, so tracked files go to LFS and come back on checkout. */
+  ready: boolean;
+  patterns: { pattern: string; source: string }[];
+  files: { path: string; size: number; oid: string; downloaded: boolean }[];
+}
+
+/** What a change to an LFS file means, read from its two pointers. */
+export interface LfsChange {
+  before: { oid: string; size: number | null } | null;
+  after: { oid: string; size: number | null } | null;
 }

@@ -3,6 +3,7 @@
   import { pluralize } from '../format';
   import { abortOperation, continueOperation, resolveNextConflict } from '../actions';
   import { bisectStore } from '../state/bisect.svelte';
+  import { lfsStore } from '../state/lfs.svelte';
 
   // A bisect moves HEAD with every answer, so its state is read again then.
   $effect(() => {
@@ -12,6 +13,14 @@
     }
   });
   const bisect = $derived(bisectStore.state);
+
+  // Whether the repository uses LFS, and whether its files are here, can
+  // change with any checkout or pull.
+  $effect(() => {
+    void repoStore.head?.oid;
+    void repoStore.info?.root;
+    lfsStore.load();
+  });
 
   const status = $derived(repoStore.status);
 
@@ -101,9 +110,21 @@
   {#if repoStore.info}
     <span class="item dim mono" title={repoStore.info.root}>git {repoStore.info.gitVersion}</span>
   {/if}
+  {#if lfsStore.used}
+    <button class="act lfs" class:warn={lfsStore.missing > 0 || !lfsStore.status?.installed || !lfsStore.status?.ready}
+      onclick={() => lfsStore.show()}
+      title={!lfsStore.status?.installed ? 'This repository uses Git LFS, but git-lfs is not installed'
+        : !lfsStore.status?.ready ? 'Git LFS is not set up for this repository'
+        : lfsStore.missing > 0 ? `${lfsStore.missing} LFS files are only pointers. Click to download them.`
+        : 'Files stored in Git LFS'}>
+      LFS{lfsStore.missing > 0 ? ` · ${lfsStore.missing} not downloaded` : !lfsStore.status?.installed ? ' · not installed' : !lfsStore.status?.ready ? ' · not set up' : ''}
+    </button>
+  {/if}
 </footer>
 
 <style>
+  .act.lfs.warn { color: var(--warning); }
+
   .status {
     display: flex;
     align-items: center;

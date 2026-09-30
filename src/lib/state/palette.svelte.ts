@@ -37,6 +37,7 @@ import {
 import { bisectStore } from './bisect.svelte';
 import { compareStore } from './compare.svelte';
 import { submoduleStore } from './submodules.svelte';
+import { lfsStore } from './lfs.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
@@ -449,6 +450,14 @@ function commands(b: PaletteBindings): PaletteCommand[] {
       run: () => submoduleStore.update(null)
     });
   }
+  add({
+    id: 'lfs',
+    label: 'Git LFS…',
+    keywords: 'lfs large files track download pull binary',
+    icon: 'folder',
+    group: 'View',
+    run: () => lfsStore.show()
+  });
   add({
     id: 'worktree-new',
     label: 'New worktree…',

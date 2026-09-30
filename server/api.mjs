@@ -1212,6 +1212,30 @@ async function readSignature(path, hash) {
   };
 }
 
+/**
+ * The two sides of a change to a Git LFS file, or null for any other diff.
+ *
+ * Git stores an LFS file as a three line pointer naming the real content by
+ * its hash and size, and a diff of one shows those lines changing. That says
+ * nothing a person can read, so the viewer shows what the pointers mean.
+ */
+function lfsPointerChange(parsed) {
+  if (parsed.binary || parsed.hunks.length === 0) return null;
+  const lines = parsed.hunks.flatMap((h) => h.lines);
+  const pointer = /^(version https:\/\/git-lfs\.github\.com\/spec\/v1|oid sha256:[0-9a-f]{64}|size \d+)$/;
+  if (!lines.every((l) => pointer.test(l.text) || l.text === '')) return null;
+  const side = (kinds) => {
+    const text = lines.filter((l) => kinds.includes(l.kind)).map((l) => l.text);
+    const oid = text.map((t) => /^oid sha256:([0-9a-f]{64})$/.exec(t)?.[1]).find(Boolean) ?? null;
+    const size = text.map((t) => /^size (\d+)$/.exec(t)?.[1]).find(Boolean);
+    return oid ? { oid, size: size === undefined ? null : Number(size) } : null;
+  };
+  const before = side(['del', 'context']);
+  const after = side(['add', 'context']);
+  if (!before && !after) return null;
+  return { before: parsed.status === 'added' ? null : before, after: parsed.status === 'deleted' ? null : after };
+}
+
 export const methods = {
   /** Validate a path and return everything needed to render the title bar. */
   async 'repo.open'({ path }) {
@@ -2876,7 +2900,8 @@ export const methods = {
       untracked,
       ...parsed,
       /** No hunks and not binary means a change Git records outside the text. */
-      empty: !parsed.binary && parsed.hunks.length === 0
+      empty: !parsed.binary && parsed.hunks.length === 0,
+      lfs: lfsPointerChange(parsed)
     };
   },
 
@@ -3445,6 +3470,88 @@ export const methods = {
     const { stdout: count } = await runGit(path, ['rev-list', '--count', `HEAD..${name}`], { allowFailure: true });
     return { isMerged, onRemote, unmergedCommits: Number(count.trim() || 0) };
   }
+};
+
+/* ------------------------------------------------------------------ *
+ * Git LFS
+ * ------------------------------------------------------------------ */
+
+/** Run git-lfs, which may not be installed. */
+async function lfs(path, args) {
+  return runGit(path, ['lfs', ...args], { allowFailure: true });
+}
+
+/**
+ * How this repository uses Git LFS.
+ *
+ * - `installed`: git-lfs is on this computer.
+ * - `ready`: its filters are set up, globally or for this repository, so
+ *   tracked files are stored in LFS and their content is fetched on checkout.
+ * - `patterns`: what `.gitattributes` sends to LFS.
+ * - `files`: every LFS file at HEAD, and whether its content is here or only
+ *   its pointer is.
+ */
+methods['lfs.status'] = async ({ path }) => {
+  const { stdout: version, code } = await lfs(path, ['version']);
+  if (code !== 0) {
+    // Without git-lfs the patterns can still be read, so the user learns
+    // that the repository needs it.
+    const { stdout: attrs } = await runGit(path, ['show', 'HEAD:.gitattributes'], { allowFailure: true });
+    const patterns = attrs.split('\n')
+      .filter((l) => /\bfilter=lfs\b/.test(l))
+      .map((l) => ({ pattern: l.trim().split(/\s+/)[0], source: '.gitattributes' }));
+    return { installed: false, version: null, ready: false, patterns, files: [] };
+  }
+  const { stdout: clean } = await runGit(path, ['config', '--get', 'filter.lfs.clean'], { allowFailure: true });
+  const { stdout: tracked } = await lfs(path, ['track', '--json']);
+  let patterns = [];
+  try {
+    patterns = (JSON.parse(tracked).patterns ?? []).map((p) => ({ pattern: p.pattern, source: p.source }));
+  } catch { /* an old git-lfs without --json lists nothing */ }
+  const { stdout: listed } = await lfs(path, ['ls-files', '--json']);
+  let files = [];
+  try {
+    files = (JSON.parse(listed).files ?? []).map((f) => ({ path: f.name, size: f.size, oid: f.oid, downloaded: !!f.downloaded }));
+  } catch { /* an empty repository has nothing to list */ }
+  return { installed: true, version: version.trim().split(' ')[0], ready: !!clean.trim(), patterns, files };
+};
+
+const lfsPattern = (pattern) => {
+  if (typeof pattern !== 'string' || !pattern.trim() || pattern.startsWith('-') || /[\n\0]/.test(pattern)) {
+    throw new GitError('Name a file pattern, such as *.psd.', { command: '', stderr: '', code: 1 });
+  }
+  return pattern.trim();
+};
+
+/** Set LFS up for this repository alone, leaving the global Git settings alone. */
+methods['lfs.install'] = async ({ path }) => {
+  const { code, stderr } = await lfs(path, ['install', '--local']);
+  if (code !== 0) throw new GitError(stderr.trim() || 'Git LFS could not be set up.', { command: 'git lfs install --local', stderr, code });
+  return methods['lfs.status']({ path });
+};
+
+/**
+ * Send files matching a pattern to LFS from now on. This writes
+ * `.gitattributes`, which then waits in the commit panel like any change.
+ * Files already committed stay as they are until they are changed again.
+ */
+methods['lfs.track'] = async ({ path, pattern }) => {
+  const { code, stderr } = await lfs(path, ['track', '--', lfsPattern(pattern)]);
+  if (code !== 0) throw new GitError(stderr.trim() || 'Git LFS could not track that pattern.', { command: 'git lfs track', stderr, code });
+  return methods['lfs.status']({ path });
+};
+
+methods['lfs.untrack'] = async ({ path, pattern }) => {
+  const { code, stderr } = await lfs(path, ['untrack', '--', lfsPattern(pattern)]);
+  if (code !== 0) throw new GitError(stderr.trim() || 'Git LFS could not stop tracking that pattern.', { command: 'git lfs untrack', stderr, code });
+  return methods['lfs.status']({ path });
+};
+
+/** Download the content of every LFS file at HEAD and put it in place. */
+methods['lfs.pull'] = async ({ path }) => {
+  const { code, stderr } = await lfs(path, ['pull']);
+  if (code !== 0) throw new GitError(stderr.trim() || 'Git LFS could not download the files.', { command: 'git lfs pull', stderr, code });
+  return methods['lfs.status']({ path });
 };
 
 /* ------------------------------------------------------------------ *

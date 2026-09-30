@@ -44,6 +44,7 @@ branches, commit your work, and change the history you already have.
 | Worktrees | Check out another branch in a folder of its own, and switch between the folders. |
 | Submodules | See the repositories kept inside this one, check them out, and open them. |
 | Signing | Sign a commit with your key, and see whether a commit's signature checks out. |
+| Git LFS | See which files are stored in LFS, track new kinds of file, and download their content. |
 | Stats | Read a report on the history: who committed, how much, and when. |
 | Safety | Read what a destructive action will do before it runs. |
 | Undo | Put back a branch, tag or stash that an operation rewrote or deleted. |
@@ -613,6 +614,29 @@ The commit details show how a signed commit stands:
 
 Hover over the label to see the signer and the key.
 
+## Git LFS: large files
+
+Git LFS* keeps large files, such as images, videos and builds, outside the
+repository. Git commits a small pointer to each one, and the content is
+downloaded when it is needed. Gitalia needs the `git-lfs` program for this. On
+a Mac, install it with `brew install git-lfs`.
+
+When a repository uses LFS, the status bar shows **LFS**. It warns when some
+files are only pointers, when `git-lfs` is not installed, or when LFS is not
+set up for the repository. Click it, or choose **Git LFS…** in the command
+palette, to open the Git LFS window:
+
+| Part | What it does |
+|---|---|
+| Set up for this repository | Sets LFS up for this repository only. Your global Git settings are not changed. |
+| Stored in LFS | The file patterns sent to LFS, such as `*.psd`. Type a pattern and press **Track** to add one, or **Stop tracking** to remove one. |
+| Files | Every LFS file in the current commit, with its size, and whether its content is here or only its pointer. **Download them** fetches what is missing. |
+
+Tracking a pattern changes `.gitattributes`. Commit that file, so that other
+people store the same files in LFS. In the commit panel, right click a file to
+store every file of its kind in LFS. The diff viewer shows a change to an LFS
+file as its size and content before and after, not as the pointer lines.
+
 ## Undoing an operation
 
 Before an operation rewrites or deletes history, Gitalia saves where the
@@ -799,6 +823,7 @@ Your own repositories are never touched.
 | `server/test/worktree.test.mjs` | Adding, listing, removing and pruning worktrees. |
 | `server/test/submodule.test.mjs` | Listing submodules and updating them to their recorded commits. |
 | `server/test/signing.test.mjs` | Signing a commit, and reading whether a signature checks out. |
+| `server/test/lfs.test.mjs` | Tracking files in Git LFS, reading LFS diffs, and downloading content. Skipped without git-lfs. |
 
 The cases worth having are the ones where Gitalia must **refuse**. A wrong
 refusal is an annoyance; a wrong rewrite loses work. So the suite checks that
@@ -921,6 +946,10 @@ Every term marked with an asterisk (*) in this document is explained here.
 
 **Git**: A program that records every change made to a set of files, so that
 people can see the history, work in parallel and combine their work.
+
+**Git LFS**: Git Large File Storage. An add-on to Git that stores large files
+on a separate server and commits only a small pointer to each one, so the
+repository stays small.
 
 **Hash**: The unique name Git gives a commit. It is a long string of letters
 and numbers, and Gitalia usually shows only its first seven characters.

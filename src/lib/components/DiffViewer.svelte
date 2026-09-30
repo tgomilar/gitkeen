@@ -183,6 +183,16 @@
   function autofocus(node: HTMLElement) {
     node.focus();
   }
+
+  /** A byte count as people read it. */
+  function sizeOf(bytes: number | null) {
+    if (bytes == null) return 'unknown size';
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = bytes / 1024, unit = 0;
+    while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+    return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+  }
 </script>
 
 <svelte:window on:keydown={onkeydown} />
@@ -294,6 +304,17 @@
             <span class="faint">Gitalia can tell you it changed, but not how. An image and file
             comparison comes later.</span>
           </p>
+        {:else if diff.lfs}
+          {@const lfs = diff.lfs}
+          <div class="notice lfs-note">
+            <p>This file is stored in Git LFS. Git keeps a pointer to its content, so the change is shown as what the pointer names.</p>
+            <table>
+              <tbody>
+                <tr><th>Before</th><td>{lfs.before ? `${sizeOf(lfs.before.size)}, content ${lfs.before.oid.slice(0, 12)}` : 'not there'}</td></tr>
+                <tr><th>After</th><td>{lfs.after ? `${sizeOf(lfs.after.size)}, content ${lfs.after.oid.slice(0, 12)}` : 'deleted'}</td></tr>
+              </tbody>
+            </table>
+          </div>
         {:else if diff.empty}
           <p class="notice">
             {#if diff.status === 'renamed'}
@@ -394,6 +415,10 @@
 {/if}
 
 <style>
+  .lfs-note p { margin: 0 0 10px; }
+  .lfs-note th { padding: 2px 12px 2px 0; color: var(--text-faint); font-weight: 500; text-align: left; }
+  .lfs-note td { font-family: var(--font-mono); font-size: 12px; }
+
   .blame {
     padding: 3px 10px;
     background: var(--bg-panel);

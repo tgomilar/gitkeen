@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo
+  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus
 } from './types';
 
 export class GitRepository {
@@ -212,6 +212,14 @@ export class GitRepository {
   /** Which commit last changed each line of a file, at `rev` or in the working tree. */
   blame(file: string, rev: string | null = null): Promise<BlameResult> {
     return transport.call('blame.file', { path: this.path, file, rev });
+  }
+
+  lfs(action: 'status' | 'install' | 'pull'): Promise<LfsStatus> {
+    return transport.call(`lfs.${action}`, { path: this.path });
+  }
+
+  lfsTrack(pattern: string, on: boolean): Promise<LfsStatus> {
+    return transport.call(on ? 'lfs.track' : 'lfs.untrack', { path: this.path, pattern });
   }
 
   submodules(): Promise<{ submodules: Submodule[] }> {

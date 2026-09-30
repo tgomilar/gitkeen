@@ -13,6 +13,7 @@ import { bisectStore } from './state/bisect.svelte';
 import { compareStore } from './state/compare.svelte';
 import { worktreeStore } from './state/worktrees.svelte';
 import { submoduleStore } from './state/submodules.svelte';
+import { lfsStore } from './state/lfs.svelte';
 import type { Worktree, Submodule } from './git/types';
 import type { DialogFact } from './state/dialogs.svelte';
 import { toasts } from './state/toasts.svelte';
@@ -1432,6 +1433,7 @@ export function changeMenuItems(change: Change): MenuItem[] {
     ...(change.kind === 'modified' || change.kind === 'renamed'
       ? [{ label: 'Blame', icon: 'commit' as const, hint: 'who changed each line', action: () => blameStore.show(change.path) }]
       : []),
+    ...lfsItemFor(change.path),
     SEPARATOR
   ];
 
@@ -2057,4 +2059,15 @@ export function submoduleMenuItems(sub: Submodule): MenuItem[] {
     { label: 'Copy path', icon: 'copy', action: () => copy(sub.path, 'path') },
     ...(sub.url ? [{ label: 'Copy URL', icon: 'copy' as const, action: () => copy(sub.url!, 'URL') }] : [])
   ];
+}
+
+
+/** "Store *.ext files in Git LFS", for a file whose kind is not tracked yet. */
+function lfsItemFor(path: string): MenuItem[] {
+  const status = lfsStore.status;
+  const ext = /\.([A-Za-z0-9]+)$/.exec(path)?.[1];
+  if (!status?.installed || !status.ready || !ext) return [];
+  const pattern = `*.${ext}`;
+  if (status.patterns.some((p) => p.pattern === pattern)) return [];
+  return [{ label: `Store ${pattern} files in Git LFS`, icon: 'folder', hint: 'from now on', action: () => lfsStore.track(pattern, true) }];
 }

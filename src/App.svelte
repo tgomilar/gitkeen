@@ -23,6 +23,8 @@
   import RecoveryPanel from './lib/components/RecoveryPanel.svelte';
   import BlameViewer from './lib/components/BlameViewer.svelte';
   import CompareViewer from './lib/components/CompareViewer.svelte';
+  import LfsPanel from './lib/components/LfsPanel.svelte';
+  import { lfsStore } from './lib/state/lfs.svelte';
   import { compareStore } from './lib/state/compare.svelte';
   import { blameStore } from './lib/state/blame.svelte';
   import { tick } from 'svelte';
@@ -136,7 +138,7 @@
 
   /** True while a dialog, an editor or Settings sits over the application. */
   function overlaid() {
-    return !!dialogs.current || rebaseStore.open || mergeStore.open || settingsStore.open || blameStore.open || compareStore.open;
+    return !!dialogs.current || rebaseStore.open || mergeStore.open || settingsStore.open || blameStore.open || compareStore.open || lfsStore.open;
   }
 
   function isTyping(target: EventTarget | null) {
@@ -387,6 +389,7 @@
 <CommandPalette />
 {#if rebaseStore.open}<RebaseEditor />{/if}
 {#if settingsStore.open}<SettingsPanel />{/if}
+{#if lfsStore.open}<LfsPanel />{/if}
 <Toasts />
 
 {#if keyboardMenu}

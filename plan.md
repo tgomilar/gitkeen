@@ -1160,7 +1160,9 @@ product value is the **interaction model around the Git DAG**.
 -   [ ] GitLab integration
 -   [x] AI assistance --- commit subjects, with a suggested split when the
     change holds unrelated work. Anthropic, OpenAI, LM Studio or Ollama.
--   [ ] Git LFS
+-   [x] Git LFS --- tracked patterns, the LFS files and whether their content
+    is here, per-repository setup, track and untrack, download, and diffs
+    that read the pointers
 -   [x] Submodules --- listed with their state, checked out or updated to
     the recorded commit, and opened as repositories of their own
 -   [x] Blame --- per line, grouped by commit, with "Before this" to follow a
