@@ -10,7 +10,7 @@
   import { consoleStore } from '../state/console.svelte';
   import type { IconName } from './Icon.svelte';
 
-  export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo' | 'github';
+  export type DockPanel = 'branches' | 'commit' | 'stats' | 'undo' | 'github' | 'help';
 
   interface Props {
     /** The open panel, or null when the dock is closed. */
@@ -83,9 +83,22 @@
       </button>
     {/if}
   {/each}
+  <!-- Help sits apart at the bottom of the rail, where people look for it. -->
+  <button
+    class="item help"
+    class:active={active === 'help'}
+    onclick={() => onselect('help')}
+    aria-pressed={active === 'help'}
+    title="What Gitkeen can do, with the shortcuts (?)"
+  >
+    <span class="glyph"><Icon name="help" size={17} /></span>
+    <span class="label">Help</span>
+  </button>
 </nav>
 
 <style>
+  .help { margin-top: auto; }
+
   .rail {
     flex: none;
     display: flex;

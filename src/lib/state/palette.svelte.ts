@@ -48,7 +48,7 @@ import { appearance, PALETTES, TEXT_SIZES } from './appearance.svelte';
 
 /** What the app has to let commands drive, provided by the shell. */
 export interface PaletteBindings {
-  setDock(panel: 'branches' | 'commit' | 'stats' | 'undo' | 'github'): void;
+  setDock(panel: 'branches' | 'commit' | 'stats' | 'undo' | 'github' | 'help'): void;
   /** Focus the commit panel's message box, opening the panel first. */
   openCommit(): void;
   focusSearch(): void;
@@ -438,6 +438,15 @@ function commands(b: PaletteBindings): PaletteCommand[] {
     icon: 'stats',
     group: 'View',
     run: () => b.setDock('stats')
+  });
+  add({
+    id: 'view-help',
+    label: 'Show help and keyboard shortcuts',
+    keywords: 'help guide shortcuts keys how info',
+    icon: 'help',
+    group: 'View',
+    hint: '?',
+    run: () => b.setDock('help')
   });
   if (repoStore.status?.operation === 'bisect') {
     for (const [verdict, label] of [['good', 'Bisect: this commit works'], ['bad', 'Bisect: this commit is broken'], ['skip', 'Bisect: skip this commit']] as const) {

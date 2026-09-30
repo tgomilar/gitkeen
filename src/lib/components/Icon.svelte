@@ -15,7 +15,7 @@
     | 'switch' | 'copy' | 'delete' | 'rename' | 'revert' | 'reset' | 'cherry-pick'
     | 'squash' | 'diff' | 'plus' | 'check' | 'unstash' | 'exclude' | 'include'
     | 'fetch' | 'close' | 'branch-plus' | 'settings' | 'ai' | 'push' | 'force-push' | 'pull'
-    | 'merge' | 'move-up' | 'move-down' | 'drop' | 'rebase' | 'pull-request' | 'console';
+    | 'merge' | 'move-up' | 'move-down' | 'drop' | 'rebase' | 'pull-request' | 'console' | 'help';
 
   interface Props {
     name: IconName;
@@ -152,6 +152,11 @@
     <path d="M3 12.8h10" />
     <path d="M5.6 5.8 10.4 10.2" />
     <path d="M10.4 5.8 5.6 10.2" />
+  {:else if name === 'help'}
+    <!-- A question mark in a circle: help. -->
+    <circle cx="8" cy="8" r="6.2" />
+    <path d="M6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4" />
+    <circle cx="8" cy="11.4" r=".45" fill="currentColor" stroke="none" />
   {:else if name === 'console'}
     <!-- A window with a prompt in it: the console. -->
     <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.6" />

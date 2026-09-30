@@ -21,6 +21,8 @@
   import DiffViewer from './lib/components/DiffViewer.svelte';
   import MergeEditor from './lib/components/MergeEditor.svelte';
   import RecoveryPanel from './lib/components/RecoveryPanel.svelte';
+  import HelpPanel from './lib/components/HelpPanel.svelte';
+  import type { HelpTarget } from './lib/help';
   import GithubPanel from './lib/components/GithubPanel.svelte';
   import { githubStore } from './lib/state/github.svelte';
   import BlameViewer from './lib/components/BlameViewer.svelte';
@@ -71,6 +73,15 @@
   function toggleDock(panel: DockPanel) {
     if (dockOpen && dock === panel) dockOpen = false;
     else showDock(panel);
+  }
+
+  /** Show me, from a Help entry: open what the entry describes. */
+  function showFromHelp(target: HelpTarget) {
+    if ('panel' in target) showDock(target.panel);
+    else if (target.open === 'palette') paletteStore.show();
+    else if (target.open === 'search') titleBar?.focusSearch();
+    else if (target.open === 'console') { if (!consoleStore.open) consoleStore.toggle(); }
+    else settingsStore.show();
   }
 
   let titleBar = $state<ReturnType<typeof TitleBar> | null>(null);
@@ -310,6 +321,12 @@
     // Single keys. A dialog or an editor on screen owns the keyboard, and a
     // key held with a modifier belongs to the browser or the system.
     if (overlaid()) return;
+    // ? opens Help, and closes it again, as it does on many sites.
+    if (!mod && !event.altKey && event.key === '?') {
+      event.preventDefault();
+      toggleDock('help');
+      return;
+    }
     if (!mod && !event.altKey && !event.shiftKey) {
       const key = event.key.toLowerCase();
       if (key === 'g') {
@@ -402,6 +419,8 @@
             <RecoveryPanel />
           {:else if shown === 'github'}
             <GithubPanel />
+          {:else if shown === 'help'}
+            <HelpPanel onshow={showFromHelp} />
           {:else}
             <BranchSidebar />
           {/if}
