@@ -20,9 +20,6 @@ On Fedora, openSUSE and other Linux systems, use the AppImage.
 A release also lists `.app.tar.gz` files and `latest.json`. Gitkeen uses them
 to update itself. You do not need to download them.
 
-To see which kind of Mac you have, open the Apple menu and choose **About This
-Mac**. A chip named "Apple M" is Apple silicon.
-
 ## Opening Gitkeen the first time
 
 Gitkeen is not signed with a paid developer certificate yet. Your system
@@ -31,10 +28,17 @@ therefore cannot check who made it, and asks you once before it opens it.
 ### macOS
 
 1. Open the `.dmg` and drag **Gitkeen** to **Applications**.
-2. Open Gitkeen. macOS says that it cannot check the app. Press **Done**.
+2. Open Gitkeen. macOS says that it could not verify the app. Press **Done**,
+   not **Move to Bin**.
 3. Open **System Settings**, then **Privacy & Security**.
-4. Scroll down to the message about Gitkeen and press **Open Anyway**.
-5. Confirm with your password. From now on, Gitkeen opens normally.
+4. Scroll down to **Security**. Next to "Gitkeen.app" was blocked to protect
+   your Mac, press **Open Anyway**.
+5. Confirm with your password or Touch ID. From now on, Gitkeen opens normally.
+
+![The Security section of Privacy & Security, with Open Anyway next to the message that Gitkeen.app was blocked](media/open-anyway.png)
+
+The button appears only for about an hour after macOS blocked the app. If it is
+not there, open Gitkeen again first.
 
 Gitkeen 0.1.0 has a broken signature, so macOS says that the app "is damaged"
 and offers no **Open Anyway**. Newer versions do not have this problem. If you
