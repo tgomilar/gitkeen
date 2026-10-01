@@ -12,7 +12,7 @@
  * anywhere. They differ only in URL, headers and response shape, so each is a
  * small record and the rest of the file is shared.
  */
-import { readKey, KEY_ENV } from './settings.mjs';
+import { readKey, readProvider, KEY_ENV } from './settings.mjs';
 
 /**
  * How much of a diff is worth sending.
@@ -197,6 +197,9 @@ async function localModels(name) {
   }
 }
 
+/** True for a provider Gitkeen knows, so a choice can be checked before it is saved. */
+export const isProvider = (name) => Object.hasOwn(PROVIDERS, name);
+
 /**
  * Which providers have a key, and which is used when none is named.
  *
@@ -223,12 +226,13 @@ export async function suggestionProviders() {
     }
   }
 
+  // The provider chosen in Settings wins while it is available. Without a
+  // choice, or when the chosen one is not running or has lost its key, the
+  // order of PROVIDERS decides, so a suggestion still works.
+  const saved = await readProvider();
   return {
     available,
-    // Whichever is configured wins; the order of PROVIDERS breaks a tie, which
-    // puts a hosted key ahead of a local server only because it has to be
-    // broken somehow.
-    preferred: available[0] ?? null,
+    preferred: available.includes(saved) ? saved : available[0] ?? null,
     models
   };
 }

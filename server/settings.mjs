@@ -1,7 +1,8 @@
 /**
  * Gitkeen's own settings, which are about the user rather than a repository.
  *
- * Only keys live here so far: the AI providers' and a GitHub token. They are kept outside every repository on
+ * Keys live here, the AI providers' and a GitHub token, along with which AI
+ * provider the user chose. The keys are kept outside every repository on
  * purpose: a key is not part of a project and must never be committed by the
  * tool whose job is committing things.
  *
@@ -98,8 +99,26 @@ export async function writeKey(provider, key) {
   if (trimmed) keys[provider] = trimmed;
   else delete keys[provider];
 
-  const next = { ...settings, keys };
+  await writeSettings({ ...settings, keys });
+  return keyStatus();
+}
 
+/** The AI provider the user chose in Settings, or null when they have not. */
+export async function readProvider() {
+  const settings = await readFileSettings();
+  return typeof settings.provider === 'string' ? settings.provider : null;
+}
+
+/** Remember which AI provider to use. Null forgets the choice. */
+export async function writeProvider(provider) {
+  const settings = await readFileSettings();
+  const next = { ...settings };
+  if (provider) next.provider = provider;
+  else delete next.provider;
+  await writeSettings(next);
+}
+
+async function writeSettings(next) {
   await mkdir(dirname(FILE), { recursive: true });
   // Written 0600 before anything is in it, so the key is never briefly
   // readable by other accounts on the machine.
@@ -107,6 +126,4 @@ export async function writeKey(provider, key) {
   // writeFile only applies the mode when it creates the file, so an existing
   // one keeps whatever it had until it is set here.
   await chmod(FILE, 0o600).catch(() => {});
-
-  return keyStatus();
 }

@@ -236,6 +236,11 @@ export class GitRepository {
     return transport.call('settings.setKey', { provider, key });
   }
 
+  /** Choose the AI provider that suggestions and explanations use. */
+  setProvider(provider: string): Promise<SuggestProviders> {
+    return transport.call('settings.setProvider', { provider });
+  }
+
   /** Which AI providers are configured on the backend. */
   suggestProviders(): Promise<SuggestProviders> {
     return transport.call('commit.suggestProviders', {});

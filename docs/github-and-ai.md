@@ -30,6 +30,10 @@ Gitkeen can ask an AI model for help. Add an Anthropic or OpenAI key in
 your own computer in LM Studio or Ollama. A local model sends nothing off your
 computer. When no model is set up, none of these buttons appear.
 
+When more than one is set up, the one marked **In use** answers. Press **Use
+this** on another to switch. Gitkeen remembers the choice. If the chosen one
+stops running or loses its key, the next one that works is used instead.
+
 | Where | What it does |
 |---|---|
 | Commit panel, the sparkle button | Writes a commit subject from the staged change, following the repository's commit rules. |

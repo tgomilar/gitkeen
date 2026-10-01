@@ -7,8 +7,8 @@
  */
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
-import { suggestSubject, suggestionProviders, explain } from './suggest.mjs';
-import { keyStatus, writeKey } from './settings.mjs';
+import { suggestSubject, suggestionProviders, explain, isProvider } from './suggest.mjs';
+import { keyStatus, writeKey, writeProvider } from './settings.mjs';
 import * as recovery from './recovery.mjs';
 import { githubToken, githubRepo, github, shapePull, commitChecks } from './github.mjs';
 import * as consoleRules from './console.mjs';
@@ -3284,6 +3284,20 @@ export const methods = {
    * suggestion at all. Reports only names and models, never a key.
    */
   async 'commit.suggestProviders'() {
+    return suggestionProviders();
+  },
+
+  /**
+   * Choose which AI provider suggestions and explanations use. The choice is
+   * saved with the keys, so it holds for every repository.
+   */
+  async 'settings.setProvider'({ provider }) {
+    if (!isProvider(provider)) throw new GitError(`Unknown provider "${provider}".`, { command: '', stderr: '', code: 1 });
+    try {
+      await writeProvider(provider);
+    } catch (err) {
+      throw new GitError(`Could not save the choice: ${err?.message ?? err}`, { command: '', stderr: '', code: 1 });
+    }
     return suggestionProviders();
   },
 

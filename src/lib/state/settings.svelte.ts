@@ -150,6 +150,25 @@ class SettingsStore {
   }
 
   /**
+   * Use this provider for suggestions and explanations from now on.
+   * The commit panel is told too, so its next suggestion uses it.
+   */
+  async choose(provider: string) {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    this.busy = provider;
+    try {
+      this.providers = await repo.setProvider(provider);
+      await commitStore.loadSuggestProviders();
+      toasts.success(`Using ${CATALOGUE.find((p) => p.id === provider)?.label ?? provider}`);
+    } catch (err) {
+      toasts.error('Could not change the provider', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /**
    * Look again for a local server, which needs no key but must be running.
    * The provider is named so only that row shows as busy.
    */

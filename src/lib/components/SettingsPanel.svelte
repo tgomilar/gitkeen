@@ -51,9 +51,10 @@
   </header>
 
   <p class="intro">
-    Gitkeen can write the subject line from the change you are about to commit.
-    Pick where that happens. A hosted provider sends the diff over the network;
-    a local one runs on this machine and sends nothing anywhere.
+    Gitkeen can write the subject line from the change you are about to commit,
+    and explain commits, conflicts and errors. Press Use this to pick where that
+    happens. A hosted provider sends the diff over the network; a local one runs
+    on this machine and sends nothing anywhere.
   </p>
 
   {#each rows as row (row.id)}
@@ -66,6 +67,15 @@
           <span class="badge">Ready</span>
         {/if}
         {#if row.model}<span class="model">{row.model}</span>{/if}
+        {#if row.configured && !row.preferred}
+          <button
+            class="secondary use"
+            onclick={() => settingsStore.choose(row.id)}
+            disabled={settingsStore.busy === row.id}
+          >
+            Use this
+          </button>
+        {/if}
       </div>
 
       <p class="detail">{row.detail}</p>
@@ -247,7 +257,8 @@
     gap: 8px;
   }
 
-  .name { font-weight: 600; }
+  .name { flex: none; font-weight: 600; }
+  .badge, .use { flex: none; }
 
   .badge {
     padding: 1px 6px;
@@ -264,6 +275,10 @@
 
   .model {
     margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--text-faint);
     font-family: var(--font-mono);
     font-size: 10.5px;
@@ -314,6 +329,10 @@
     color: var(--text-dim);
   }
   .secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  /* Sits after the model name, or takes its place at the end of the row. */
+  .use { margin-left: auto; padding: 2px 9px; font-size: 11px; }
+  .model + .use { margin-left: 0; }
 
   .state, .hint {
     margin: 6px 0 0;
