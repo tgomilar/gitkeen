@@ -44,6 +44,16 @@ const MAX_DIFF_LOCAL = 4_500;
 const MAX_TOKENS = 200;
 const MAX_TOKENS_LOCAL = 1_500;
 
+/**
+ * How long to wait for an answer.
+ *
+ * A hosted API answers in seconds. A local server loads the model into memory
+ * on the first request after a while idle, and a large model on a laptop then
+ * writes slowly, so 30 seconds cut off answers that were on their way.
+ */
+const TIMEOUT = 30_000;
+const TIMEOUT_LOCAL = 120_000;
+
 const PROVIDERS = {
   anthropic: {
     label: 'Anthropic',
@@ -462,7 +472,8 @@ async function requestProvider(name, system, user, maxTokens) {
   }
 
   // A hung request should not leave the button spinning forever.
-  const abort = AbortSignal.timeout(30_000);
+  const timeout = LOCAL_PROBE[name] ? TIMEOUT_LOCAL : TIMEOUT;
+  const abort = AbortSignal.timeout(timeout);
 
   let res;
   try {
@@ -475,7 +486,12 @@ async function requestProvider(name, system, user, maxTokens) {
       signal: abort
     });
   } catch (err) {
-    if (err?.name === 'TimeoutError') throw new Error(`${provider.label} did not answer within 30 seconds.`);
+    if (err?.name === 'TimeoutError') {
+      throw new Error(
+        `${provider.label} did not answer within ${timeout / 1000} seconds.` +
+          (LOCAL_PROBE[name] ? ' Load a smaller model, or choose another provider in Settings.' : '')
+      );
+    }
     throw new Error(`Could not reach ${provider.label}: ${err?.message ?? err}`);
   }
 
