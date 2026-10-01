@@ -1,7 +1,7 @@
 {
   "name": "gitkeen",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
   "description": "A standalone visual Git workspace. Your editor writes code, Gitkeen manages your commits, history and more.",
