@@ -36,8 +36,9 @@ therefore cannot check who made it, and asks you once before it opens it.
 4. Scroll down to the message about Gitkeen and press **Open Anyway**.
 5. Confirm with your password. From now on, Gitkeen opens normally.
 
-If macOS says that the app "is damaged", run this once in Terminal, then open
-Gitkeen again:
+Gitkeen 0.1.0 has a broken signature, so macOS says that the app "is damaged"
+and offers no **Open Anyway**. Newer versions do not have this problem. If you
+see the message, run this once in Terminal, then open Gitkeen again:
 
 ```
 xattr -dr com.apple.quarantine /Applications/Gitkeen.app
