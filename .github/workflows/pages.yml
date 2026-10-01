@@ -1,0 +1,52 @@
+# Build the website in site/ (the landing page and the pages in docs/) and
+# publish it on GitHub Pages at https://tgomilar.github.io/gitkeen/.
+#
+# Starts on every push to main that changes the site, the docs or the logo, or
+# by hand from the Actions tab. In the repository's Settings, under Pages,
+# Source must be set to "GitHub Actions".
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'docs/**', 'brand/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. A newer push waits for the running one to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
