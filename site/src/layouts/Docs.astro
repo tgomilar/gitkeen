@@ -1,0 +1,202 @@
+---
+import Base from './Base.astro';
+import { docsNav } from '../lib/docs-nav';
+
+interface Props {
+  title: string;
+  slug?: string;
+  headings?: { depth: number; slug: string; text: string }[];
+}
+
+const { title, slug, headings = [] } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const sections = headings.filter((h) => h.depth === 2);
+const index = docsNav.findIndex((p) => p.slug === slug);
+const prev = index > 0 ? docsNav[index - 1] : undefined;
+const next = index >= 0 ? docsNav[index + 1] : docsNav[0];
+---
+
+<Base title={`${title} | Gitkeen docs`}>
+  <div class="docs wrap">
+    <nav class="docs-nav" aria-label="Documentation">
+      <details class="pages">
+        <summary>All pages</summary>
+        <ul>
+          <li><a href={`${base}/docs/`} aria-current={slug ? undefined : 'page'}>Overview</a></li>
+          {
+            docsNav.map((p) => (
+              <li>
+                <a href={`${base}/docs/${p.slug}/`} aria-current={p.slug === slug ? 'page' : undefined}>
+                  {p.title}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </details>
+    </nav>
+    <script is:inline>
+      // The page list starts closed on phones, so the text comes first.
+      if (matchMedia('(min-width: 761px)').matches) document.querySelector('details.pages').open = true;
+    </script>
+    <article class="prose">
+      <slot />
+      <nav class="pager" aria-label="Previous and next page">
+        {prev ? <a href={`${base}/docs/${prev.slug}/`}><span>Previous</span>{prev.title}</a> : <span />}
+        {next && <a class="next" href={`${base}/docs/${next.slug}/`}><span>Next</span>{next.title}</a>}
+      </nav>
+      {
+        slug && (
+          <p class="edit">
+            <a href={`https://github.com/tgomilar/gitkeen/edit/main/docs/${slug}.md`}>Edit this page on GitHub</a>
+          </p>
+        )
+      }
+    </article>
+    {
+      sections.length > 1 && (
+        <aside class="toc" aria-label="On this page">
+          <p>On this page</p>
+          <ul>
+            {sections.map((h) => (
+              <li>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) 200px;
+    gap: 48px;
+    padding-block: 48px var(--section);
+    align-items: start;
+  }
+
+  .docs-nav,
+  .toc {
+    position: sticky;
+    top: 96px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    font-size: 14px;
+  }
+
+  summary {
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 8px;
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .docs-nav a,
+  .toc a {
+    display: block;
+    padding: 5px 12px;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+  }
+
+  .docs-nav a:hover,
+  .toc a:hover {
+    color: var(--text);
+  }
+
+  .docs-nav a[aria-current='page'] {
+    color: var(--text);
+    font-weight: 600;
+    border-left-color: var(--red);
+  }
+
+  .toc p {
+    margin: 0 0 8px;
+    font-weight: 600;
+  }
+
+  .toc a {
+    border-left-color: var(--border);
+  }
+
+  .pager {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .pager a {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .pager span {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .pager .next {
+    text-align: right;
+    margin-left: auto;
+  }
+
+  .edit {
+    font-size: 14px;
+  }
+
+  @media (max-width: 1100px) {
+    .docs {
+      grid-template-columns: 200px minmax(0, 1fr);
+    }
+
+    .toc {
+      display: none;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .docs {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+      padding-top: 24px;
+    }
+
+    .docs-nav {
+      position: static;
+      max-height: none;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+    }
+
+    summary {
+      margin: 0;
+    }
+
+    details[open] summary {
+      margin-bottom: 8px;
+    }
+  }
+</style>

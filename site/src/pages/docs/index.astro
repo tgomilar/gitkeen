@@ -1,0 +1,28 @@
+---
+import Docs from '../../layouts/Docs.astro';
+import { docsNav } from '../../lib/docs-nav';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Docs title="Documentation">
+  <h1>Gitkeen documentation</h1>
+  <p>
+    Everything Gitkeen can do, page by page. New to Gitkeen? Start with
+    <a href={`${base}/docs/install/`}>Installing Gitkeen</a>, then
+    <a href={`${base}/docs/getting-started/`}>Getting started</a>.
+  </p>
+  <table>
+    <thead><tr><th scope="col">Page</th><th scope="col">What it covers</th></tr></thead>
+    <tbody>
+      {
+        docsNav.map((p) => (
+          <tr>
+            <td><a href={`${base}/docs/${p.slug}/`}>{p.title}</a></td>
+            <td>{p.about}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</Docs>

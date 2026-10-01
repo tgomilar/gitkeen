@@ -1,0 +1,182 @@
+---
+// A small commit graph in the style of Gitkeen's own graph view, drawn with
+// the logo's three strokes: red for main, blue and ink for two branches.
+const row = (i: number) => 34 + i * 46;
+const lane = [36, 72, 108];
+
+const commits = [
+  { lane: 0, text: "Merge branch 'stage-lines'", ref: 'main', merge: true },
+  { lane: 1, text: 'Stage single lines in the diff viewer', selected: true },
+  { lane: 2, text: 'Save a recovery point before a reset', ref: 'undo' },
+  { lane: 0, text: 'Name each broken commitlint rule' },
+  { lane: 1, text: 'Tick a file to run git add' },
+  { lane: 2, text: 'List force pushes in the Undo panel' },
+  { lane: 0, text: 'Release v0.1.1', ref: 'v0.1.1' },
+  { lane: 0, text: 'Sign the whole macOS app' },
+];
+
+const curve = (x1: number, y1: number, x2: number, y2: number) =>
+  `C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`;
+
+const lines = [
+  { cls: 'l0', d: `M${lane[0]},${row(0)} V${row(7) + 30}` },
+  {
+    cls: 'l1',
+    d: `M${lane[0]},${row(0)} ${curve(lane[0], row(0), lane[1], row(1))} V${row(5)} ${curve(lane[1], row(5), lane[0], row(6))}`,
+  },
+  { cls: 'l2', d: `M${lane[2]},${row(2)} V${row(5)} ${curve(lane[2], row(5), lane[0], row(6))}` },
+];
+const textX = 148;
+---
+
+<figure class="graph-card" aria-label="A commit graph with a main branch and two branches">
+  <div class="graph-bar">
+    <span class="mono">~/notes-app</span>
+    <span class="mono branch">main</span>
+  </div>
+  <svg viewBox="0 0 520 404" role="img" aria-hidden="true">
+    {
+      commits.map((c, i) =>
+        c.selected ? <rect class="sel" x="8" y={row(i) - 18} width="504" height="36" rx="8" /> : null,
+      )
+    }
+    {lines.map((l, i) => <path class={`lane ${l.cls}`} d={l.d} pathLength="1" style={`--i:${i}`} />)}
+    {
+      commits.map((c, i) => (
+        <g class="commit" style={`--i:${i}`}>
+          <circle class={`dot l${c.lane} ${c.merge ? 'merge' : ''}`} cx={lane[c.lane]} cy={row(i)} r="7" />
+          {c.ref && (
+            <g class={`ref l${c.lane}`}>
+              <rect x={textX} y={row(i) - 11} width={c.ref.length * 8 + 16} height="22" rx="11" />
+              <text x={textX + 8} y={row(i) + 4.5}>
+                {c.ref}
+              </text>
+            </g>
+          )}
+          <text class="msg" x={c.ref ? textX + c.ref.length * 8 + 26 : textX} y={row(i) + 5}>
+            {c.text}
+          </text>
+        </g>
+      ))
+    }
+  </svg>
+</figure>
+
+<style>
+  .graph-card {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    overflow: hidden;
+  }
+
+  .graph-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .mono {
+    font-family: var(--mono);
+  }
+
+  .branch {
+    color: var(--red);
+    font-weight: 600;
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    padding: 6px 0 2px;
+  }
+
+  .sel {
+    fill: color-mix(in srgb, var(--blue) 12%, transparent);
+  }
+
+  .lane {
+    fill: none;
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: draw 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: calc(var(--i) * 260ms + 150ms);
+  }
+
+  .l0 {
+    stroke: var(--red);
+    --c: var(--red);
+  }
+
+  .l1 {
+    stroke: var(--blue);
+    --c: var(--blue);
+  }
+
+  .l2 {
+    stroke: var(--ink);
+    --c: var(--ink);
+  }
+
+  .dot {
+    fill: var(--c);
+    stroke: var(--surface);
+    stroke-width: 3;
+  }
+
+  .dot.merge {
+    fill: var(--surface);
+    stroke: var(--c);
+    stroke-width: 3;
+  }
+
+  .commit {
+    opacity: 0;
+    animation: appear 400ms ease forwards;
+    animation-delay: calc(var(--i) * 70ms + 500ms);
+  }
+
+  .msg {
+    font: 400 14px var(--mono);
+    fill: var(--text);
+  }
+
+  .ref rect {
+    fill: color-mix(in srgb, var(--c) 14%, transparent);
+    stroke: none;
+  }
+
+  .ref text {
+    font: 600 12px var(--mono);
+    fill: var(--c);
+  }
+
+  @keyframes draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes appear {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane {
+      stroke-dashoffset: 0;
+    }
+
+    .commit {
+      opacity: 1;
+    }
+  }
+</style>

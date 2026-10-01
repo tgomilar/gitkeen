@@ -1,0 +1,449 @@
+---
+import Base from '../layouts/Base.astro';
+import HeroGraph from '../components/HeroGraph.astro';
+import Download from '../components/Download.svelte';
+import { docsNav } from '../lib/docs-nav';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const docs = (slug: string, hash = '') => `${base}/docs/${slug}/${hash}`;
+const media = (file: string) => `${base}/media/${file}`;
+
+// From the "Why Gitkeen" table in the README.
+const features = [
+  ['See everything', 'The full commit graph, with branches, merges and tags as lanes. Search the whole history by message, author, file or date.'],
+  ['Commit precisely', "Stage whole files, single hunks or single lines. What you tick is exactly what Git's index holds."],
+  ['Rewrite history safely', 'Squash, reorder, reword, drop, cherry-pick, revert and reset from the commit menu, or plan a whole rebase and drag the commits into order.'],
+  ['Know before you act', 'Every risky operation says what it will change first: which commits a force push removes, which files a merge will conflict on.'],
+  ['Undo it', 'Gitkeen saves a recovery point before it rewrites or deletes anything. One click on Restore puts it back.'],
+  ['Keep your editor', 'Gitkeen does not edit code. Use any editor you like.'],
+  ['Still type commands', 'The console runs Git commands with suggestions from your repository, and shows the result as a picture.'],
+];
+
+// From "A quick tour" in the README.
+const tour = [
+  {
+    title: 'The commit panel',
+    text: 'Tick files to stage them, or open the diff viewer to stage single hunks and lines. Amend the last commit, sign it, or set work aside in a stash.',
+    media: 'commit-lines.gif',
+    alt: 'Leaving a debug line out of the commit in the diff viewer, then staging the rest',
+    link: [docs('committing'), 'Committing'],
+  },
+  {
+    title: 'Commit messages',
+    text: "Gitkeen reads the repository's commitlint rules and names each broken rule while you type. Suggest writes a subject that follows them, with an AI model of your choice.",
+    media: 'suggest.gif',
+    alt: 'A message that breaks the rules, the problems named below it, then Suggest writing a subject that follows them',
+    link: [docs('committing', '#commit-messages'), 'Commit messages'],
+  },
+  {
+    title: 'The rebase editor',
+    text: 'Right click a commit and choose Rebase from here. Drag commits into a new order, and choose pick, reword, edit, squash, fixup or drop for each one. Nothing runs until you press Start rebase.',
+    media: 'rebase.gif',
+    alt: 'Dragging a commit to the top of the rebase editor, folding a fix into the commit before it, and starting the rebase',
+    link: [docs('history'), 'Changing history'],
+  },
+  {
+    title: 'The merge editor',
+    text: 'When a merge, pull or rebase stops on a conflict, resolve each block by keeping ours, theirs or both, or edit the result by hand.',
+    media: 'merge-editor.png',
+    alt: 'The merge editor with one conflict: ours on the left, theirs on the right, and the result in the middle',
+    link: [docs('branches-and-remotes'), 'Branches, remotes and conflicts'],
+  },
+  {
+    title: 'The Undo panel',
+    text: 'Every reset, squash, rebase, drop, deleted branch and force push is listed. Restore puts things back as they were.',
+    media: 'undo.gif',
+    alt: 'Dropping a commit, then bringing it back from the Undo panel',
+    link: [docs('undo'), 'Undo'],
+  },
+  {
+    title: 'The console',
+    text: 'Type status, log or switch main, with suggestions for commands, options, branches and files.',
+    media: 'console.gif',
+    alt: 'Typing git switch with suggestions for the command and the branch, then git log drawn as a small graph',
+    link: [docs('console'), 'The console'],
+  },
+];
+
+const files = [
+  ['macOS on Apple silicon (M1 and newer)', 'Gitkeen-macOS-Apple-silicon.dmg'],
+  ['macOS on Intel', 'Gitkeen-macOS-Intel.dmg'],
+  ['Windows 10 and 11', 'Gitkeen-Windows-Installer.exe'],
+  ['Linux', 'Gitkeen-Linux.AppImage'],
+  ['Debian and Ubuntu', 'Gitkeen-Linux.deb'],
+];
+---
+
+<Base title="Gitkeen, a visual Git client that works next to any editor">
+  <section class="hero wrap">
+    <div class="hero-text">
+      <h1>Your editor writes code. Gitkeen looks after your history.</h1>
+      <p class="lede">
+        A visual Git client for macOS, Windows and Linux. See the whole commit graph, commit exactly the
+        lines you want, and change history with a few clicks. Before anything risky happens, Gitkeen
+        tells you what it will do, and afterwards the Undo panel can put it back.
+      </p>
+      <Download client:load installDocs={docs('install')} />
+    </div>
+    <HeroGraph />
+  </section>
+
+  <section class="shot wrap" aria-label="The Gitkeen window">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset={media('overview-dark.png')} />
+      <img
+        src={media('overview-light.png')}
+        width="2560"
+        height="1520"
+        alt="The Gitkeen window: the branches panel, the commit graph with its lanes, and the details of the selected commit"
+      />
+    </picture>
+  </section>
+
+  <section id="features" class="features wrap">
+    <div class="features-intro">
+      <h2>What Gitkeen does</h2>
+      <p>
+        Gitkeen sits next to your editor and handles the Git side: commits, branches, history and
+        the mistakes you want to take back.
+      </p>
+      <a href={docs('getting-started')}>Getting started</a>
+    </div>
+    <ol class="lane-list">
+      {
+        features.map(([title, text], i) => (
+          <li class={i % 3 === 1 ? 'blue' : i % 3 === 2 ? 'ink' : ''}>
+            <h3>{title}</h3>
+            <p>{text}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section id="tour" class="tour wrap">
+    <h2>A quick tour</h2>
+    {
+      tour.map((item) => (
+        <article class="tour-item">
+          <div class="tour-text">
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+            <a href={item.link[0]}>{item.link[1]}</a>
+          </div>
+          <img class="tour-media" src={media(item.media)} alt={item.alt} width="1000" height="594" loading="lazy" />
+        </article>
+      ))
+    }
+  </section>
+
+  <section id="download" class="download-section">
+    <div class="wrap download-grid">
+      <div>
+        <h2>Download</h2>
+        <p>
+          Download Gitkeen from the <a href="https://github.com/tgomilar/gitkeen/releases">Releases page</a>.
+          Open the newest release, and under Assets choose the file for your system. You also need Git
+          2.30 or newer.
+        </p>
+        <p>
+          The app is not signed yet, so macOS and Windows ask once before they open it.
+          <a href={docs('install', '#opening-gitkeen-the-first-time')}>Installing Gitkeen</a> shows the
+          steps. Gitkeen is a pre-release for now. From the first full release on, it updates itself
+          when a new version is out.
+        </p>
+        <h3>Run it from source</h3>
+        <p>You need Git 2.30 or newer and Node.js 20 or newer.</p>
+        <pre><code>git clone https://github.com/tgomilar/gitkeen.git
+cd gitkeen
+npm install
+npm run dev</code></pre>
+        <p>Open <code>http://localhost:5183</code>, paste the path of a repository and press Open.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Your system</th><th scope="col">File</th></tr>
+          </thead>
+          <tbody>
+            {
+              files.map(([system, file]) => (
+                <tr>
+                  <td>{system}</td>
+                  <td><code>{file}</code></td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="docs-list wrap">
+    <h2>Documentation</h2>
+    <ul>
+      {
+        docsNav.map((page) => (
+          <li>
+            <a href={docs(page.slug)}>{page.title}</a>
+            <span>{page.about}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<style>
+  h2 {
+    font-size: clamp(30px, 4vw, 40px);
+    margin: 0 0 16px;
+  }
+
+  h3 {
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 56px;
+    align-items: center;
+    padding-block: 72px 56px;
+  }
+
+  h1 {
+    font-size: clamp(40px, 5.4vw, 64px);
+    line-height: 1.04;
+    margin: 0 0 24px;
+  }
+
+  .lede {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 52ch;
+    margin: 0 0 32px;
+  }
+
+  .shot img {
+    display: block;
+    border-radius: var(--r-card);
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 60px -30px color-mix(in srgb, var(--red) 35%, transparent);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 56px;
+    padding-block: var(--section);
+  }
+
+  .features-intro {
+    align-self: start;
+    position: sticky;
+    top: 104px;
+  }
+
+  .features-intro p {
+    color: var(--muted);
+    max-width: 40ch;
+  }
+
+  /* Each feature is a commit on a lane, like a row in the graph. */
+  .lane-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+
+  .lane-list::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 14px;
+    bottom: 14px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--red);
+  }
+
+  .lane-list li {
+    --c: var(--red);
+    position: relative;
+    padding: 0 0 32px 48px;
+  }
+
+  .lane-list li:last-child {
+    padding-bottom: 0;
+  }
+
+  .lane-list li::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 6px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+
+  .lane-list li.blue {
+    --c: var(--blue);
+  }
+
+  .lane-list li.ink {
+    --c: var(--ink);
+  }
+
+  .lane-list p {
+    margin: 0;
+    color: var(--muted);
+    max-width: 60ch;
+  }
+
+  .tour {
+    padding-block: 0 var(--section);
+  }
+
+  .tour > h2 {
+    margin-bottom: 40px;
+  }
+
+  .tour-item {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+    gap: 48px;
+    align-items: center;
+    padding-block: 32px;
+    border-top: 1px solid var(--border);
+  }
+
+  .tour-item:nth-of-type(even) .tour-text {
+    order: 2;
+  }
+
+  .tour-text p {
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+
+  .tour-media {
+    display: block;
+    border-radius: var(--r-card);
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .download-section {
+    background: var(--surface);
+    border-block: 1px solid var(--border);
+    padding-block: var(--section);
+  }
+
+  .download-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 56px;
+  }
+
+  .download-grid p {
+    max-width: 60ch;
+  }
+
+  .download-grid h3 {
+    margin-top: 32px;
+  }
+
+  pre {
+    background: var(--code-bg);
+    border-radius: var(--r-control);
+    padding: 16px 20px;
+    overflow-x: auto;
+    line-height: 1.7;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    align-self: start;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card);
+    background: var(--bg);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:last-child td {
+    border-bottom: 0;
+  }
+
+  th {
+    font-weight: 600;
+  }
+
+  .docs-list {
+    padding-block: var(--section);
+  }
+
+  .docs-list ul {
+    list-style: none;
+    margin: 32px 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 24px 40px;
+  }
+
+  .docs-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .docs-list a {
+    font-weight: 600;
+  }
+
+  .docs-list span {
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  @media (max-width: 900px) {
+    .hero,
+    .features,
+    .tour-item,
+    .download-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 32px;
+    }
+
+    .hero {
+      padding-block: 48px 40px;
+    }
+
+    .features-intro {
+      position: static;
+    }
+
+    .tour-item:nth-of-type(even) .tour-text {
+      order: 0;
+    }
+  }
+</style>

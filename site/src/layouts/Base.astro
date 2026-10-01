@@ -1,0 +1,78 @@
+---
+import '../styles/site.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Gitkeen is a visual Git client that works next to any editor. Your editor writes code. Gitkeen manages your commits, history and more.',
+} = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const path = Astro.url.pathname;
+const inDocs = path.startsWith(`${base}/docs`);
+const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href={`${base}/brand/icon.svg`} media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href={`${base}/brand/icon-dark.svg`} media="(prefers-color-scheme: dark)" />
+    <link rel="canonical" href={new URL(path, Astro.site).href} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={socialImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap header-row">
+        <a class="brand" href={`${base}/`} aria-label="Gitkeen home">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset={`${base}/brand/logo-dark.svg`} />
+            <img src={`${base}/brand/logo.svg`} alt="Gitkeen" width="145" height="30" />
+          </picture>
+        </a>
+        <nav class="site-nav" aria-label="Main">
+          <a href={`${base}/#features`}>Features</a>
+          <a href={`${base}/#tour`}>Tour</a>
+          <a href={`${base}/docs/`} aria-current={inDocs ? 'page' : undefined}>Docs</a>
+          <a href="https://github.com/tgomilar/gitkeen">GitHub</a>
+          <a class="btn btn-small" href={`${base}/#download`}>Download</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap footer-row">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset={`${base}/brand/icon-dark.svg`} />
+          <img src={`${base}/brand/icon.svg`} alt="" width="28" height="28" />
+        </picture>
+        <p>
+          Gitkeen is open source under the
+          <a href="https://github.com/tgomilar/gitkeen/blob/main/LICENSE">MIT licence</a>.
+          This site is built from the
+          <a href="https://github.com/tgomilar/gitkeen">repository on GitHub</a>.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
