@@ -208,6 +208,7 @@ version for light backgrounds and one ending in `-dark` for dark backgrounds.
 | `brand/logo.svg` | The full logo: the square and the word. |
 | `brand/wordmark.svg` | The word alone, for small sizes such as the status bar. |
 | `brand/icon.svg` | The square alone, for icons. |
+| `brand/social-preview.png` | The picture shown when the repository link is shared, 1280 × 640 px. It is set in the repository's Settings, under Social preview. |
 
 `public/favicon.svg` switches to the dark version when the browser uses a dark
 colour scheme. `src-tauri/app-icon.svg` is the dark square on the canvas macOS
