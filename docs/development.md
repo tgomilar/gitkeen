@@ -60,6 +60,7 @@ The user interface never builds a Git command. It calls named methods such as
 | `src/lib/components/` | The Svelte components. |
 | `src-tauri/` | The desktop app's Rust shell and its icons. |
 | `brand/` | The logo files. |
+| `site/` | The website: the landing page and these docs, published on GitHub Pages. |
 
 ## The graph
 
@@ -196,6 +197,26 @@ every time. Only that scene can reach it.
 | `conflict` | `merge-editor.png` |
 | `stats` | `stats.png` |
 | `help` | `help.png` |
+
+## The website
+
+The website at <https://tgomilar.github.io/gitkeen/> is built from `site/` with
+Astro. It has the landing page and every page in `docs/`, read from the
+Markdown files at build time, so the docs are only ever written once. Links
+such as `undo.md#restoring` and pictures in `media/` are turned into the site's
+own addresses as the pages are built. `DESIGN.md` has the colours, which come
+from the logo, and the rules for the layout.
+
+To work on it:
+
+1. `cd site`
+2. `npm install`
+3. `npm run dev`, and open the address it prints.
+
+`npm run build` writes the finished site to `site/dist`. Each push to `main`
+that changes `site/`, `docs/` or `brand/` starts
+`.github/workflows/pages.yml`, which builds the site and publishes it. In the
+repository's Settings, under Pages, Source must be set to GitHub Actions.
 
 ## The logo
 
