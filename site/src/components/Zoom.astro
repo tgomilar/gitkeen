@@ -1,0 +1,77 @@
+---
+// Opens a screenshot or GIF at full size when it is clicked, so its details
+// can be read. A click anywhere, or Escape, closes it again.
+---
+
+<dialog class="zoom" aria-label="Enlarged picture">
+  <img alt="" />
+</dialog>
+
+<script>
+  const dialog = document.querySelector<HTMLDialogElement>('dialog.zoom')!;
+  const big = dialog.querySelector('img')!;
+
+  function open(img: HTMLImageElement) {
+    // currentSrc is the picture on show, so the dark screenshot in dark mode.
+    big.src = img.currentSrc || img.src;
+    big.alt = img.alt;
+    dialog.showModal();
+  }
+
+  for (const img of document.querySelectorAll<HTMLImageElement>('.prose img, .shot img, .tour-media')) {
+    img.classList.add('zoomable');
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', `Enlarge: ${img.alt}`);
+    img.addEventListener('click', () => open(img));
+    img.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open(img);
+      }
+    });
+  }
+
+  dialog.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => big.removeAttribute('src'));
+</script>
+
+<style is:global>
+  .zoomable {
+    cursor: zoom-in;
+  }
+
+  .zoomable:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: 3px;
+  }
+
+  dialog.zoom {
+    max-width: none;
+    max-height: none;
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    background: transparent;
+    cursor: zoom-out;
+  }
+
+  dialog.zoom[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  dialog.zoom::backdrop {
+    background: rgb(0 0 0 / 0.8);
+  }
+
+  dialog.zoom img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--r-control);
+  }
+</style>

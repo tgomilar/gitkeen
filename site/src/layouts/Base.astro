@@ -1,5 +1,6 @@
 ---
 import '../styles/site.css';
+import Zoom from '../components/Zoom.astro';
 
 interface Props {
   title: string;
@@ -74,5 +75,6 @@ const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href
         </p>
       </div>
     </footer>
+    <Zoom />
   </body>
 </html>
