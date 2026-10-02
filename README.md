@@ -132,4 +132,4 @@ See [all keyboard shortcuts](docs/keyboard.md).
 ## Licence
 
 Gitkeen is released under the [MIT licence](LICENSE). It is developed and
-maintained by Tanja Gomilar, with the help of AI.
+maintained by [Tanja Gomilar](https://github.com/tgomilar), with the help of AI.
