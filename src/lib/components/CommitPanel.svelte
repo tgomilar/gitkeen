@@ -24,6 +24,7 @@
   import { buildChangeTree } from '../changes';
   import { pluralize } from '../format';
   import { checkMessage } from '../git/commit-rules';
+  import { uiScale } from '../state/appearance.svelte';
   import type { Change } from '../changes';
   import type { Stash } from '../git/types';
   import type { MenuItem } from '../menu';
@@ -32,6 +33,82 @@
   // the heading counts the same things as the button.
   const splitPlanned = $derived(commitStore.splitGroups.filter((g) => !g.leftover));
   const splitLeftover = $derived(commitStore.splitGroups.find((g) => g.leftover) ?? null);
+
+  /**
+   * The commit area's height once the user has dragged it, or null to fit its
+   * content. Kept between sessions, like the app's other dividers.
+   */
+  const COMPOSE_KEY = 'gitkeen.composeHeight';
+  const COMPOSE_MIN = 140;
+  /** The file list always keeps this much, so the files stay in sight. */
+  const LIST_MIN = 120;
+  let panel = $state<HTMLElement | null>(null);
+  let composeHeight = $state<number | null>(readComposeHeight());
+
+  function readComposeHeight(): number | null {
+    try {
+      const saved = Number(localStorage.getItem(COMPOSE_KEY));
+      return saved >= COMPOSE_MIN ? saved : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveComposeHeight() {
+    try {
+      if (composeHeight === null) localStorage.removeItem(COMPOSE_KEY);
+      else localStorage.setItem(COMPOSE_KEY, String(Math.round(composeHeight)));
+    } catch {
+      // Not kept for next time; it still applies now.
+    }
+  }
+
+  /** Drag the line above the commit area: up for more room, down for less. */
+  function resizeCompose(event: PointerEvent) {
+    event.preventDefault();
+    const grip = event.currentTarget as HTMLElement;
+    const compose = grip.nextElementSibling as HTMLElement;
+    const start = event.clientY;
+    const height = compose.getBoundingClientRect().height / uiScale();
+    // Everything in the panel but the file list and the commit area stays as it is.
+    const list = panel?.querySelector('.scroll') as HTMLElement | null;
+    const room = height + (list ? list.getBoundingClientRect().height / uiScale() - LIST_MIN : 0);
+    grip.setPointerCapture(event.pointerId);
+    const move = (e: PointerEvent) => {
+      const next = height + (start - e.clientY) / uiScale();
+      composeHeight = Math.max(COMPOSE_MIN, Math.min(room, next));
+    };
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      document.body.style.cursor = '';
+      saveComposeHeight();
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up, { once: true });
+    document.body.style.cursor = 'row-resize';
+  }
+
+  /** The same from the keyboard: the arrows move the line, Home hands the height back. */
+  function keyCompose(event: KeyboardEvent) {
+    if (event.key === 'Home') {
+      event.preventDefault();
+      resetCompose();
+      return;
+    }
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const grip = event.currentTarget as HTMLElement;
+    const now = composeHeight ?? (grip.nextElementSibling as HTMLElement).getBoundingClientRect().height / uiScale();
+    const list = panel?.querySelector('.scroll') as HTMLElement | null;
+    const room = now + (list ? list.getBoundingClientRect().height / uiScale() - LIST_MIN : 0);
+    composeHeight = Math.max(COMPOSE_MIN, Math.min(room, now + (event.key === 'ArrowUp' ? 24 : -24)));
+    saveComposeHeight();
+  }
+
+  function resetCompose() {
+    composeHeight = null;
+    saveComposeHeight();
+  }
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let messageBox = $state<HTMLTextAreaElement | null>(null);
@@ -104,7 +181,7 @@
   }
 </script>
 
-<section class="panel">
+<section class="panel" bind:this={panel}>
   <div class="toolbar">
     <button
       class="tool"
@@ -249,7 +326,28 @@
     {/if}
   </div>
 
-  <div class="compose">
+  <!--
+    The line above the message box. Dragging it gives the commit area more
+    room, for a long message or a long list of suggested commits, at the file
+    list's expense; a double click hands the height back to the content.
+    A focusable separator with a value is a splitter, an interactive control
+    in ARIA, which the checker does not know.
+  -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class="compose-grip"
+    role="separator"
+    aria-orientation="horizontal"
+    aria-label="Resize the commit area"
+    title="Drag to resize · double-click to reset"
+    tabindex="0"
+    aria-valuenow={composeHeight ?? undefined}
+    aria-valuemin={COMPOSE_MIN}
+    onpointerdown={resizeCompose}
+    ondblclick={resetCompose}
+    onkeydown={keyCompose}
+  ></div>
+  <div class="compose" class:sized={composeHeight !== null} style:height={composeHeight !== null ? `${composeHeight}px` : null}>
     <div class="options">
       <label class="amend" class:disabled={!commitStore.head?.exists}>
         <TriCheckbox
@@ -618,8 +716,36 @@
     flex-direction: column;
     gap: 6px;
     padding: 8px;
+  }
+  /* A height of its own: what does not fit scrolls, with the buttons kept in sight. */
+  .compose.sized {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .compose.sized .buttons {
+    position: sticky;
+    bottom: -8px;
+    margin: auto -8px -8px;
+    padding: 8px;
+    background: var(--bg-panel);
     border-top: 1px solid var(--border);
   }
+
+  /* The border above the commit area, with a wider band to grab than it shows. */
+  .compose-grip {
+    flex: none;
+    position: relative;
+    height: 1px;
+    background: var(--border);
+    cursor: row-resize;
+    transition: background 0.1s ease;
+  }
+  .compose-grip::before {
+    content: '';
+    position: absolute;
+    inset: -3px 0;
+  }
+  .compose-grip:hover, .compose-grip:focus-visible { background: var(--accent); outline: none; }
 
   .options {
     display: flex;
