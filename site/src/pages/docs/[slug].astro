@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import Docs from '../../layouts/Docs.astro';
+import { docsNav } from '../../lib/docs-nav';
 
 export async function getStaticPaths() {
   const pages = await getCollection('docs');
@@ -10,8 +11,31 @@ export async function getStaticPaths() {
 const { page } = Astro.props;
 const { Content, headings } = await render(page);
 const title = page.body?.match(/^#\s+(.+)$/m)?.[1] ?? page.id;
+
+/**
+ * The page's first paragraph as plain text, for a page without a description
+ * of its own. Cut at a word near 160 characters, which is about what a search
+ * result shows.
+ */
+function firstParagraph(body: string): string | undefined {
+  const block = body
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .find((b) => b && !/^(#|!\[|\||>|```|<|[-*] |\d+\. )/.test(b));
+  if (!block) return undefined;
+  const text = block
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= 160) return text;
+  return text.slice(0, 157).replace(/\s+\S*$/, '') + '…';
+}
+// The description written for the page comes first; a page added without one
+// still gets its first paragraph rather than the site's general line.
+const description = docsNav.find((p) => p.slug === page.id)?.description ?? firstParagraph(page.body ?? '');
 ---
 
-<Docs title={title} slug={page.id} headings={headings}>
+<Docs title={title} description={description} slug={page.id} headings={headings}>
   <Content />
 </Docs>

@@ -213,7 +213,10 @@ To work on it:
 2. `npm install`
 3. `npm run dev`, and open the address it prints.
 
-`npm run build` writes the finished site to `site/dist`. Each push to `main`
+`npm run build` writes the finished site to `site/dist`. The favicons in
+`site/public` are drawn from `brand/icon.svg` by `npm run favicons`, which
+runs on macOS with ImageMagick installed. Run it again only when the logo
+changes. Each push to `main`
 that changes `site/`, `docs/` or `brand/` starts
 `.github/workflows/pages.yml`, which builds the site and publishes it. In the
 repository's Settings, under Pages, Source must be set to GitHub Actions.

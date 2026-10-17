@@ -4,19 +4,44 @@ import { docsNav } from '../lib/docs-nav';
 
 interface Props {
   title: string;
+  /** What the page covers, for search results and shared links. */
+  description?: string;
   slug?: string;
   headings?: { depth: number; slug: string; text: string }[];
 }
 
-const { title, slug, headings = [] } = Astro.props;
+const { title, description, slug, headings = [] } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const sections = headings.filter((h) => h.depth === 2);
 const index = docsNav.findIndex((p) => p.slug === slug);
 const prev = index > 0 ? docsNav[index - 1] : undefined;
 const next = index >= 0 ? docsNav[index + 1] : docsNav[0];
+
+const at = (path: string) => new URL(`${base}${path}`, Astro.site).href;
+const trail = [
+  { name: 'Gitkeen', url: at('/') },
+  { name: 'Documentation', url: at('/docs/') },
+  ...(slug ? [{ name: title, url: at(`/docs/${slug}/`) }] : []),
+];
+const schema = [
+  {
+    '@type': 'BreadcrumbList',
+    itemListElement: trail.map((step, i) => ({ '@type': 'ListItem', position: i + 1, name: step.name, item: step.url })),
+  },
+  ...(slug
+    ? [{
+        '@type': 'TechArticle',
+        headline: title,
+        description,
+        url: at(`/docs/${slug}/`),
+        about: { '@type': 'SoftwareApplication', name: 'Gitkeen' },
+        author: { '@type': 'Person', name: 'Tanja Gomilar', url: 'https://github.com/tgomilar' },
+      }]
+    : []),
+];
 ---
 
-<Base title={`${title} | Gitkeen docs`}>
+<Base title={`${title} | Gitkeen docs`} description={description} type={slug ? 'article' : 'website'} schema={schema}>
   <div class="docs wrap">
     <nav class="docs-nav" aria-label="Documentation">
       <details class="pages">

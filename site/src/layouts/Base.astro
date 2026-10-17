@@ -7,11 +7,20 @@ import iconDark from '../../../brand/icon-dark.svg?raw';
 interface Props {
   title: string;
   description?: string;
+  /** `article` for a docs page, so a shared link is described as one. */
+  type?: 'website' | 'article';
+  /** Keeps a page such as the 404 out of search results. */
+  noindex?: boolean;
+  /** Structured data for search engines, one schema.org object each. */
+  schema?: Record<string, unknown>[];
 }
 
 const {
   title,
   description = 'Gitkeen is a visual Git client that works next to any editor. Your editor writes code. Gitkeen manages your commits, history and more.',
+  type = 'website',
+  noindex = false,
+  schema = [],
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -22,6 +31,8 @@ const steadyTile = (svg: string) => svg.replace('<rect ', '<rect fill-opacity="1
 const path = Astro.url.pathname;
 const inDocs = path.startsWith(`${base}/docs`);
 const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href;
+const canonical = new URL(path, Astro.site).href;
+const socialAlt = 'Gitkeen: a visual Git client that works next to any editor, beside its window with a commit graph and branches';
 ---
 
 <!doctype html>
@@ -33,14 +44,37 @@ const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href
     <meta name="description" content={description} />
     <meta name="color-scheme" content="light dark" />
     <meta name="google-site-verification" content="TWTDG5sHkQOekIFUa5uWVmi7yO3pJTU7AGMaIPajIHc" />
-    <link rel="icon" type="image/svg+xml" href={`${base}/brand/icon.svg`} media="(prefers-color-scheme: light)" />
+    {noindex && <meta name="robots" content="noindex" />}
+    <!--
+      The .ico is for older browsers and for search results, which want a
+      bitmap of at least 48 px; it is marked 32x32 so that browsers that can
+      draw the SVG still prefer it. The SVG follows the system's light or dark
+      mode. Rendered by `npm run favicons`.
+    -->
+    <link rel="icon" href={`${base}/favicon.ico`} sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href={`${base}/brand/icon.svg`} />
     <link rel="icon" type="image/svg+xml" href={`${base}/brand/icon-dark.svg`} media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
+    <link rel="manifest" href={`${base}/site.webmanifest`} />
+    <meta name="theme-color" content="#fffaf9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1c1c1f" media="(prefers-color-scheme: dark)" />
     <link rel="sitemap" href={`${base}/sitemap-index.xml`} />
-    <link rel="canonical" href={new URL(path, Astro.site).href} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:site_name" content="Gitkeen" />
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={socialImage} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content={socialAlt} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={socialAlt} />
+    {schema.map((item) => <script type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', ...item })} />)}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

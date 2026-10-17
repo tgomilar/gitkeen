@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import HeroGraph from '../components/HeroGraph.astro';
 import Download from '../components/Download.svelte';
 import { docsNav } from '../lib/docs-nav';
+import app from '../../../package.json';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const docs = (slug: string, hash = '') => `${base}/docs/${slug}/${hash}`;
@@ -65,6 +66,28 @@ const tour = [
   },
 ];
 
+// What search engines show for the app: free, for three systems, with the
+// version read from the app itself so it never needs changing by hand.
+const home = new URL(`${base}/`, Astro.site).href;
+const schema = [
+  { '@type': 'WebSite', name: 'Gitkeen', url: home },
+  {
+    '@type': 'SoftwareApplication',
+    name: 'Gitkeen',
+    url: home,
+    description: 'A visual Git client that works next to any editor: the whole commit graph, staging single lines, squash, reorder and rebase, and undo for anything it rewrote.',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'macOS, Windows, Linux',
+    softwareVersion: app.version,
+    downloadUrl: 'https://github.com/tgomilar/gitkeen/releases/latest',
+    image: new URL(`${base}/icon-512.png`, Astro.site).href,
+    screenshot: new URL(`${base}/brand/social-preview.png`, Astro.site).href,
+    license: 'https://opensource.org/licenses/MIT',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    author: { '@type': 'Person', name: 'Tanja Gomilar', url: 'https://github.com/tgomilar' },
+  },
+];
+
 const files = [
   ['macOS on Apple silicon (M1 and newer)', 'Gitkeen-macOS-Apple-silicon.dmg'],
   ['macOS on Intel', 'Gitkeen-macOS-Intel.dmg'],
@@ -74,7 +97,7 @@ const files = [
 ];
 ---
 
-<Base title="Gitkeen, a visual Git client that works next to any editor">
+<Base title="Gitkeen, a visual Git client that works next to any editor" schema={schema}>
   <section class="hero wrap">
     <div class="hero-text">
       <h1>
