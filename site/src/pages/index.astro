@@ -324,6 +324,10 @@ npm run dev</code></pre>
     border-top: 1px solid var(--border);
   }
 
+  .tour-item:nth-of-type(even) {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr);
+  }
+
   .tour-item:nth-of-type(even) .tour-text {
     order: 2;
   }
@@ -429,6 +433,7 @@ npm run dev</code></pre>
     .hero,
     .features,
     .tour-item,
+    .tour-item:nth-of-type(even),
     .download-grid {
       grid-template-columns: minmax(0, 1fr);
       gap: 32px;
