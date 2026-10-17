@@ -13,11 +13,35 @@
    */
   import { settingsStore } from '../state/settings.svelte';
   import Icon from './Icon.svelte';
+  import type { ModelPull } from '../git/types';
 
   /** What has been typed for each provider, cleared once it is saved. */
   let drafts = $state<Record<string, string>>({});
 
   const rows = $derived(settingsStore.rows);
+  const ollama = $derived(settingsStore.ollama);
+  const pull = $derived(ollama?.pull ?? null);
+  const lmstudio = $derived(settingsStore.lmstudio);
+  const lmstudioDownloaded = $derived(settingsStore.lmstudioDownloaded);
+  /** The downloaded LM Studio model picked to load; empty means the first. */
+  let loadChoice = $state('');
+
+  /** How far a layer has got. Ollama reports layers one by one, so between them there is no figure. */
+  function pullPercent(p: ModelPull): number {
+    return p.total ? Math.floor((p.completed / p.total) * 100) : 0;
+  }
+
+  const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
+
+  /** Ollama's step in words a person reads, with the size while the bulk of it downloads. */
+  function pullText(p: ModelPull): string {
+    if (p.total && p.status.startsWith('pulling')) {
+      return `Downloading ${p.model}: ${pullPercent(p)}%, ${gb(p.completed)} of ${gb(p.total)}. You can close Settings meanwhile.`;
+    }
+    if (p.status.startsWith('verifying')) return `Checking the download of ${p.model}…`;
+    if (p.status.startsWith('writing')) return `Finishing ${p.model}…`;
+    return `Preparing to download ${p.model}…`;
+  }
 
   function onkeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
@@ -66,7 +90,8 @@
         {:else if row.configured}
           <span class="badge">Ready</span>
         {/if}
-        {#if row.model}<span class="model">{row.model}</span>{/if}
+        <!-- A running local server's model has its own menu below. -->
+        {#if row.model && !((row.id === 'ollama' && ollama?.running) || (row.id === 'lmstudio' && lmstudio?.running))}<span class="model">{row.model}</span>{/if}
         {#if row.configured && !row.preferred}
           <button
             class="secondary use"
@@ -80,7 +105,137 @@
 
       <p class="detail">{row.detail}</p>
 
-      {#if row.keyless}
+      {#if row.id === 'ollama' && ollama}
+        <!--
+          Ollama can be taken from installed to ready without a terminal, so
+          the row offers whichever step is missing: install, start, download
+          a model, then choose between models once there are several.
+        -->
+        {#if pull && !pull.done}
+          <p class="state">{pullText(pull)}</p>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={pullPercent(pull)}>
+            <span style:width="{pullPercent(pull)}%"></span>
+          </div>
+        {:else if !ollama.installed}
+          <div class="row">
+            <p class="state">Ollama is not installed on this machine.</p>
+            <button class="secondary" onclick={() => settingsStore.recheck('ollama')} disabled={settingsStore.busy === 'ollama'}>
+              {settingsStore.busy === 'ollama' ? 'Checking…' : 'Check again'}
+            </button>
+          </div>
+          <a class="get" href={row.console} target="_blank" rel="noreferrer noopener">{row.consoleLabel} ↗</a>
+        {:else if !ollama.running}
+          <div class="row">
+            <p class="state">Installed, but not running.</p>
+            <button class="primary" onclick={() => settingsStore.startOllama()} disabled={settingsStore.busy === 'ollama'}>
+              {settingsStore.busy === 'ollama' ? 'Starting…' : 'Start Ollama'}
+            </button>
+          </div>
+        {:else if ollama.models.length === 0}
+          <div class="row">
+            <p class="state">Running, but no model is downloaded yet.</p>
+            <button class="primary" onclick={() => settingsStore.pullModel(ollama.recommended)}>
+              Download {ollama.recommended}
+            </button>
+          </div>
+          <p class="hint faint">
+            A small, quick model that is good at one-line summaries. About 2 GB, downloaded once.
+          </p>
+        {:else}
+          <div class="row">
+            <label class="state" for="ollama-model">Model</label>
+            <select
+              id="ollama-model"
+              value={row.model ?? ''}
+              onchange={(e) => settingsStore.chooseModel('ollama', e.currentTarget.value)}
+              disabled={settingsStore.busy === 'ollama'}
+            >
+              {#each ollama.models as model (model)}
+                <option value={model}>{model}</option>
+              {/each}
+            </select>
+          </div>
+          {#if !ollama.hasRecommended}
+            <p class="hint faint">
+              Running and ready. Suggestions slow?
+              <button class="link" onclick={() => settingsStore.pullModel(ollama.recommended)}>Download {ollama.recommended}</button>,
+              a small model made for quick answers.
+            </p>
+          {/if}
+        {/if}
+        {#if pull?.done && pull.error}
+          <p class="hint error">The download of {pull.model} failed: {pull.error}</p>
+        {/if}
+      {:else if row.id === 'lmstudio' && lmstudio}
+        <!--
+          The same steps for LM Studio, through its lms command: start the
+          server, load a downloaded model, then choose between loaded ones.
+        -->
+        {#if !lmstudio.installed}
+          <div class="row">
+            <p class="state">LM Studio is not installed on this machine.</p>
+            <button class="secondary" onclick={() => settingsStore.recheck('lmstudio')} disabled={settingsStore.busy === 'lmstudio'}>
+              {settingsStore.busy === 'lmstudio' ? 'Checking…' : 'Check again'}
+            </button>
+          </div>
+          <a class="get" href={row.console} target="_blank" rel="noreferrer noopener">{row.consoleLabel} ↗</a>
+        {:else if !lmstudio.running}
+          <div class="row">
+            <p class="state">Installed, but its server is not running.</p>
+            {#if lmstudio.cli}
+              <button class="primary" onclick={() => settingsStore.startLmstudio()} disabled={settingsStore.busy === 'lmstudio'}>
+                {settingsStore.busy === 'lmstudio' ? 'Starting…' : 'Start server'}
+              </button>
+            {:else}
+              <button class="secondary" onclick={() => settingsStore.recheck('lmstudio')} disabled={settingsStore.busy === 'lmstudio'}>
+                {settingsStore.busy === 'lmstudio' ? 'Checking…' : 'Check again'}
+              </button>
+            {/if}
+          </div>
+          {#if !lmstudio.cli}
+            <p class="hint faint">
+              Start the server in LM Studio's Developer tab. Gitkeen can start it for you once LM Studio has
+              added its <code>lms</code> command, which it does the first time it opens.
+            </p>
+          {/if}
+        {:else if lmstudio.models.length === 0}
+          {#if lmstudioDownloaded?.length}
+            <div class="row">
+              <label class="state" for="lmstudio-load">Load</label>
+              <select id="lmstudio-load" bind:value={loadChoice} disabled={settingsStore.busy === 'lmstudio'}>
+                {#each lmstudioDownloaded as model (model.key)}
+                  <option value={model.key}>{model.name} ({(model.size / 1e9).toFixed(1)} GB)</option>
+                {/each}
+              </select>
+              <button
+                class="primary"
+                onclick={() => settingsStore.loadLmstudio(loadChoice || lmstudioDownloaded[0].key)}
+                disabled={settingsStore.busy === 'lmstudio'}
+              >
+                {settingsStore.busy === 'lmstudio' ? 'Loading…' : 'Load'}
+              </button>
+            </div>
+            <p class="hint faint">The server is running with no model loaded. A smaller model answers faster.</p>
+          {:else}
+            <p class="state">The server is running, but no model is downloaded in LM Studio yet.</p>
+            <a class="get" href="https://lmstudio.ai/models" target="_blank" rel="noreferrer noopener">Find a model for LM Studio ↗</a>
+          {/if}
+        {:else}
+          <div class="row">
+            <label class="state" for="lmstudio-model">Model</label>
+            <select
+              id="lmstudio-model"
+              value={row.model ?? ''}
+              onchange={(e) => settingsStore.chooseModel('lmstudio', e.currentTarget.value)}
+              disabled={settingsStore.busy === 'lmstudio'}
+            >
+              {#each lmstudio.models as model (model)}
+                <option value={model}>{model}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+      {:else if row.keyless}
         <!--
           A local server takes no key: it is available exactly when it is
           running, so the only useful control is a way to look again after
@@ -105,6 +260,9 @@
             {settingsStore.busy === row.id ? 'Checking…' : 'Check again'}
           </button>
         </div>
+        {#if !row.configured && row.console}
+          <a class="get" href={row.console} target="_blank" rel="noreferrer noopener">{row.consoleLabel} ↗</a>
+        {/if}
       {:else if row.source === 'environment'}
         <!--
           An exported variable wins over anything saved here, so offering a
@@ -136,13 +294,13 @@
             <button class="secondary" onclick={() => disconnect(row.id)}>Disconnect</button>
           {/if}
         </div>
-        <p class="hint">
-          {#if row.saved}A key is saved. It cannot be shown again, so changing it means pasting a new one.{/if}
-          {#if row.console}
-            <a href={row.console} target="_blank" rel="noreferrer noopener">Get a key</a>
-          {/if}
-          or set <code>{row.variable}</code> in your environment.
-        </p>
+        {#if row.saved}
+          <p class="hint">A key is saved. It cannot be shown again, so changing it means pasting a new one.</p>
+        {/if}
+        {#if row.console}
+          <a class="get" href={row.console} target="_blank" rel="noreferrer noopener">{row.consoleLabel} ↗</a>
+        {/if}
+        <p class="hint faint">Or set <code>{row.variable}</code> in your environment instead of saving a key here.</p>
       {/if}
     </section>
   {/each}
@@ -174,11 +332,15 @@
           <button class="secondary" onclick={() => disconnect('github')}>Disconnect</button>
         {/if}
       </div>
-      <p class="hint">
-        {#if githubStore.status?.tokenSource === 'gh'}Using the GitHub CLI's sign-in for now. A token saved here takes over.{/if}
-        {#if settingsStore.github?.saved}A token is saved. It cannot be shown again.{/if}
-        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer noopener">Create a token</a>
-        with access to this repository and Pull requests (read and write), Commit statuses and Actions (read).
+      {#if githubStore.status?.tokenSource === 'gh' || settingsStore.github?.saved}
+        <p class="hint">
+          {#if githubStore.status?.tokenSource === 'gh'}Using the GitHub CLI's sign-in for now. A token saved here takes over.{/if}
+          {#if settingsStore.github?.saved}A token is saved. It cannot be shown again.{/if}
+        </p>
+      {/if}
+      <a class="get" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer noopener">Create a GitHub token ↗</a>
+      <p class="hint faint">
+        Give it access to this repository, with Pull requests (read and write), and Commit statuses and Actions (read).
       </p>
     {/if}
   </section>
@@ -341,7 +503,59 @@
     line-height: 1.5;
   }
 
-  .hint a { color: var(--accent); }
+  .hint.faint { color: var(--text-faint); }
+  .hint.error { color: var(--danger); }
+
+  .row .state { flex: 1; margin: 0; }
+  label.state { flex: none; }
+
+  select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  select:focus { border-color: var(--accent); outline: none; }
+
+  .bar {
+    height: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+    background: var(--bg-sunken);
+    border-radius: 2px;
+  }
+  .bar span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  .link {
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .link:hover { text-decoration: underline; }
+
+  /* Where to get a key or the app, on a line of its own so it reads as the next step. */
+  .get {
+    display: inline-block;
+    margin-top: 8px;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .get:hover { text-decoration: underline; }
 
   code {
     padding: 0 3px;

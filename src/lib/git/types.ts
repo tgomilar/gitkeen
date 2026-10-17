@@ -126,6 +126,49 @@ export interface SuggestProviders {
   models: Record<string, string>;
 }
 
+/** A model download into Ollama, as far as it has got. */
+export interface ModelPull {
+  model: string;
+  /** Ollama's own word for the step, such as "pulling manifest" or "success". */
+  status: string;
+  /** Bytes of the layer being downloaded, so far and in all. Zero between layers. */
+  completed: number;
+  total: number;
+  done: boolean;
+  error: string | null;
+}
+
+/** What is missing before Ollama can be used, for the settings panel. */
+export interface OllamaStatus {
+  installed: boolean;
+  running: boolean;
+  /** The models downloaded so far. */
+  models: string[];
+  /** The model offered when none is downloaded. */
+  recommended: string;
+  /** True when the recommended model is downloaded, under any of its names. */
+  hasRecommended: boolean;
+  pull: ModelPull | null;
+}
+
+/** What is missing before LM Studio can be used, for the settings panel. */
+export interface LmstudioStatus {
+  installed: boolean;
+  /** True when its server answers. */
+  running: boolean;
+  /** True when its `lms` command was found, which starting and loading need. */
+  cli: boolean;
+  /** The chat models the server can answer with. */
+  models: string[];
+}
+
+/** A model downloaded in LM Studio, which can be loaded. */
+export interface LmstudioModel {
+  key: string;
+  name: string;
+  size: number;
+}
+
 /** One commit a change could be split into, when it holds unrelated work. */
 export interface SuggestedGroup {
   /** What this group of files is, in a few words. */

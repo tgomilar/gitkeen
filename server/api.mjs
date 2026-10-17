@@ -8,7 +8,10 @@
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
 import { readCommitRules, validateMessage } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders, explain, isProvider } from './suggest.mjs';
-import { keyStatus, writeKey, writeProvider } from './settings.mjs';
+import { keyStatus, writeKey, writeProvider, writeModel } from './settings.mjs';
+import {
+  ollamaStatus, startOllama, pullModel, lmstudioStatus, startLmstudio, lmstudioDownloaded, loadLmstudio
+} from './local-ai.mjs';
 import * as recovery from './recovery.mjs';
 import { githubToken, githubRepo, github, shapePull, commitChecks } from './github.mjs';
 import * as consoleRules from './console.mjs';
@@ -3299,6 +3302,79 @@ export const methods = {
       throw new GitError(`Could not save the choice: ${err?.message ?? err}`, { command: '', stderr: '', code: 1 });
     }
     return suggestionProviders();
+  },
+
+  /**
+   * Use this model for a local provider from now on. An empty model forgets
+   * the choice, so the first one the server lists is used again.
+   */
+  async 'settings.setModel'({ provider, model }) {
+    if (!isProvider(provider)) throw new GitError(`Unknown provider "${provider}".`, { command: '', stderr: '', code: 1 });
+    try {
+      await writeModel(provider, model || null);
+    } catch (err) {
+      throw new GitError(`Could not save the choice: ${err?.message ?? err}`, { command: '', stderr: '', code: 1 });
+    }
+    return suggestionProviders();
+  },
+
+  /**
+   * Whether Ollama is installed, running and has a model, so the panel can
+   * offer the one step that is missing. Also reports a download in progress.
+   */
+  async 'ai.ollamaStatus'() {
+    return ollamaStatus();
+  },
+
+  /** Start the Ollama the user installed, and wait until it answers. */
+  async 'ai.startOllama'() {
+    try {
+      return await startOllama();
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: 'ollama serve', stderr: '', code: 1 });
+    }
+  },
+
+  /** Start downloading a model into Ollama. Progress comes from `ai.ollamaStatus`. */
+  async 'ai.pullModel'({ model }) {
+    try {
+      pullModel(model);
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: `ollama pull ${model}`, stderr: '', code: 1 });
+    }
+    return ollamaStatus();
+  },
+
+  /** Whether LM Studio is installed and its server running, and the models it serves. */
+  async 'ai.lmstudioStatus'() {
+    return lmstudioStatus();
+  },
+
+  /** Start LM Studio's server with its `lms` command, and wait until it answers. */
+  async 'ai.startLmstudio'() {
+    try {
+      return await startLmstudio();
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: 'lms server start', stderr: '', code: 1 });
+    }
+  },
+
+  /** The chat models downloaded in LM Studio, offered when none is loaded. */
+  async 'ai.lmstudioDownloaded'() {
+    try {
+      return await lmstudioDownloaded();
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: 'lms ls', stderr: '', code: 1 });
+    }
+  },
+
+  /** Load one downloaded model into LM Studio. */
+  async 'ai.loadLmstudio'({ model }) {
+    try {
+      return await loadLmstudio(model);
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: `lms load ${model}`, stderr: '', code: 1 });
+    }
   },
 
   /**

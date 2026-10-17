@@ -12,13 +12,12 @@
  */
 import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
-import { choose, prompt } from './dialogs.svelte';
 import { toChange } from '../changes';
 import type { SigningInfo } from '../git/types';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
 import type {
-  HeadCommit, PushOptions, Stash, StashFile, SuggestProviders, KeyStatus, SuggestedGroup
+  HeadCommit, PushOptions, Stash, StashFile, SuggestProviders, SuggestedGroup
 } from '../git/types';
 
 class CommitStore {
@@ -281,74 +280,6 @@ class CommitStore {
     } catch {
       this.suggestProviders = { available: [], preferred: null, models: {} };
     }
-  }
-
-  /**
-   * Connect a provider by pasting a key.
-   *
-   * There is no browser sign-in to offer: neither Anthropic nor OpenAI issues
-   * inference keys through an authorisation flow, so a key from their console
-   * is the only thing that works. It is sent straight to the backend and saved
-   * outside every repository; it is never held in the browser and never read
-   * back, so changing it means pasting a new one.
-   */
-  async connectProvider(): Promise<boolean> {
-    const repo = repoStore.repo;
-    if (!repo) return false;
-
-    let status: KeyStatus;
-    try {
-      status = await repo.keyStatus();
-    } catch (err) {
-      toasts.error('Could not read the settings', describe(err));
-      return false;
-    }
-
-    const labels: Record<string, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
-    const chosen = await choose({
-      title: 'Connect an AI provider',
-      message: `Paste a key from the provider's console. It is saved in ${status.file}, outside every repository.`,
-      choices: Object.entries(labels).map(([value, label]) => {
-        const state = status.providers[value];
-        return {
-          value,
-          label,
-          detail: state?.source === 'environment'
-            ? `Currently using ${state.variable} from the environment`
-            : state?.saved
-              ? 'A key is saved. Pasting a new one replaces it.'
-              : `Not connected. Or set ${state?.variable ?? ''} instead.`
-        };
-      }),
-      confirmLabel: 'Continue'
-    });
-    if (!chosen) return false;
-
-    const key = await prompt({
-      title: `${labels[chosen]} key`,
-      message: status.providers[chosen]?.saved
-        ? 'Paste a new key to replace the saved one, or leave it empty to disconnect.'
-        : 'Paste the key. Leave it empty to cancel.',
-      input: {
-        label: 'API key',
-        value: '',
-        placeholder: chosen === 'anthropic' ? 'sk-ant-…' : 'sk-…',
-        // An empty value means "disconnect", so it cannot be rejected here.
-        validate: () => null
-      },
-      confirmLabel: 'Save'
-    });
-    if (key === null) return false;
-
-    const saved = await this.run('Saving the key', () => repo.setKey(chosen, key));
-    if (!saved) return false;
-
-    await this.loadSuggestProviders();
-    toasts.success(
-      key.trim() ? `Connected ${labels[chosen]}` : `Disconnected ${labels[chosen]}`,
-      key.trim() ? 'The Suggest button is ready to use.' : null
-    );
-    return true;
   }
 
   canSuggest = $derived(

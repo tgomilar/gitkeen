@@ -34,6 +34,31 @@ When more than one is set up, the one marked **In use** answers. Press **Use
 this** on another to switch. Gitkeen remembers the choice. If the chosen one
 stops running or loses its key, the next one that works is used instead.
 
+### Setting up Ollama
+
+Ollama can be set up from Settings, without a terminal. Its row shows the one
+step that is still missing:
+
+| What Settings says | What to do |
+|---|---|
+| Not installed | Press **Download Ollama**, install it, then press **Check again**. |
+| Installed, but not running | Press **Start Ollama**. On a Mac this opens the Ollama app, which stays in the menu bar. |
+| No model is downloaded yet | Press **Download llama3.2:3b**. It is about 2 GB and is downloaded once. You can close Settings while it downloads. |
+| Model | Choose which downloaded model writes the answers. Gitkeen remembers the choice. |
+
+### Setting up LM Studio
+
+LM Studio works the same way. Gitkeen uses LM Studio's `lms` command, which
+LM Studio adds the first time it opens.
+
+| What Settings says | What to do |
+|---|---|
+| Not installed | Press **Download LM Studio**, install it, open it once, then press **Check again**. |
+| Installed, but its server is not running | Press **Start server**. |
+| No model loaded | Choose a downloaded model and press **Load**. A large model can take a minute. |
+| No model downloaded | Download one in LM Studio first. Gitkeen does not download models for LM Studio. |
+| Model | Choose which model writes the answers. Embedding models are left out, because they cannot write text. |
+
 | Where | What it does |
 |---|---|
 | Commit panel, the sparkle button | Writes a commit subject from the staged change, following the repository's commit rules. |

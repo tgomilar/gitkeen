@@ -14,6 +14,7 @@
   import StashSection from './StashSection.svelte';
   import { repoStore } from '../state/repo.svelte';
   import { commitStore } from '../state/commit.svelte';
+  import { settingsStore } from '../state/settings.svelte';
   import {
     commitChanges, commitAndPush, rollbackChanges, changeMenuItems, openChange,
     stashChanges, stashMenuItems
@@ -376,8 +377,8 @@
       {:else if commitStore.suggestProviders}
         <button
           class="secondary suggest"
-          onclick={() => commitStore.connectProvider()}
-          title="Connect Anthropic or OpenAI to suggest commit messages"
+          onclick={() => settingsStore.show()}
+          title="Set up an AI provider to suggest commit messages"
         >
           Suggest…
         </button>

@@ -12,7 +12,8 @@
  * anywhere. They differ only in URL, headers and response shape, so each is a
  * small record and the rest of the file is shared.
  */
-import { readKey, readProvider, KEY_ENV } from './settings.mjs';
+import { readKey, readProvider, readModel, KEY_ENV } from './settings.mjs';
+import { ollamaModels, lmstudioModels } from './local-ai.mjs';
 
 /**
  * How much of a diff is worth sending.
@@ -174,37 +175,30 @@ async function key(name) {
   return readKey(name);
 }
 
-/** The two local providers are offered only when they are actually running. */
-const LOCAL_PROBE = {
-  ollama: {
-    url: () => PROVIDERS.ollama.url.replace('/api/chat', '/api/tags'),
-    // { models: [{ name: 'llama3.2' }] }
-    models: (json) => (json?.models ?? []).map((m) => m?.name).filter(Boolean)
-  },
-  lmstudio: {
-    url: () => PROVIDERS.lmstudio.url.replace('/chat/completions', '/models'),
-    // { data: [{ id: 'google/gemma-4-e4b' }] }
-    models: (json) => (json?.data ?? []).map((m) => m?.id).filter(Boolean)
-  }
-};
+/**
+ * The two local providers are offered only when they are actually running.
+ * Each answers with the names of the models it can use, or null when nothing
+ * is listening; the names matter because a local server runs whichever model
+ * the user chose, so the one to ask for cannot be known in advance.
+ */
+const LOCAL_PROBE = { ollama: ollamaModels, lmstudio: lmstudioModels };
+
+const localModels = (name) => LOCAL_PROBE[name]?.() ?? null;
 
 /**
- * Ask a local server what it has loaded.
+ * The model a local server should be asked for.
  *
- * Returns the model names, or null when nothing is listening. The names matter
- * because a local server runs whichever model the user chose, so the one to
- * ask for cannot be known in advance.
+ * A variable wins, as it does for keys. Then the model chosen in Settings,
+ * while the server still has it, and otherwise the first one it lists. With
+ * nothing listed there is no model to ask for, so the answer is null rather
+ * than a default name the server would reject.
  */
-async function localModels(name) {
-  const probe = LOCAL_PROBE[name];
-  if (!probe) return null;
-  try {
-    const res = await fetch(probe.url(), { signal: AbortSignal.timeout(600) });
-    if (!res.ok) return null;
-    return probe.models(await res.json());
-  } catch {
-    return null;
-  }
+async function localModel(name, loaded) {
+  const env = process.env[PROVIDERS[name].modelEnv];
+  if (env) return env;
+  const saved = await readModel(name);
+  if (saved && loaded.includes(saved)) return saved;
+  return loaded[0] ?? null;
 }
 
 /** True for a provider Gitkeen knows, so a choice can be checked before it is saved. */
@@ -224,7 +218,7 @@ export async function suggestionProviders() {
     if (LOCAL_PROBE[name]) {
       const loaded = await localModels(name);
       if (loaded === null) continue;
-      const chosen = process.env[PROVIDERS[name].modelEnv] || loaded[0] || PROVIDERS[name].model;
+      const chosen = await localModel(name, loaded);
       // A server that is running with nothing loaded cannot answer, so it is
       // not offered: the button would be there only to fail.
       if (!chosen) continue;
@@ -465,9 +459,8 @@ async function requestProvider(name, system, user, maxTokens) {
     throw new Error(`No ${provider.label} key. Add one in Settings, or set ${provider.env}.`);
   }
   let model = process.env[provider.modelEnv] || provider.model;
-  if (LOCAL_PROBE[name] && !process.env[provider.modelEnv]) {
-    const loaded = await localModels(name);
-    model = loaded?.[0] || model;
+  if (LOCAL_PROBE[name]) {
+    model = await localModel(name, (await localModels(name)) ?? []);
     if (!model) throw new Error(`${provider.label} has no model loaded.`);
   }
 

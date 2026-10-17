@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
+  KeyStatus, OllamaStatus, LmstudioStatus, LmstudioModel, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
 } from './types';
 
 export class GitRepository {
@@ -239,6 +239,46 @@ export class GitRepository {
   /** Choose the AI provider that suggestions and explanations use. */
   setProvider(provider: string): Promise<SuggestProviders> {
     return transport.call('settings.setProvider', { provider });
+  }
+
+  /** Use this model for a local provider. An empty string forgets the choice. */
+  setModel(provider: string, model: string): Promise<SuggestProviders> {
+    return transport.call('settings.setModel', { provider, model });
+  }
+
+  /** Whether Ollama is installed, running and has a model. */
+  ollamaStatus(): Promise<OllamaStatus> {
+    return transport.call('ai.ollamaStatus', {});
+  }
+
+  /** Start Ollama and wait until it answers. */
+  startOllama(): Promise<OllamaStatus> {
+    return transport.call('ai.startOllama', {});
+  }
+
+  /** Start downloading a model into Ollama. */
+  pullModel(model: string): Promise<OllamaStatus> {
+    return transport.call('ai.pullModel', { model });
+  }
+
+  /** Whether LM Studio is installed and its server running. */
+  lmstudioStatus(): Promise<LmstudioStatus> {
+    return transport.call('ai.lmstudioStatus', {});
+  }
+
+  /** Start LM Studio's server and wait until it answers. */
+  startLmstudio(): Promise<LmstudioStatus> {
+    return transport.call('ai.startLmstudio', {});
+  }
+
+  /** The chat models downloaded in LM Studio. */
+  lmstudioDownloaded(): Promise<LmstudioModel[]> {
+    return transport.call('ai.lmstudioDownloaded', {});
+  }
+
+  /** Load a downloaded model into LM Studio. */
+  loadLmstudio(model: string): Promise<LmstudioStatus> {
+    return transport.call('ai.loadLmstudio', { model });
   }
 
   /** Which AI providers are configured on the backend. */

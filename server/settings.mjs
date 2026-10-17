@@ -118,6 +118,26 @@ export async function writeProvider(provider) {
   await writeSettings(next);
 }
 
+/**
+ * The model chosen for a local provider, or null to use whichever it lists
+ * first. A local server can hold several, and the first is not always the one
+ * the user wants writing their commit messages.
+ */
+export async function readModel(provider) {
+  const settings = await readFileSettings();
+  const model = settings.models?.[provider];
+  return typeof model === 'string' && model ? model : null;
+}
+
+/** Remember which model a local provider should use. Null forgets the choice. */
+export async function writeModel(provider, model) {
+  const settings = await readFileSettings();
+  const models = { ...(settings.models ?? {}) };
+  if (model) models[provider] = model;
+  else delete models[provider];
+  await writeSettings({ ...settings, models });
+}
+
 async function writeSettings(next) {
   await mkdir(dirname(FILE), { recursive: true });
   // Written 0600 before anything is in it, so the key is never briefly

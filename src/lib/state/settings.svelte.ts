@@ -10,7 +10,7 @@ import { repoStore, describe } from './repo.svelte';
 import { githubStore } from './github.svelte';
 import { toasts } from './toasts.svelte';
 import { commitStore } from './commit.svelte';
-import type { KeyStatus, SuggestProviders } from '../git/types';
+import type { KeyStatus, LmstudioModel, LmstudioStatus, OllamaStatus, SuggestProviders } from '../git/types';
 
 /** Everything the panel shows about one provider, ready to render. */
 export interface ProviderRow {
@@ -27,38 +27,44 @@ export interface ProviderRow {
   /** True when this is the provider a suggestion would actually use. */
   preferred: boolean;
   model: string | null;
-  /** Where to get a key, shown next to the field. */
+  /** Where to get a key, or the app itself for a local provider. */
   console: string | null;
+  /** The words of that link, naming where it leads. */
+  consoleLabel: string;
 }
 
 const CATALOGUE = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    detail: 'Claude. Fast and inexpensive for one-line summaries.',
-    keyless: false,
-    console: 'https://console.anthropic.com/settings/keys'
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI',
-    detail: 'GPT. Needs API credits, which are separate from a ChatGPT plan.',
-    keyless: false,
-    console: 'https://platform.openai.com/api-keys'
-  },
   {
     id: 'lmstudio',
     label: 'LM Studio',
     detail: 'Runs on this machine, using whichever model you have loaded. Nothing is sent anywhere.',
     keyless: true,
-    console: 'https://lmstudio.ai'
+    console: 'https://lmstudio.ai',
+    consoleLabel: 'Download LM Studio'
   },
   {
     id: 'ollama',
     label: 'Ollama',
     detail: 'Runs on this machine. No key, no account, and nothing is sent anywhere.',
     keyless: true,
-    console: 'https://ollama.com/download'
+    console: 'https://ollama.com/download',
+    consoleLabel: 'Download Ollama'
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic',
+    detail: 'Claude. Fast and inexpensive for one-line summaries.',
+    keyless: false,
+    console: 'https://console.anthropic.com/settings/keys',
+    consoleLabel: 'Get an Anthropic API key'
+  },
+  {
+    id: 'openai',
+    label: 'OpenAI',
+    detail: 'GPT. Needs API credits, which are separate from a ChatGPT plan.',
+    keyless: false,
+    console: 'https://platform.openai.com/api-keys',
+    consoleLabel: 'Get an OpenAI API key'
   }
 ];
 
@@ -68,6 +74,14 @@ class SettingsStore {
 
   private status = $state<KeyStatus | null>(null);
   private providers = $state<SuggestProviders | null>(null);
+
+  /** Installed, running, which models: what the Ollama row needs to offer the next step. */
+  ollama = $state<OllamaStatus | null>(null);
+  private polling: ReturnType<typeof setInterval> | null = null;
+
+  /** The same for LM Studio, plus what it has downloaded, asked for only when nothing is loaded. */
+  lmstudio = $state<LmstudioStatus | null>(null);
+  lmstudioDownloaded = $state<LmstudioModel[] | null>(null);
 
   /** Where the keys are saved, shown so the user knows what to back up. */
   file = $derived(this.status?.file ?? null);
@@ -113,9 +127,17 @@ class SettingsStore {
     const repo = repoStore.repo;
     if (!repo) return;
     try {
-      const [status, providers] = await Promise.all([repo.keyStatus(), repo.suggestProviders()]);
+      const [status, providers, ollama, lmstudio] = await Promise.all([
+        repo.keyStatus(),
+        repo.suggestProviders(),
+        repo.ollamaStatus(),
+        repo.lmstudioStatus()
+      ]);
       this.status = status;
       this.providers = providers;
+      this.ollama = ollama;
+      if (ollama.pull && !ollama.pull.done) this.watchPull();
+      await this.setLmstudio(lmstudio);
     } catch (err) {
       toasts.error('Could not read the settings', describe(err));
     }
@@ -163,6 +185,136 @@ class SettingsStore {
       toasts.success(`Using ${CATALOGUE.find((p) => p.id === provider)?.label ?? provider}`);
     } catch (err) {
       toasts.error('Could not change the provider', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /**
+   * Use this model for a local provider. The commit panel is told, so its
+   * tooltip and next suggestion name the new model.
+   */
+  async chooseModel(provider: string, model: string) {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    this.busy = provider;
+    try {
+      this.providers = await repo.setModel(provider, model);
+      await commitStore.loadSuggestProviders();
+    } catch (err) {
+      toasts.error('Could not change the model', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /** Start the Ollama the user installed. Takes a few seconds the first time. */
+  async startOllama() {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    this.busy = 'ollama';
+    try {
+      this.ollama = await repo.startOllama();
+      this.providers = await repo.suggestProviders();
+      await commitStore.loadSuggestProviders();
+      toasts.success('Ollama is running', this.ollama.models.length ? null : 'Download a model to start using it.');
+    } catch (err) {
+      toasts.error('Could not start Ollama', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /** Download a model into Ollama. The download runs on the backend, so the panel can close meanwhile. */
+  async pullModel(model: string) {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    try {
+      this.ollama = await repo.pullModel(model);
+      this.watchPull();
+    } catch (err) {
+      toasts.error('Could not start the download', describe(err));
+    }
+  }
+
+  /**
+   * Ask how far the download has got until it ends. A model is gigabytes,
+   * so this keeps going after the panel closes and says when it is done.
+   */
+  private watchPull() {
+    if (this.polling) return;
+    this.polling = setInterval(async () => {
+      const repo = repoStore.repo;
+      if (!repo) return;
+      try {
+        this.ollama = await repo.ollamaStatus();
+      } catch {
+        return;
+      }
+      const pull = this.ollama.pull;
+      if (pull && !pull.done) return;
+      clearInterval(this.polling!);
+      this.polling = null;
+      if (!pull) return;
+      if (pull.error) {
+        toasts.error(`Could not download ${pull.model}`, pull.error);
+        return;
+      }
+      this.providers = await repo.suggestProviders();
+      await commitStore.loadSuggestProviders();
+      toasts.success(`Downloaded ${pull.model}`, 'Ollama is ready to suggest commit messages.');
+    }, 700);
+  }
+
+  /**
+   * Keep LM Studio's state, and when its server runs with nothing loaded,
+   * fetch what could be loaded. That needs its `lms` command, which wakes
+   * LM Studio's background service, so it is asked only in that one case.
+   */
+  private async setLmstudio(next: LmstudioStatus) {
+    this.lmstudio = next;
+    if (!next.running || next.models.length || !next.cli) {
+      this.lmstudioDownloaded = null;
+      return;
+    }
+    try {
+      this.lmstudioDownloaded = await repoStore.repo!.lmstudioDownloaded();
+    } catch {
+      this.lmstudioDownloaded = [];
+    }
+  }
+
+  /** Start LM Studio's server. */
+  async startLmstudio() {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    this.busy = 'lmstudio';
+    try {
+      await this.setLmstudio(await repo.startLmstudio());
+      this.providers = await repo.suggestProviders();
+      await commitStore.loadSuggestProviders();
+      toasts.success('The LM Studio server is running');
+    } catch (err) {
+      toasts.error('Could not start LM Studio', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /** Load a downloaded model into LM Studio, then use it. A large one takes a while. */
+  async loadLmstudio(key: string) {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    // Named now: once a model is loaded, the downloaded list is no longer kept.
+    const name = this.lmstudioDownloaded?.find((m) => m.key === key)?.name ?? key;
+    this.busy = 'lmstudio';
+    try {
+      await this.setLmstudio(await repo.loadLmstudio(key));
+      this.providers = await repo.setModel('lmstudio', key);
+      await commitStore.loadSuggestProviders();
+      toasts.success(`Loaded ${name}`);
+    } catch (err) {
+      toasts.error('Could not load the model', describe(err));
     } finally {
       this.busy = null;
     }

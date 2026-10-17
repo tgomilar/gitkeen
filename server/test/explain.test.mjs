@@ -16,6 +16,8 @@ const server = createServer((req, res) => {
   req.on('end', () => {
     res.setHeader('Content-Type', 'application/json');
     if (req.url === '/v1/models') return res.end(JSON.stringify({ data: [{ id: 'stand-in' }] }));
+    // Like an LM Studio older than its own model listing, so the plain one is read.
+    if (req.method === 'GET') return res.writeHead(404).end('{}');
     requests.push(JSON.parse(body));
     res.end(JSON.stringify(reply));
   });
