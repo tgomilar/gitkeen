@@ -30,9 +30,11 @@ jobs:
         working-directory: site
     steps:
       - uses: actions/checkout@v7
+      # The same npm as on a developer's Mac. npm 10, which Node 22 brings, is
+      # stricter in `npm ci` than npm 11 and refused a lock file npm 11 wrote.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
       - run: npm ci
