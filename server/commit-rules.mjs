@@ -79,7 +79,16 @@ function parseRules(source, filename) {
   if (filename.endsWith('.json') || filename === '.commitlintrc') {
     try {
       const json = JSON.parse(source);
-      return { rules: json.rules ?? {}, extends: [].concat(json.extends ?? []) };
+      // Each rule is `[level, applicable, value]`, the same as in a JS config,
+      // and is turned into the same shape, or the validator would find no
+      // level or value in it and let every message through.
+      for (const [name, entry] of Object.entries(json.rules ?? {})) {
+        if (!Array.isArray(entry) || typeof entry[0] !== 'number') continue;
+        const [level, applicable = 'always', value = null] = entry;
+        if (applicable !== 'always' && applicable !== 'never') continue;
+        rules[name] = { level, applicable, value };
+      }
+      return { rules, extends: [].concat(json.extends ?? []) };
     } catch {
       return { rules: {}, extends: [] };
     }
