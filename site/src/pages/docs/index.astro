@@ -18,7 +18,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       {
         docsNav.map((p) => (
           <tr>
-            <td><a href={`${base}/docs/${p.slug}/`}>{p.title}</a></td>
+            <td>
+              <motion-hover scale="1" x="4">
+                <a href={`${base}/docs/${p.slug}/`}>{p.title}</a>
+              </motion-hover>
+            </td>
             <td>{p.about}</td>
           </tr>
         ))
@@ -26,3 +30,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </tbody>
   </table>
 </Docs>
+
+<script>
+  // Each page link nudges right under the mouse. It does nothing when the
+  // reader asks for reduced motion.
+  import 'motion-components/motion-hover';
+</script>

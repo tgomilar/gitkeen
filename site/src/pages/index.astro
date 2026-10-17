@@ -77,7 +77,11 @@ const files = [
 <Base title="Gitkeen, a visual Git client that works next to any editor">
   <section class="hero wrap">
     <div class="hero-text">
-      <h1>Your editor writes code. Gitkeen looks after your history.</h1>
+      <h1>
+        <motion-headline by="words" variant="flip" interval="0.08">
+          Your editor writes code. Gitkeen looks after your history.
+        </motion-headline>
+      </h1>
       <p class="lede">
         A visual Git client for macOS, Windows and Linux. See the whole commit graph, commit exactly the
         lines you want, and change history with a few clicks. Before anything risky happens, Gitkeen
@@ -107,7 +111,9 @@ const files = [
         Gitkeen sits next to your editor and handles the Git side: commits, branches, history and
         the mistakes you want to take back.
       </p>
-      <a href={docs('getting-started')}>Getting started</a>
+      <a class="more" href={docs('getting-started')}>
+        <motion-underline trigger="hover">Getting started</motion-underline>
+      </a>
     </div>
     <ol class="lane-list">
       {
@@ -126,12 +132,20 @@ const files = [
     {
       tour.map((item) => (
         <article class="tour-item">
-          <div class="tour-text">
-            <h3>{item.title}</h3>
+          <motion-reveal class="tour-text" threshold="0.4" duration="1" y="16">
+            <h3>
+              <motion-underline shape="zigzag">{item.title}</motion-underline>
+            </h3>
             <p>{item.text}</p>
-            <a href={item.link[0]}>{item.link[1]}</a>
-          </div>
-          <img class="tour-media" src={media(item.media)} alt={item.alt} width="1000" height="594" loading="lazy" />
+            <a class="more" href={item.link[0]}>
+              <motion-underline trigger="hover">{item.link[1]}</motion-underline>
+            </a>
+          </motion-reveal>
+          <motion-reveal class="tour-media-wrap" threshold="0.4" duration="1" y="16">
+            <motion-tilt max="6" scale="1.02">
+              <img class="tour-media" src={media(item.media)} alt={item.alt} width="1000" height="594" loading="lazy" />
+            </motion-tilt>
+          </motion-reveal>
         </article>
       ))
     }
@@ -194,6 +208,19 @@ npm run dev</code></pre>
     </ul>
   </section>
 </Base>
+
+<script>
+  // The title flips in word by word. Each tour item rises into place the first
+  // time it scrolls into view, its title draws a zigzag under itself, and its
+  // picture tilts toward the mouse. The "read more" links draw their underline
+  // under the mouse. All of them stay still when the reader asks for reduced
+  // motion.
+  import 'motion-components/motion-headline';
+  import 'motion-components/motion-reveal';
+  import 'motion-components/motion-tilt';
+  import 'motion-components/motion-underline';
+  import 'motion-components/preload.css';
+</script>
 
 <style>
   h2 {
@@ -335,6 +362,21 @@ npm run dev</code></pre>
   .tour-text p {
     color: var(--muted);
     margin: 0 0 12px;
+  }
+
+  .tour-text,
+  .tour-media-wrap,
+  .tour-media-wrap motion-tilt {
+    display: block;
+  }
+
+  .tour-text h3 motion-underline {
+    --mc-mark-color: var(--red);
+  }
+
+  /* motion-underline draws the line, so the link's own one would double it. */
+  .more {
+    text-decoration: none;
   }
 
   .tour-media {

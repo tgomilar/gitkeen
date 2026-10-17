@@ -1,6 +1,8 @@
 ---
 import '../styles/site.css';
 import Zoom from '../components/Zoom.astro';
+import icon from '../../../brand/icon.svg?raw';
+import iconDark from '../../../brand/icon-dark.svg?raw';
 
 interface Props {
   title: string;
@@ -12,6 +14,11 @@ const {
   description = 'Gitkeen is a visual Git client that works next to any editor. Your editor writes code. Gitkeen manages your commits, history and more.',
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+// The header mark redraws its lanes under the mouse. While it draws,
+// motion-icon fades every fill with the lanes; the tile keeps its own, so only
+// the lanes and their dots come back in.
+const steadyTile = (svg: string) => svg.replace('<rect ', '<rect fill-opacity="1" ');
 const path = Astro.url.pathname;
 const inDocs = path.startsWith(`${base}/docs`);
 const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href;
@@ -46,9 +53,11 @@ const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href
     <header class="site-header">
       <div class="wrap header-row">
         <a class="brand" href={`${base}/`} aria-label="Gitkeen home">
+          <motion-icon class="mark light" icon={steadyTile(icon)} animation="draw" trigger="hover"></motion-icon>
+          <motion-icon class="mark dark" icon={steadyTile(iconDark)} animation="draw" trigger="hover"></motion-icon>
           <picture>
-            <source media="(prefers-color-scheme: dark)" srcset={`${base}/brand/logo-dark.svg`} />
-            <img src={`${base}/brand/logo.svg`} alt="Gitkeen" width="145" height="30" />
+            <source media="(prefers-color-scheme: dark)" srcset={`${base}/brand/wordmark-dark.svg`} />
+            <img src={`${base}/brand/wordmark.svg`} alt="Gitkeen" width="103" height="30" />
           </picture>
         </a>
         <nav class="site-nav" aria-label="Main">
@@ -78,5 +87,8 @@ const socialImage = new URL(`${base}/brand/social-preview.png`, Astro.site).href
       </div>
     </footer>
     <Zoom />
+    <script>
+      import 'motion-components/motion-icon';
+    </script>
   </body>
 </html>

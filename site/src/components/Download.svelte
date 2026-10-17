@@ -3,6 +3,7 @@
   // GitHub leaves pre-releases out of "latest", so this links to the Releases
   // page and names the file to choose there (see docs/development.md).
   import { onMount } from 'svelte';
+  import 'motion-components/motion-underline';
 
   const releases = 'https://github.com/tgomilar/gitkeen/releases';
 
@@ -54,11 +55,19 @@
     {#each systems[chosen].files as [label, file], i}
       {#if i > 0}{' or '}{/if}<code>{file}</code>{systems[chosen].files.length > 1 ? ` (${label})` : ''}
     {/each}.
-    You also need Git 2.30 or newer. <a href={installDocs}>Installing Gitkeen</a>
+    You also need Git 2.30 or newer. <a class="install" href={installDocs}
+      ><motion-underline shape="zigzag">Installing Gitkeen</motion-underline></a
+    >
   </p>
 </div>
 
 <style>
+  /* The red zigzag replaces the link's own underline. */
+  .install {
+    text-decoration: none;
+    --mc-mark-color: var(--red);
+  }
+
   .row {
     display: flex;
     flex-wrap: wrap;

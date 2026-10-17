@@ -1,0 +1,69 @@
+---
+import Base from '../layouts/Base.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<Base title="Page not found | Gitkeen">
+  <section class="not-found wrap">
+    <p class="code">
+      <motion-glitch trigger="loop" intensity="6" interval="2.5">404</motion-glitch>
+    </p>
+    <h1>Page not found</h1>
+    <p class="lede">There is no page at this address. It may have moved, or the link may be wrong.</p>
+    <p class="links">
+      <a class="btn" href={`${base}/`}>Go to the home page</a>
+      <a href={`${base}/docs/`}>Read the documentation</a>
+    </p>
+  </section>
+</Base>
+
+<script>
+  // The 404 splits into the logo's colours now and then. It stays still when
+  // the reader asks for reduced motion.
+  import 'motion-components/motion-glitch';
+</script>
+
+<style>
+  .not-found {
+    padding-block: 96px var(--section);
+  }
+
+  .code {
+    margin: 0;
+    font-size: clamp(96px, 18vw, 200px);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--red);
+  }
+
+  h1 {
+    font-size: clamp(30px, 4vw, 40px);
+    margin: 24px 0 12px;
+  }
+
+  .lede {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 52ch;
+    margin: 0 0 32px;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 24px;
+  }
+
+  /* motion-glitch writes its red and cyan copies into the page with inline
+     colours, so these take the logo's other two lanes instead. */
+  .code :global([data-mg-r]) {
+    color: var(--blue) !important;
+  }
+
+  .code :global([data-mg-b]) {
+    color: var(--ink) !important;
+  }
+</style>

@@ -169,10 +169,35 @@ p {
   min-height: 64px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  /* The same space as between the mark and the letters in brand/logo.svg. */
+  gap: 12.5px;
+}
+
 .brand img {
   display: block;
   height: 30px;
   width: auto;
+}
+
+.brand .mark {
+  --mc-icon-size: 30px;
+}
+
+.brand .mark.dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .brand .mark.light {
+    display: none;
+  }
+
+  .brand .mark.dark {
+    display: inline-block;
+  }
 }
 
 .site-nav {
