@@ -12,6 +12,7 @@
    * so rather than showing a masked value that cannot be edited.
    */
   import { settingsStore } from '../state/settings.svelte';
+  import { repoStore } from '../state/repo.svelte';
   import Icon from './Icon.svelte';
   import type { ModelPull } from '../git/types';
 
@@ -19,6 +20,26 @@
   let drafts = $state<Record<string, string>>({});
 
   const rows = $derived(settingsStore.rows);
+  const rules = $derived(settingsStore.commitRules);
+  const repoRules = $derived(repoStore.info?.commitRules ?? null);
+
+  /** A type being typed, added on Enter or when the field loses focus. */
+  let newType = $state('');
+  function addType() {
+    const type = newType.trim().toLowerCase();
+    newType = '';
+    if (!rules || !/^[a-z][a-z0-9-]*$/.test(type) || rules.types.includes(type)) return;
+    settingsStore.saveCommitRules({ types: [...rules.types, type] });
+  }
+
+  /** Opened from the rules hint under the message box, the panel scrolls to its section. */
+  let commitSection = $state<HTMLElement | null>(null);
+  $effect(() => {
+    if (settingsStore.focus === 'commit' && commitSection) {
+      commitSection.scrollIntoView({ block: 'start' });
+      settingsStore.focus = null;
+    }
+  });
   const ollama = $derived(settingsStore.ollama);
   const pull = $derived(ollama?.pull ?? null);
   const lmstudio = $derived(settingsStore.lmstudio);
@@ -68,12 +89,115 @@
 
 <div class="panel" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
   <header>
-    <h2>AI and GitHub</h2>
+    <h2>Settings</h2>
     <button class="close" onclick={() => settingsStore.hide()} aria-label="Close settings">
       <Icon name="close" size={14} />
     </button>
   </header>
 
+  <!--
+    Commit rules for repositories that have none of their own. A repository's
+    commitlint config or commit-msg hook always wins, so the section says which
+    applies to the open one before offering anything to change.
+  -->
+  <section class="group" id="settings-commit" bind:this={commitSection}>
+    <h3>Commit messages</h3>
+    {#if repoRules?.source === 'commitlint'}
+      <p class="note">
+        This repository has its own rules, in <code>{repoRules.file}</code>, and they apply here.
+        The rules below are for repositories without any.
+      </p>
+    {:else if repoRules?.source === 'hook'}
+      <p class="note">
+        This repository checks messages with <code>{repoRules.file}</code>, so the rules below
+        are not applied here.
+      </p>
+    {/if}
+    {#if rules}
+      <label class="check">
+        <input type="checkbox" checked={rules.enabled} onchange={(e) => settingsStore.saveCommitRules({ enabled: e.currentTarget.checked })} />
+        Check messages in repositories that have no rules of their own
+      </label>
+      {#if rules.enabled}
+        <div class="fields">
+          <label for="rules-format">Format</label>
+          <select id="rules-format" value={rules.format} onchange={(e) => settingsStore.saveCommitRules({ format: e.currentTarget.value as 'conventional' | 'free' })}>
+            <option value="conventional">Conventional Commits, as in feat: add a button</option>
+            <option value="free">Free text</option>
+          </select>
+
+          {#if rules.format === 'conventional'}
+            <span class="label">Types</span>
+            <div class="types">
+              {#each rules.types as type (type)}
+                <span class="type">
+                  {type}
+                  <button
+                    onclick={() => settingsStore.saveCommitRules({ types: rules.types.filter((t) => t !== type) })}
+                    disabled={rules.types.length === 1}
+                    aria-label={`Remove the type ${type}`}
+                  >×</button>
+                </span>
+              {/each}
+              <input
+                class="add-type"
+                bind:value={newType}
+                placeholder="Add a type"
+                spellcheck="false"
+                aria-label="Add a type"
+                onkeydown={(e) => e.key === 'Enter' && addType()}
+                onblur={addType}
+              />
+            </div>
+
+            <label for="rules-scope">Scope</label>
+            <select id="rules-scope" value={rules.scope} onchange={(e) => settingsStore.saveCommitRules({ scope: e.currentTarget.value as 'none' | 'optional' | 'required' })}>
+              <option value="none">Not allowed, as in feat: add a button</option>
+              <option value="optional">Optional, as in feat(ui): add a button</option>
+              <option value="required">Required, as in feat(ui): add a button</option>
+            </select>
+          {/if}
+
+          <label for="rules-max">First line</label>
+          <span class="inline">
+            at most
+            <input
+              id="rules-max"
+              class="number"
+              type="number"
+              min="20"
+              max="200"
+              value={rules.maxHeader}
+              onchange={(e) => settingsStore.saveCommitRules({ maxHeader: Number(e.currentTarget.value) })}
+            />
+            characters
+          </span>
+
+          <span class="label"></span>
+          <label class="check">
+            <input type="checkbox" checked={rules.noFullStop} onchange={(e) => settingsStore.saveCommitRules({ noFullStop: e.currentTarget.checked })} />
+            No full stop at the end of the first line
+          </label>
+        </div>
+        <p class="hint faint">
+          Suggest follows these rules too, and fixes a missing type or colon in what the AI writes.
+        </p>
+      {/if}
+      {#if repoRules?.source === 'gitkeen' || (repoRules?.source === 'none' && rules.enabled)}
+        <div class="row share">
+          <p class="state">
+            Save these rules into this repository, so everyone on the project and commitlint follow them.
+          </p>
+          <button class="secondary" onclick={() => settingsStore.writeCommitlint()} disabled={settingsStore.busy === 'commit-rules'}>
+            Save to this repository
+          </button>
+        </div>
+        <p class="hint faint">This writes <code>.commitlintrc.json</code>. Commit it to share the rules.</p>
+      {/if}
+    {/if}
+  </section>
+
+  <h3 class="group-head">AI</h3>
   <p class="intro">
     Gitkeen can write the subject line from the change you are about to commit,
     and explain commits, conflicts and errors. Press Use this to pick where that
@@ -305,6 +429,7 @@
     </section>
   {/each}
 
+  <h3 class="group-head">GitHub</h3>
   <section class="provider github" class:on={githubStore.connected}>
     <div class="head">
       <span class="name">GitHub</span>
@@ -408,6 +533,95 @@
     line-height: 1.5;
   }
 
+  h3 {
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .group-head {
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-strong);
+  }
+
+  .group { padding-bottom: 14px; }
+
+  .note {
+    margin: 0 0 10px;
+    padding: 6px 8px;
+    background: var(--bg-sunken);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  .check input { accent-color: var(--accent); }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+  }
+  .fields > label, .fields > .label {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .fields .check { grid-column: 2; }
+
+  .types {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .type {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 3px 1px 7px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .type button {
+    padding: 0 4px;
+    background: none;
+    border: 0;
+    color: var(--text-faint);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .type button:hover:not(:disabled) { color: var(--danger); }
+  .type button:disabled { opacity: 0.3; cursor: default; }
+  .types input.add-type {
+    flex: 0 1 90px;
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+
+  .inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .inline input.number { flex: 0 0 64px; }
+
+  .share { margin-top: 12px; }
+
   .provider {
     padding: 12px 0;
     border-top: 1px solid var(--border);
@@ -458,7 +672,7 @@
     gap: 6px;
   }
 
-  input {
+  input:not([type='checkbox']) {
     flex: 1;
     min-width: 0;
     padding: 5px 8px;
@@ -469,7 +683,7 @@
     font-family: var(--font-mono);
     font-size: 12px;
   }
-  input:focus { border-color: var(--accent); outline: none; }
+  input:not([type='checkbox']):focus { border-color: var(--accent); outline: none; }
 
   .primary, .secondary {
     flex: none;

@@ -6,7 +6,7 @@
  * with the same names and argument shapes, and the UI is unaffected.
  */
 import { git, runGit, resolveRepository, gitVersion, GitError } from './git.mjs';
-import { readCommitRules, validateMessage } from './commit-rules.mjs';
+import { readCommitRules, validateMessage, readGitkeenRules, writeGitkeenRules, writeCommitlintFile } from './commit-rules.mjs';
 import { suggestSubject, suggestionProviders, explain, isProvider } from './suggest.mjs';
 import { keyStatus, writeKey, writeProvider, writeModel } from './settings.mjs';
 import {
@@ -1336,6 +1336,31 @@ export const methods = {
    */
   async 'repo.commitRules'({ path }) {
     return readCommitRules(path);
+  },
+
+  /**
+   * Write Gitkeen's rules into the repository as `.commitlintrc.json`, so
+   * they travel with it. Refused when the repository has rules already.
+   */
+  async 'repo.writeCommitlint'({ path }) {
+    try {
+      return await writeCommitlintFile(path);
+    } catch (err) {
+      throw new GitError(err?.message ?? String(err), { command: '', stderr: '', code: 1 });
+    }
+  },
+
+  /** The commit message rules chosen in Settings, for repositories without their own. */
+  async 'settings.commitRules'() {
+    return readGitkeenRules();
+  },
+
+  async 'settings.setCommitRules'({ rules }) {
+    try {
+      return await writeGitkeenRules(rules);
+    } catch (err) {
+      throw new GitError(`Could not save the rules: ${err?.message ?? err}`, { command: '', stderr: '', code: 1 });
+    }
   },
 
   async 'repo.status'({ path }) {

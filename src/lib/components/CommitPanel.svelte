@@ -311,12 +311,16 @@
         {/each}
         {#if commitStore.rules?.file}
           <p class="origin">from {commitStore.rules.file}</p>
+        {:else if commitStore.rules?.source === 'gitkeen'}
+          <p class="origin">from <button class="rules-link" onclick={() => settingsStore.show('commit')}>Gitkeen settings</button></p>
         {/if}
       {:else if commitStore.rulesHint}
         <p class="hint">
           {commitStore.rulesHint}
           {#if commitStore.rules?.file}
             <span class="origin">· {commitStore.rules.file}</span>
+          {:else if commitStore.rules?.source === 'gitkeen'}
+            <span class="origin">· <button class="rules-link" onclick={() => settingsStore.show('commit')} title="Change the rules">Gitkeen settings</button></span>
           {/if}
         </p>
       {/if}
@@ -332,7 +336,7 @@
       <SuggestWaiting
         files={commitStore.checkedPaths}
         model={commitStore.suggestProviders?.models[commitStore.suggestProviders?.preferred ?? ''] ?? null}
-        rulesFrom={commitStore.rules?.file ?? null}
+        rulesFrom={commitStore.rules?.file ?? (commitStore.rules?.source === 'gitkeen' ? 'your Gitkeen rules' : null)}
       />
     {:else if commitStore.splitGroups.length > 0}
       <div class="split">
@@ -708,6 +712,19 @@
     font-family: var(--font-mono);
   }
   .problem + .origin { padding-left: 15px; }
+
+  .rules-link {
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong);
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .rules-link:hover { color: var(--accent); text-decoration-color: currentColor; }
 
   .suggest {
     display: inline-flex;

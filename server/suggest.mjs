@@ -293,7 +293,10 @@ function systemPrompt(rules, { split = false } = {}) {
 
   const noScope = enforced['scope-empty']?.applicable === 'always';
 
-  if (rules?.source === 'commitlint') {
+  // Gitkeen's own rules are commitlint's rules by another source, unless
+  // they ask for free text, which has no type to name.
+  const conventional = (rules?.source === 'commitlint' || rules?.source === 'gitkeen') && rules?.format !== 'free';
+  if (conventional) {
     lines.push(
       noScope
         ? 'Follow Conventional Commits, without a scope: type: subject.'
@@ -786,7 +789,8 @@ const VERB_TYPES = {
  */
 export function repairSubject(subject, rules, { files = [], fallbackType = null } = {}) {
   let text = (subject ?? '').trim();
-  if (!text || rules?.source !== 'commitlint' || !rules?.enforced) return text;
+  const conventional = (rules?.source === 'commitlint' || rules?.source === 'gitkeen') && rules?.format !== 'free';
+  if (!text || !conventional || !rules?.enforced) return text;
 
   const enforced = rules.rules ?? {};
   const types = Array.isArray(rules.types) && rules.types.length ? rules.types : null;

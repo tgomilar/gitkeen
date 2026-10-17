@@ -19,9 +19,10 @@ import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 
-const FILE = process.env.GITKEEN_CONFIG || join(homedir(), '.config', 'gitkeen', 'config.json');
+// Read each time, so a test can point it elsewhere after this module loads.
+const configFile = () => process.env.GITKEEN_CONFIG || join(homedir(), '.config', 'gitkeen', 'config.json');
 // Where the settings lived while the app was called Gitalia. Read only until
-// the first save, which writes everything to FILE.
+// the first save, which writes everything to the new file.
 const LEGACY_FILE = join(homedir(), '.config', 'gitalia', 'config.json');
 
 /** The providers a key can be stored for, and the variable that overrides it. */
@@ -34,7 +35,7 @@ export const KEY_ENV = {
 
 async function readFileSettings() {
   try {
-    const raw = await readFile(FILE, 'utf8').catch((err) => {
+    const raw = await readFile(configFile(), 'utf8').catch((err) => {
       if (err.code !== 'ENOENT' || process.env.GITKEEN_CONFIG) throw err;
       return readFile(LEGACY_FILE, 'utf8');
     });
@@ -81,7 +82,7 @@ export async function keyStatus() {
       saved: Boolean(saved)
     };
   }
-  return { file: FILE, providers: status };
+  return { file: configFile(), providers: status };
 }
 
 /**
@@ -138,12 +139,27 @@ export async function writeModel(provider, model) {
   await writeSettings({ ...settings, models });
 }
 
+/**
+ * The commit message rules chosen in Settings, as saved, or null when none
+ * were. They apply to a repository that has no rules of its own; the rules
+ * module fills in the defaults and checks the values.
+ */
+export async function readCommitRuleSettings() {
+  const settings = await readFileSettings();
+  return settings.commitRules && typeof settings.commitRules === 'object' ? settings.commitRules : null;
+}
+
+export async function writeCommitRuleSettings(rules) {
+  const settings = await readFileSettings();
+  await writeSettings({ ...settings, commitRules: rules });
+}
+
 async function writeSettings(next) {
-  await mkdir(dirname(FILE), { recursive: true });
+  await mkdir(dirname(configFile()), { recursive: true });
   // Written 0600 before anything is in it, so the key is never briefly
   // readable by other accounts on the machine.
-  await writeFile(FILE, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+  await writeFile(configFile(), JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
   // writeFile only applies the mode when it creates the file, so an existing
   // one keeps whatever it had until it is set here.
-  await chmod(FILE, 0o600).catch(() => {});
+  await chmod(configFile(), 0o600).catch(() => {});
 }

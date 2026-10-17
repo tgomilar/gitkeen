@@ -258,6 +258,18 @@ class RepoStore {
     if (this.cursor && !live.has(this.cursor)) this.cursor = kept[0] ?? null;
   }
 
+  /** Read the commit rules again, after Settings changed them or a rules file was written. */
+  async reloadRules() {
+    const repo = this.repo;
+    if (!repo || !this.info) return;
+    try {
+      const commitRules = await repo.commitRules();
+      if (this.repo === repo && this.info) this.info = { ...this.info, commitRules };
+    } catch {
+      // The rules already shown stay; nothing about committing depends on a re-read.
+    }
+  }
+
   async refresh() {
     const repo = this.repo;
     if (!repo) return;

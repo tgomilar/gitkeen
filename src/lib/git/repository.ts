@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, CommitGroupsResult, OllamaStatus, LmstudioStatus, LmstudioModel, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
+  KeyStatus, CommitGroupsResult, CommitRules, GitkeenRules, OllamaStatus, LmstudioStatus, LmstudioModel, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
 } from './types';
 
 export class GitRepository {
@@ -232,6 +232,25 @@ export class GitRepository {
 
   signing(): Promise<SigningInfo> {
     return transport.call('commit.signing', { path: this.path });
+  }
+
+  /** Read the commit rules again: the repository's own, else the ones from Settings. */
+  commitRules(): Promise<CommitRules> {
+    return transport.call('repo.commitRules', { path: this.path });
+  }
+
+  /** Write the rules from Settings into the repository as `.commitlintrc.json`. */
+  writeCommitlint(): Promise<CommitRules> {
+    return transport.call('repo.writeCommitlint', { path: this.path });
+  }
+
+  /** The commit rules chosen in Settings. */
+  gitkeenRules(): Promise<GitkeenRules> {
+    return transport.call('settings.commitRules', {});
+  }
+
+  setGitkeenRules(rules: GitkeenRules): Promise<GitkeenRules> {
+    return transport.call('settings.setCommitRules', { rules });
   }
 
   /** Where each AI key comes from. Never returns a key. */

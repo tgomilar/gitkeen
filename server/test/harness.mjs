@@ -11,6 +11,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runGit } from '../git.mjs';
 
+// Gitkeen's settings, such as its commit rules, are read from the user's own
+// config unless told otherwise. A test that sets nothing gets a file of its
+// own that does not exist yet, so the defaults apply and nothing real is read.
+process.env.GITKEEN_CONFIG ??= join(tmpdir(), `gitkeen-test-config-${process.pid}.json`);
+
 /** Fixed identity and dates, so a commit's hash does not change per run. */
 const ENV = {
   GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com',

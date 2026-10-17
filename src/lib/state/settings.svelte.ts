@@ -10,7 +10,7 @@ import { repoStore, describe } from './repo.svelte';
 import { githubStore } from './github.svelte';
 import { toasts } from './toasts.svelte';
 import { commitStore } from './commit.svelte';
-import type { KeyStatus, LmstudioModel, LmstudioStatus, OllamaStatus, SuggestProviders } from '../git/types';
+import type { GitkeenRules, KeyStatus, LmstudioModel, LmstudioStatus, OllamaStatus, SuggestProviders } from '../git/types';
 
 /** Everything the panel shows about one provider, ready to render. */
 export interface ProviderRow {
@@ -79,6 +79,12 @@ class SettingsStore {
   ollama = $state<OllamaStatus | null>(null);
   private polling: ReturnType<typeof setInterval> | null = null;
 
+  /** The commit message rules for repositories without their own. */
+  commitRules = $state<GitkeenRules | null>(null);
+
+  /** The section to bring into view when the panel opens, such as `commit` from the rules hint. */
+  focus = $state<string | null>(null);
+
   /** The same for LM Studio, plus what it has downloaded, asked for only when nothing is loaded. */
   lmstudio = $state<LmstudioStatus | null>(null);
   lmstudioDownloaded = $state<LmstudioModel[] | null>(null);
@@ -114,7 +120,8 @@ class SettingsStore {
   /** True when nothing is set up, so the panel can say so plainly. */
   none = $derived(this.rows.every((r) => !r.configured));
 
-  async show() {
+  async show(section: string | null = null) {
+    this.focus = section;
     this.open = true;
     await this.load();
   }
@@ -127,12 +134,14 @@ class SettingsStore {
     const repo = repoStore.repo;
     if (!repo) return;
     try {
-      const [status, providers, ollama, lmstudio] = await Promise.all([
+      const [status, providers, ollama, lmstudio, commitRules] = await Promise.all([
         repo.keyStatus(),
         repo.suggestProviders(),
         repo.ollamaStatus(),
-        repo.lmstudioStatus()
+        repo.lmstudioStatus(),
+        repo.gitkeenRules()
       ]);
+      this.commitRules = commitRules;
       this.status = status;
       this.providers = providers;
       this.ollama = ollama;
@@ -185,6 +194,41 @@ class SettingsStore {
       toasts.success(`Using ${CATALOGUE.find((p) => p.id === provider)?.label ?? provider}`);
     } catch (err) {
       toasts.error('Could not change the provider', describe(err));
+    } finally {
+      this.busy = null;
+    }
+  }
+
+  /**
+   * Change the commit rules. Saved at once, then the open repository's rules
+   * are read again, so the message box is checked by the new ones straight
+   * away, unless the repository has rules of its own, which still win.
+   */
+  async saveCommitRules(change: Partial<GitkeenRules>) {
+    const repo = repoStore.repo;
+    if (!repo || !this.commitRules) return;
+    const next = { ...this.commitRules, ...change };
+    this.commitRules = next;
+    try {
+      this.commitRules = await repo.setGitkeenRules(next);
+      await repoStore.reloadRules();
+    } catch (err) {
+      toasts.error('Could not save the rules', describe(err));
+    }
+  }
+
+  /** Write the rules into the open repository as `.commitlintrc.json`. */
+  async writeCommitlint() {
+    const repo = repoStore.repo;
+    if (!repo) return;
+    this.busy = 'commit-rules';
+    try {
+      await repo.writeCommitlint();
+      await repoStore.reloadRules();
+      await repoStore.refresh();
+      toasts.success('Saved the rules to .commitlintrc.json', 'Commit the file to share the rules with everyone on the project.');
+    } catch (err) {
+      toasts.error('Could not save the rules to the repository', describe(err));
     } finally {
       this.busy = null;
     }

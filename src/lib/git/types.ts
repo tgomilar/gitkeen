@@ -83,6 +83,16 @@ export interface RepositoryInfo {
   commitRules?: CommitRules;
 }
 
+/** The commit message rules chosen in Settings, for repositories without their own. */
+export interface GitkeenRules {
+  enabled: boolean;
+  format: 'conventional' | 'free';
+  types: string[];
+  scope: 'none' | 'optional' | 'required';
+  maxHeader: number;
+  noFullStop: boolean;
+}
+
 /** One commitlint rule, as read from the repository's own config. */
 export interface CommitRule {
   /** commitlint levels: 0 off, 1 warning, 2 error. */
@@ -92,8 +102,13 @@ export interface CommitRule {
 }
 
 export interface CommitRules {
-  /** Where the rules came from, which decides whether they are enforced. */
-  source: 'commitlint' | 'hook' | 'none';
+  /**
+   * Where the rules came from, which decides whether they are enforced:
+   * `gitkeen` is the rules chosen in Settings, for a repository without any.
+   */
+  source: 'commitlint' | 'hook' | 'gitkeen' | 'none';
+  /** `free` checks only the length and full stop, not a type: subject shape. */
+  format?: 'conventional' | 'free';
   /** The file the rules were read from, shown so the user can go and read it. */
   file: string | null;
   /** True only when the rules can be both read and checked before committing. */

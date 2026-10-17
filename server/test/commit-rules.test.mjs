@@ -4,7 +4,9 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readCommitRules, validateMessage } from '../commit-rules.mjs';
+import { readCommitRules, validateMessage, writeGitkeenRules, writeCommitlintFile, GITKEEN_DEFAULTS } from '../commit-rules.mjs';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { repairSubject } from '../suggest.mjs';
 import { withRepo } from './harness.mjs';
 
@@ -83,10 +85,86 @@ describe('putting a suggested subject into the format', () => {
     });
   });
 
-
-  test('without commitlint rules nothing is changed', async () => {
+  test('with every rule switched off, nothing is changed', async () => {
     await withRepo(async (repo) => {
-      assert.equal(repairSubject('update settings panel', await readCommitRules(repo.path)), 'update settings panel');
+      await writeGitkeenRules({ enabled: false });
+      try {
+        assert.equal(repairSubject('update settings panel', await readCommitRules(repo.path)), 'update settings panel');
+      } finally {
+        await writeGitkeenRules(GITKEEN_DEFAULTS);
+      }
+    });
+  });
+});
+
+describe("Gitkeen's own rules", () => {
+  test('a repository without commitlint gets them, on by default', async () => {
+    await withRepo(async (repo) => {
+      const rules = await readCommitRules(repo.path);
+      assert.equal(rules.source, 'gitkeen');
+      assert.equal(rules.maxHeader, 72);
+      assert.equal((await check(repo, 'update things')).ok, false);
+      assert.equal((await check(repo, 'feat: add a thing.')).blocking[0].rule, 'subject-full-stop');
+      assert.equal((await check(repo, 'feat: add a thing')).ok, true);
+    });
+  });
+
+  test("a repository's own commitlint config wins over them", async () => {
+    await withRepo(async (repo) => {
+      repo.write('commitlint.config.js', "export default { rules: { 'header-max-length': [2, 'always', 120] } };\n");
+      const rules = await readCommitRules(repo.path);
+      assert.equal(rules.source, 'commitlint');
+      assert.equal(rules.maxHeader, 120);
+    });
+  });
+
+  test('the choices in Settings are what is checked', async () => {
+    await withRepo(async (repo) => {
+      await writeGitkeenRules({ types: ['feat', 'fix'], scope: 'required', maxHeader: 30 });
+      try {
+        assert.match((await check(repo, 'docs(x): short')).blocking[0].message, /not an allowed type/);
+        assert.match((await check(repo, 'fix: short')).blocking[0].message, /scope is required/);
+        assert.equal((await check(repo, 'fix(api): short')).ok, true);
+        assert.equal((await check(repo, 'fix(api): a first line much longer than thirty')).ok, false);
+      } finally {
+        await writeGitkeenRules(GITKEEN_DEFAULTS);
+      }
+    });
+  });
+
+  test('free text is held only to its length and its full stop', async () => {
+    await withRepo(async (repo) => {
+      await writeGitkeenRules({ format: 'free', maxHeader: 30 });
+      try {
+        assert.equal((await check(repo, 'Update the install guide')).ok, true);
+        assert.equal((await check(repo, 'Update the install guide.')).ok, false);
+        assert.equal((await check(repo, 'Update the install guide and everything near it')).ok, false);
+      } finally {
+        await writeGitkeenRules(GITKEEN_DEFAULTS);
+      }
+    });
+  });
+
+  test('values that make no sense fall back to the defaults', async () => {
+    const saved = await writeGitkeenRules({ maxHeader: 5, scope: 'sometimes', types: ['', 'Feat', 'feat', 'two words'] });
+    try {
+      assert.equal(saved.maxHeader, 72);
+      assert.equal(saved.scope, 'optional');
+      assert.deepEqual(saved.types, ['feat']);
+    } finally {
+      await writeGitkeenRules(GITKEEN_DEFAULTS);
+    }
+  });
+
+  test('they can be saved into the repository, where commitlint reads them too', async () => {
+    await withRepo(async (repo) => {
+      const rules = await writeCommitlintFile(repo.path);
+      assert.equal(rules.source, 'commitlint');
+      assert.equal(rules.file, '.commitlintrc.json');
+      const written = JSON.parse(await readFile(join(repo.path, '.commitlintrc.json'), 'utf8'));
+      assert.deepEqual(written.rules['header-max-length'], [2, 'always', 72]);
+      assert.equal((await check(repo, 'update things')).ok, false, 'and are enforced the same way');
+      await assert.rejects(() => writeCommitlintFile(repo.path), /already has rules/);
     });
   });
 });

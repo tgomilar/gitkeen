@@ -7,7 +7,9 @@
  *
  *   1. a commitlint config, which states its rules in a form we can explain;
  *   2. a commit-msg hook, which enforces rules we can run but cannot read;
- *   3. nothing, in which case Conventional Commits is offered as a hint and
+ *   3. the rules chosen in Gitkeen's Settings, so a project without commitlint
+ *      still gets organised messages; on by default, and they can be off;
+ *   4. nothing, in which case Conventional Commits is offered as a hint and
  *      nothing is ever blocked.
  *
  * Only the subset of commitlint rules that a person actually meets in practice
@@ -15,9 +17,10 @@
  * a rule we have misunderstood would block a commit the repository allows,
  * which is worse than missing one.
  */
-import { readFile, access } from 'node:fs/promises';
+import { readFile, writeFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { constants } from 'node:fs';
+import { readCommitRuleSettings, writeCommitRuleSettings } from './settings.mjs';
 
 /** Types from @commitlint/config-conventional, the near-universal default. */
 const CONVENTIONAL_TYPES = [
@@ -133,6 +136,81 @@ function parseRules(source, filename) {
  * Returns a plain description the UI can show and the validator can apply, so
  * the rules the user is held to are always the rules they were shown.
  */
+/**
+ * Gitkeen's own rules, for a repository without any: Conventional Commits, a
+ * first line that fits a terminal `git log`, and no full stop.
+ */
+export const GITKEEN_DEFAULTS = {
+  enabled: true,
+  format: 'conventional',
+  types: CONVENTIONAL_TYPES,
+  scope: 'optional',
+  maxHeader: 72,
+  noFullStop: true
+};
+
+/** The saved rules, with anything missing or invalid replaced by the default. */
+export function cleanGitkeenRules(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const types = Array.isArray(r.types)
+    ? [...new Set(r.types.map((t) => String(t).trim().toLowerCase()).filter((t) => /^[a-z][a-z0-9-]*$/.test(t)))]
+    : null;
+  const max = Number(r.maxHeader);
+  return {
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : GITKEEN_DEFAULTS.enabled,
+    format: r.format === 'free' ? 'free' : 'conventional',
+    types: types?.length ? types : GITKEEN_DEFAULTS.types,
+    scope: ['none', 'optional', 'required'].includes(r.scope) ? r.scope : GITKEEN_DEFAULTS.scope,
+    maxHeader: Number.isInteger(max) && max >= 20 && max <= 200 ? max : GITKEEN_DEFAULTS.maxHeader,
+    noFullStop: typeof r.noFullStop === 'boolean' ? r.noFullStop : GITKEEN_DEFAULTS.noFullStop
+  };
+}
+
+export async function readGitkeenRules() {
+  return cleanGitkeenRules(await readCommitRuleSettings());
+}
+
+export async function writeGitkeenRules(rules) {
+  const clean = cleanGitkeenRules(rules);
+  await writeCommitRuleSettings(clean);
+  return clean;
+}
+
+/**
+ * Gitkeen's rules as commitlint states them: `[level, applicable, value]`.
+ * The same form serves both the checker here and a `.commitlintrc.json`
+ * written into a repository, so the two can never disagree.
+ */
+export function gitkeenToCommitlint(r) {
+  const rules = { 'header-max-length': [2, 'always', r.maxHeader] };
+  if (r.format === 'conventional') {
+    rules['type-enum'] = [2, 'always', r.types];
+    rules['type-empty'] = [2, 'never'];
+    rules['type-case'] = [2, 'always', 'lower-case'];
+    rules['subject-empty'] = [2, 'never'];
+    if (r.scope === 'none') rules['scope-empty'] = [2, 'always'];
+    if (r.scope === 'required') rules['scope-empty'] = [2, 'never'];
+  }
+  if (r.noFullStop) rules['subject-full-stop'] = [2, 'never', '.'];
+  return rules;
+}
+
+/**
+ * Write Gitkeen's rules into the repository as `.commitlintrc.json`, so they
+ * travel with the project: teammates see them, and commitlint, if it is ever
+ * installed, enforces the same. A repository that already has rules is left
+ * alone, since replacing them is a decision for whoever wrote them.
+ */
+export async function writeCommitlintFile(path) {
+  for (const name of [...CONFIG_FILES, ...HOOK_FILES]) {
+    if (await exists(join(path, name))) throw new Error(`This repository already has rules, in ${name}.`);
+  }
+  const r = await readGitkeenRules();
+  const file = join(path, '.commitlintrc.json');
+  await writeFile(file, JSON.stringify({ rules: gitkeenToCommitlint(r) }, null, 2) + '\n');
+  return readCommitRules(path);
+}
+
 export async function readCommitRules(path) {
   for (const name of CONFIG_FILES) {
     const file = join(path, name);
@@ -179,6 +257,23 @@ export async function readCommitRules(path) {
     };
   }
 
+  const own = await readGitkeenRules().catch(() => null);
+  if (own?.enabled) {
+    const rules = {};
+    for (const [name, [level, applicable, value = null]] of Object.entries(gitkeenToCommitlint(own))) {
+      rules[name] = { level, applicable, value };
+    }
+    return {
+      source: 'gitkeen',
+      file: null,
+      enforced: true,
+      format: own.format,
+      rules,
+      types: own.format === 'conventional' ? own.types : null,
+      maxHeader: own.maxHeader
+    };
+  }
+
   return {
     source: 'none',
     file: null,
@@ -214,8 +309,14 @@ export function validateMessage(message, config) {
     problems.push({ rule, message: text, level });
   };
 
-  const match = header.match(HEADER);
-  if (!match) {
+  // Free text has no shape to check: only its length and its last character.
+  const free = config.format === 'free';
+  const match = free ? null : header.match(HEADER);
+  if (free) {
+    if (rules['subject-full-stop']?.applicable === 'never' && header.endsWith(rules['subject-full-stop'].value ?? '.')) {
+      add('subject-full-stop', 'The first line must not end with a full stop');
+    }
+  } else if (!match) {
     const form = rules['scope-empty']?.applicable === 'always' ? 'type: subject' : 'type(scope): subject';
     const shape = config.types?.length
       ? `${form} — for example "${config.types[0]}: short description"`

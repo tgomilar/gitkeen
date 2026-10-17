@@ -75,11 +75,35 @@ you opened. It looks for them in this order:
 |---|---|
 | A commitlint config, such as `commitlint.config.js` or `.commitlintrc` | Shows the format under the message box, and names each broken rule as you type. **Commit** stays off until the message follows every rule that commitlint would reject. |
 | A commit-msg hook, in `.husky/commit-msg` or `.git/hooks/commit-msg` | Says that the hook runs when you commit. Its rules cannot be read in advance, so Git reports a refusal only when you commit. |
-| Neither | Offers the Conventional Commits format as a hint. Nothing is blocked. |
+| Neither | Uses the rules from Gitkeen's own Settings. They are on by default. |
 
 Gitkeen checks the commitlint rules that people meet most often, such as the
 type, the scope, the subject and the length of the first line. It ignores a
 rule it does not know, so it never blocks a commit that commitlint would allow.
+
+### Rules for repositories without commitlint
+
+A repository without its own rules uses the ones in **Settings**, under
+**Commit messages**. To open them, click **Gitkeen settings** under the message
+box. The rules start as Conventional Commits, such as `feat: add a button`,
+with a first line of at most 72 characters and no full stop at the end.
+
+| Setting | What it does |
+|---|---|
+| Check messages | Turns the rules on or off for every repository without its own. |
+| Format | Conventional Commits (`type: subject`), or free text, which is checked only for its length and full stop. |
+| Types | The types a message can start with, such as `feat` and `fix`. Add or remove them. |
+| Scope | Whether `feat(ui): …` is not allowed, optional, or required. |
+| First line | The most characters the first line can have. |
+| No full stop | Refuses a first line that ends with a full stop. |
+
+A change applies at once, also to the message you are writing. **Suggest**
+follows the same rules.
+
+To share the rules, open a repository and press **Save to this repository**.
+Gitkeen writes them to `.commitlintrc.json`. Commit that file, and everyone on
+the project, and commitlint too, follows the same rules. From then on, that
+file is the repository's own rules, and the Settings no longer apply to it.
 
 ### Suggest
 

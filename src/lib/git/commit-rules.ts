@@ -32,10 +32,10 @@ export function describeRules(config: CommitRules | null | undefined): string | 
   if (config.source === 'hook') {
     return 'runs on the message when you commit';
   }
-  if (config.source !== 'commitlint') return null;
+  if (config.source !== 'commitlint' && config.source !== 'gitkeen') return null;
 
   const noScope = config.rules?.['scope-empty']?.applicable === 'always';
-  const parts = [noScope ? 'type: subject' : 'type(scope): subject'];
+  const parts = config.format === 'free' ? [] : [noScope ? 'type: subject' : 'type(scope): subject'];
   if (config.maxHeader) parts.push(`${config.maxHeader} characters max`);
   return parts.join(' · ');
 }
@@ -60,8 +60,15 @@ export function checkMessage(
     problems.push({ rule, message, level });
   };
 
-  const match = header.match(HEADER);
-  if (!match?.groups) {
+  // Free text has no shape to check: only its length and its last character.
+  const free = config.format === 'free';
+  const match = free ? null : header.match(HEADER);
+  if (free) {
+    const stop = rules['subject-full-stop'];
+    if (stop?.applicable === 'never' && header.endsWith((stop.value as string) ?? '.')) {
+      add('subject-full-stop', 'The first line must not end with a full stop');
+    }
+  } else if (!match?.groups) {
     const example = config.types?.length ? `${config.types[0]}: short description` : 'feat: short description';
     const shape = rules['scope-empty']?.applicable === 'always' ? 'type: subject' : 'type(scope): subject';
     problems.push({
