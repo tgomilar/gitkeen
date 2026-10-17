@@ -3283,6 +3283,90 @@ export const methods = {
   },
 
   /**
+   * Commit the staged change as several commits, one per group of files, in
+   * the order given. This is how a suggested split is accepted.
+   *
+   * Each commit is made from a scratch index: HEAD's tree with only that
+   * group's entries copied over from the real index. That is what
+   * `git commit --only` does, except that the staged version of a file is
+   * taken rather than the working copy, so a file staged hunk by hunk goes in
+   * as staged. The real index is never rewritten; once a group is committed
+   * its entries simply match HEAD, and every other file stays staged.
+   *
+   * It stops at the first commit Git refuses, a hook for instance. Those
+   * already made stand, and the error says how many.
+   */
+  async 'changes.commitGroups'({ path, groups, sign = null }) {
+    const fail = (message, extra = {}) => new GitError(message, { command: '', stderr: '', code: 1, ...extra });
+    if (!Array.isArray(groups) || groups.length === 0) throw fail('Choose at least one commit to make.');
+    for (const group of groups) {
+      if (!group?.message?.trim()) throw fail('Every commit needs a message.');
+      if (!Array.isArray(group.files) || group.files.length === 0) throw fail('Every commit needs at least one file.');
+    }
+    const operation = await detectOperation(path);
+    if (operation) {
+      throw fail(`A ${operation} is in progress, so everything staged has to go in one commit.`);
+    }
+
+    // Only staged files can be committed, and a renamed file takes the path
+    // it came from with it, or the old copy would linger until a later commit.
+    const status = parseStatus(await git(path, STATUS_ARGS));
+    const staged = new Map(
+      status.files.filter((f) => f.index !== '.' && f.index !== '?').map((f) => [f.path, f])
+    );
+    for (const group of groups) {
+      const missing = group.files.find((f) => !staged.has(f));
+      if (missing) throw fail(`${missing} is not staged. Tick it, then try again.`);
+    }
+
+    const literal = { GIT_LITERAL_PATHSPECS: '1' };
+    const made = [];
+
+    for (const group of groups) {
+      const paths = group.files.flatMap((f) => [f, staged.get(f).origPath].filter(Boolean));
+      // Asked each time: on a new branch the first commit is what gives it a HEAD.
+      const { code: unborn } = await runGit(path, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true });
+      try {
+        await withScratch(async (dir) => {
+          const env = { ...literal, GIT_INDEX_FILE: join(dir, 'index') };
+          await git(path, unborn ? ['read-tree', '--empty'] : ['read-tree', 'HEAD'], { env });
+
+          // "mode sha stage<TAB>path" for each path the real index holds.
+          const { stdout } = await runGit(path, ['ls-files', '-s', '-z', '--', ...paths], { env: literal });
+          const held = new Set();
+          const cacheinfo = [];
+          for (const record of stdout.split('\0').filter(Boolean)) {
+            const tab = record.indexOf('\t');
+            const [mode, sha] = record.slice(0, tab).split(' ');
+            const file = record.slice(tab + 1);
+            held.add(file);
+            cacheinfo.push('--cacheinfo', `${mode},${sha},${file}`);
+          }
+          if (cacheinfo.length) await git(path, ['update-index', '--add', ...cacheinfo], { env });
+          // A path staged as deleted, or the old side of a rename, is gone
+          // from the real index, so it goes from this one too.
+          const removed = paths.filter((p) => !held.has(p));
+          if (removed.length) await git(path, ['update-index', '--force-remove', '--', ...removed], { env });
+
+          const args = ['commit'];
+          if (sign === true) args.push('-S');
+          else if (sign === false) args.push('--no-gpg-sign');
+          args.push('-m', group.message.trim());
+          await git(path, args, { env });
+        });
+      } catch (err) {
+        const done = made.length ? `Made ${made.length} of ${groups.length} commits, then ` : '';
+        throw new GitError(`${done}"${group.message.trim()}" failed: ${err?.message ?? err}`, {
+          command: err?.command ?? 'git commit', stderr: err?.stderr ?? '', code: err?.code ?? 1
+        });
+      }
+      const { stdout: created } = await runGit(path, ['rev-parse', 'HEAD'], { allowFailure: true });
+      made.push({ commit: created.trim(), message: group.message.trim(), files: group.files.length });
+    }
+    return { ok: true, commits: made };
+  },
+
+  /**
    * Which AI providers are configured, so the panel knows whether to offer a
    * suggestion at all. Reports only names and models, never a key.
    */

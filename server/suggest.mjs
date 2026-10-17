@@ -44,6 +44,11 @@ const MAX_DIFF_LOCAL = 4_500;
  */
 const MAX_TOKENS = 200;
 const MAX_TOKENS_LOCAL = 1_500;
+// A split names every file and writes a subject per commit, which a one-line
+// budget cuts off half way: the reply then cannot be read and the split is
+// lost without a word. Twenty paths and their subjects fit in this.
+const MAX_TOKENS_SPLIT = 1_500;
+const MAX_TOKENS_SPLIT_LOCAL = 3_000;
 
 /**
  * How long to wait for an answer.
@@ -253,7 +258,7 @@ function systemPrompt(rules, { split = false } = {}) {
     ? [
         'You describe a Git change that is about to be committed.',
         'Reply with JSON and nothing else, in this exact shape:',
-        '{"subject": "...", "groups": [{"reason": "...", "files": ["path", ...]}]}',
+        '{"subject": "...", "groups": [{"reason": "...", "subject": "...", "files": ["path", ...]}]}',
         '"subject" is the commit subject line for the whole change.',
         'Describe what the change does and why, not which files moved.',
         'Use the imperative mood, as in "add", "fix", "remove".',
@@ -263,9 +268,15 @@ function systemPrompt(rules, { split = false } = {}) {
         'feature alongside an unrelated config or tooling change; a bug fix',
         'alongside unrelated documentation; two features touching different',
         'parts of the app.',
-        'Give a group per commit, each with a short "reason" naming the work',
-        'and the exact file paths from the diff that belong to it.',
-        'Every file in the diff must appear in exactly one group.',
+        'Give a group per commit, each with a short "reason" naming the work,',
+        'a "subject" that is the commit subject line for that group alone and',
+        'follows the same rules as the main one, and the exact file paths from',
+        'the diff that belong to it.',
+        'Every file listed under <files> must appear in exactly one group.',
+        'Build each group around one task a reviewer would name, so it could',
+        'be read or reverted on its own. A large change usually holds several',
+        'tasks: do not merge unrelated ones to keep the list short, and do not',
+        'make a group of files that only share a folder or a file type.',
         'A change and its tests, or a change and the files it forced, serve',
         'one purpose and belong in a single commit.',
         'When the whole change serves one purpose, return an empty groups array.'
@@ -357,6 +368,69 @@ function clipDiff(diff, stat, budget = MAX_DIFF) {
   return { text: text + note, clipped: true };
 }
 
+/** Files whose diff is machine-written, so their lines say nothing about the work. */
+const GENERATED = /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|composer\.lock|Gemfile\.lock|poetry\.lock|go\.sum)$|\.min\.(js|css)$/;
+
+/**
+ * A diff too large to send, shortened so that every file still appears.
+ *
+ * Clipping keeps the first files whole and drops the rest, which is fine for
+ * a subject but useless for a split: a file the model never saw cannot be put
+ * in a group, so any grouping would leave it out and be thrown away. Here each
+ * file keeps its name and its first changed lines, without context, within an
+ * equal share of the budget; a file that needs less gives the rest to the
+ * others. A lockfile is only counted, since its lines describe nothing.
+ */
+function digestDiff(diff, budget) {
+  const files = diff.split(/\n(?=diff --git )/).filter((f) => f.startsWith('diff --git '));
+  if (files.length === 0) return diff.slice(0, budget);
+
+  const entries = files.map((file) => {
+    const lines = file.split('\n');
+    const header = lines[0].match(/^diff --git a\/(.+?) b\/(.+)$/);
+    const path = header ? header[2] : lines[0].slice('diff --git '.length);
+    const changed = lines.filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l));
+    const added = changed.filter((l) => l[0] === '+').length;
+    const removed = changed.length - added;
+    const head = `${path} (+${added} -${removed})`;
+    const body = GENERATED.test(path) ? '' : changed.join('\n');
+    return { head, body };
+  });
+
+  // Names and counts always go in; what is left is shared out for the lines.
+  let left = budget - entries.reduce((n, e) => n + e.head.length + 1, 0);
+  const share = new Map();
+  let open = entries.filter((e) => e.body);
+  while (open.length && left > 0) {
+    const each = Math.floor(left / open.length);
+    if (each <= 0) break;
+    const next = [];
+    for (const e of open) {
+      const need = e.body.length + 1 - (share.get(e) ?? 0);
+      const give = Math.min(need, each);
+      share.set(e, (share.get(e) ?? 0) + give);
+      left -= give;
+      if (give < need) next.push(e);
+    }
+    if (next.length === open.length) break;
+    open = next;
+  }
+
+  const parts = entries.map((e) => {
+    const room = share.get(e) ?? 0;
+    // A share too small for a useful line is left out, unless it is the whole change.
+    if (!e.body || room < Math.min(40, e.body.length + 1)) return e.head;
+    const cut = e.body.length + 1 > room;
+    return `${e.head}\n${cut ? e.body.slice(0, room).replace(/\n[^\n]*$/, '') + '\n…' : e.body}`;
+  });
+  return [
+    'The diff was too large to send in full. Every file changed is below, each',
+    'with its name, the lines added and removed, and its first changed lines.',
+    '',
+    parts.join('\n\n')
+  ].join('\n');
+}
+
 /**
  * Pull just the "subject" out of a reply whose JSON could not be parsed.
  *
@@ -413,6 +487,7 @@ function parseJsonReply(raw) {
     ? parsed.groups
         .map((g) => ({
           reason: typeof g?.reason === 'string' ? g.reason.trim() : '',
+          subject: typeof g?.subject === 'string' ? g.subject : '',
           files: Array.isArray(g?.files) ? g.files.filter((f) => typeof f === 'string') : []
         }))
         .filter((g) => g.reason && g.files.length > 0)
@@ -526,9 +601,13 @@ async function requestProvider(name, system, user, maxTokens) {
   return { raw: provider.read(json) ?? '', model, json };
 }
 
-async function askProvider(name, system, user) {
+async function askProvider(name, system, user, { split = false } = {}) {
   const provider = PROVIDERS[name];
-  const { raw, model, json } = await requestProvider(name, system, user, LOCAL_PROBE[name] ? MAX_TOKENS_LOCAL : MAX_TOKENS);
+  const local = Boolean(LOCAL_PROBE[name]);
+  const maxTokens = split
+    ? (local ? MAX_TOKENS_SPLIT_LOCAL : MAX_TOKENS_SPLIT)
+    : (local ? MAX_TOKENS_LOCAL : MAX_TOKENS);
+  const { raw, model, json } = await requestProvider(name, system, user, maxTokens);
   const subject = cleanSubject(raw);
 
   // A model cut off mid-sentence has not written a subject, whatever text came
@@ -579,13 +658,201 @@ function usableGroups(groups, paths) {
     // not a division, and the first claim on it is as good as any.
     const files = group.files.filter((f) => wanted.has(f) && !seen.has(f));
     for (const f of files) seen.add(f);
-    if (files.length > 0) cleaned.push({ reason: group.reason, files });
+    // A group without a subject is still a good division: the panel asks
+    // for one rather than discarding the advice.
+    if (files.length > 0) cleaned.push({ reason: group.reason, subject: cleanSubject(group.subject ?? ''), files });
   }
 
-  // Fewer than two groups is not a split, and a grouping that misses files
-  // would have the user commit less than they ticked without saying so.
-  if (cleaned.length < 2 || seen.size !== wanted.size) return [];
+  // Fewer than two groups is not a split.
+  if (cleaned.length < 2) return [];
+
   return cleaned;
+}
+
+/** The files of `paths` that no group holds. */
+const unplaced = (groups, paths) => {
+  const seen = new Set(groups.flatMap((g) => g.files));
+  return paths.filter((p) => !seen.has(p));
+};
+
+/**
+ * Ask once more where the files the split left out belong.
+ *
+ * A model given many files nearly always forgets some, and the more files the
+ * more it forgets. Asked again about only those, next to the commits it
+ * already proposed, it places most of them: a short question is far easier
+ * than the long one. It may also start a new commit for files that fit none.
+ */
+async function placeMissed(chosen, groups, missed, { diff, budget, rules }) {
+  const wanted = new Set(missed);
+  const theirs = diff.split(/\n(?=diff --git )/).filter((part) => {
+    const header = part.match(/^diff --git a\/.+? b\/(.+)$/m);
+    return header && wanted.has(header[1]);
+  }).join('\n');
+  const material = theirs.length > budget ? digestDiff(theirs, budget) : theirs;
+
+  const system = [
+    'You sort files into Git commits that have already been planned.',
+    'Reply with JSON and nothing else, in this exact shape:',
+    '{"placements": [{"file": "path", "commit": 1}], "new": [{"commit": 4, "reason": "...", "subject": "..."}]}',
+    'Give every file listed under <files> a placement, with the number of the',
+    'planned commit it belongs to. When it fits none of them, give it a new',
+    'number and describe that commit under "new", with a short "reason" and a',
+    'commit "subject". Several files can share a new commit.',
+    'Each new subject is one line, and follows these rules:',
+    // The plain prompt's own lines after its first four say how to word a
+    // subject and what this repository's rules are; its reply shape does not apply.
+    ...systemPrompt(rules).split('\n').slice(4)
+  ].join('\n');
+  const planned = groups
+    .map((g, i) => `${i + 1}. ${g.subject || g.reason} (${g.reason})\n   ${g.files.join(', ')}`)
+    .join('\n');
+  const user = `<commits>\n${planned}\n</commits>\n<files>\n${missed.join('\n')}\n</files>\n<diff>\n${material}\n</diff>`;
+
+  let reply;
+  try {
+    ({ raw: reply } = await askProvider(chosen, system, user, { split: true }));
+  } catch {
+    return groups;
+  }
+  const text = reply ?? '';
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  } catch {
+    return groups;
+  }
+
+  const result = groups.map((g) => ({ ...g, files: [...g.files] }));
+  const extra = new Map();
+  for (const n of Array.isArray(parsed?.new) ? parsed.new : []) {
+    const number = Number(n?.commit);
+    if (Number.isInteger(number) && number > groups.length && typeof n.reason === 'string') {
+      extra.set(number, { reason: n.reason.trim() || 'More changes', subject: cleanSubject(n.subject ?? ''), files: [] });
+    }
+  }
+  const placed = new Set();
+  for (const p of Array.isArray(parsed?.placements) ? parsed.placements : []) {
+    const file = p?.file;
+    const number = Number(p?.commit);
+    if (!wanted.has(file) || placed.has(file)) continue;
+    const target = number >= 1 && number <= groups.length ? result[number - 1] : extra.get(number);
+    if (!target) continue;
+    target.files.push(file);
+    placed.add(file);
+  }
+  return [...result, ...[...extra.values()].filter((g) => g.files.length)];
+}
+
+/**
+ * A split with every file in it: the model's groups, then a second pass for
+ * what it left out, then whatever is still unplaced as a group of its own.
+ *
+ * Dropping a split for a few forgotten files would hide good advice, and
+ * acting on it as it is would commit less than was ticked without saying so.
+ * So the files that are left are shown, with no subject, for the user to place.
+ */
+async function completeGroups(chosen, groups, paths, context) {
+  if (groups.length < 2) return [];
+  let done = groups;
+  if (unplaced(done, paths).length > 0) done = await placeMissed(chosen, done, unplaced(done, paths), context);
+  const missed = unplaced(done, paths);
+  if (missed.length > 0) done = [...done, { reason: 'Not placed by the AI', subject: '', files: missed, leftover: true }];
+  return done;
+}
+
+/** The opening verb of a subject without a type, and the type it usually means. */
+const VERB_TYPES = {
+  add: 'feat', implement: 'feat', introduce: 'feat', support: 'feat', allow: 'feat', create: 'feat',
+  fix: 'fix', correct: 'fix', resolve: 'fix', repair: 'fix', prevent: 'fix',
+  update: 'refactor', improve: 'refactor', refactor: 'refactor', simplify: 'refactor', clean: 'refactor',
+  rename: 'refactor', move: 'refactor', restructure: 'refactor', reorganize: 'refactor',
+  remove: 'chore', bump: 'chore', upgrade: 'chore',
+  document: 'docs', test: 'test'
+};
+
+/**
+ * Put right the mistakes a model makes most with a commit format, before the
+ * rules are checked: a type with no colon ("fix api imports"), no type at all
+ * ("update settings panel"), a capital in the type, a scope where none is
+ * allowed, a full stop at the end.
+ *
+ * Small local models ignore the format often, and asking them again works
+ * only some of the time. These fixes are mechanical and need no model; what
+ * they cannot settle, such as a line too long, is still sent back. The type,
+ * when there was none, comes from the files where they all say the same
+ * (only docs, only tests), else from the opening verb, else from the type the
+ * whole change was given.
+ */
+export function repairSubject(subject, rules, { files = [], fallbackType = null } = {}) {
+  let text = (subject ?? '').trim();
+  if (!text || rules?.source !== 'commitlint' || !rules?.enforced) return text;
+
+  const enforced = rules.rules ?? {};
+  const types = Array.isArray(rules.types) && rules.types.length ? rules.types : null;
+  const allowed = (t) => (types ? types.includes(t) : /^[a-z]+$/.test(t));
+  const noScope = enforced['scope-empty']?.applicable === 'always';
+
+  let match = text.match(/^([A-Za-z]+)(\([^)]*\))?(!)?:\s*(.*)$/);
+  if (match && allowed(match[1].toLowerCase())) {
+    const [, type, scope = '', bang = '', rest] = match;
+    text = `${type.toLowerCase()}${noScope ? '' : scope}${bang}: ${rest}`;
+  } else if (!match) {
+    const [first, ...others] = text.split(/\s+/);
+    const word = first.toLowerCase().replace(/[^a-z]/g, '');
+    if (allowed(word) && others.length) {
+      // "fix api imports": the type is there, only the colon is missing.
+      text = `${word}: ${others.join(' ')}`;
+    } else {
+      const byFiles = files.length && files.every((f) => /\.(md|mdx|txt)$|(^|\/)docs\//i.test(f)) ? 'docs'
+        : files.length && files.every((f) => /(^|\/)(test|tests|__tests__)\/|\.(test|spec)\.[a-z]+$/i.test(f)) ? 'test'
+        : null;
+      const type = [byFiles, VERB_TYPES[word], fallbackType, 'chore'].find((t) => t && allowed(t));
+      if (type) text = `${type}: ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+    }
+  }
+
+  if (enforced['subject-full-stop']?.applicable === 'never') text = text.replace(/\.+$/, '');
+  return text;
+}
+
+/**
+ * Hold each group's subject to the rules, as the main one is.
+ *
+ * Each becomes a commit of its own, so each is checked by what the Commit
+ * button would check it by. One that breaks a blocking rule is sent back once,
+ * without the diff: the usual fault is a line too long, which needs only the
+ * line and the complaint to fix.
+ */
+async function checkGroups(groups, { chosen, rules, validate, fallbackType }) {
+  const checked = [];
+  for (const group of groups) {
+    let subject = group.leftover ? '' : repairSubject(group.subject, rules, { files: group.files, fallbackType });
+    let check = subject ? validate(subject) : null;
+    if (check && check.blocking.length > 0 && !group.leftover) {
+      const complaint = [
+        `You suggested this subject for a commit of ${group.files.join(', ')}: ${subject}`,
+        'That breaks the rules of this repository:',
+        ...check.blocking.map((p) => `- ${p.message}`),
+        '',
+        'Reply with a corrected subject line, and nothing else.'
+      ].join('\n');
+      const retry = await askProvider(chosen, systemPrompt(rules), complaint).catch(() => null);
+      if (retry?.subject) {
+        const again = repairSubject(retry.subject, rules, { files: group.files, fallbackType });
+        // A retry that is no better is not taken: the first answer was at least the model's own.
+        if (validate(again).blocking.length < check.blocking.length) subject = again;
+        check = validate(subject);
+      }
+    }
+    checked.push({
+      ...group,
+      subject,
+      problems: check?.problems ?? [],
+      ok: Boolean(check) && check.blocking.length === 0
+    });
+  }
+  return checked;
 }
 
 /**
@@ -610,15 +877,20 @@ export async function suggestSubject({ diff, stat, rules, provider, validate, pa
   if (!PROVIDERS[chosen]) throw new Error(`Unknown provider "${chosen}".`);
   if (!diff.trim()) throw new Error('There is nothing staged to describe.');
 
-  const { text, clipped } = clipDiff(diff, stat, LOCAL_PROBE[chosen] ? MAX_DIFF_LOCAL : MAX_DIFF);
+  // Too large to send whole, every file still goes in, shortened, so that a
+  // split can place each of them: that is when a split matters most.
+  const budget = LOCAL_PROBE[chosen] ? MAX_DIFF_LOCAL : MAX_DIFF;
+  const clipped = diff.length > budget;
+  const text = clipped ? digestDiff(diff, budget) : diff;
 
-  // Asking about a split is only worth it with enough files to split, and only
-  // when the whole diff was seen: a grouping drawn from a clipped diff would
-  // quietly leave out the files that did not fit.
-  const askSplit = paths.length >= 3 && !clipped;
+  // Asking about a split is only worth it with two files or more.
+  const askSplit = paths.length >= 2;
 
   const system = systemPrompt(rules, { split: askSplit });
-  let { subject, raw, model } = await askProvider(chosen, system, `<diff>\n${text}\n</diff>`);
+  // The paths are listed on their own as well: in a long or shortened diff
+  // they are easy to lose, and a file the model forgets cannot be placed.
+  const files = askSplit ? `<files>\n${paths.join('\n')}\n</files>\n` : '';
+  let { subject, raw, model } = await askProvider(chosen, system, `${files}<diff>\n${text}\n</diff>`, { split: askSplit });
 
   let groups = [];
   if (askSplit) {
@@ -633,6 +905,7 @@ export async function suggestSubject({ diff, stat, rules, provider, validate, pa
 
   if (!subject) throw new Error(`${PROVIDERS[chosen].label} returned an empty subject.`);
 
+  subject = repairSubject(subject, rules, { files: paths });
   let check = validate(subject);
   if (check.blocking.length > 0) {
     const complaint = [
@@ -649,7 +922,7 @@ export async function suggestSubject({ diff, stat, rules, provider, validate, pa
     // whatever the first request asked for. Any grouping already stands.
     const retry = await askProvider(chosen, systemPrompt(rules), complaint);
     if (retry.subject) {
-      subject = retry.subject;
+      subject = repairSubject(retry.subject, rules, { files: paths });
       check = validate(subject);
     }
   }
@@ -661,7 +934,9 @@ export async function suggestSubject({ diff, stat, rules, provider, validate, pa
     clipped,
     problems: check.problems,
     ok: check.blocking.length === 0,
-    groups: usableGroups(groups, paths)
+    groups: await checkGroups(await completeGroups(chosen, usableGroups(groups, paths), paths, { diff, budget, rules }), {
+      chosen, rules, validate, fallbackType: subject.match(/^([a-z]+)[(!:]/)?.[1] ?? null
+    })
   };
 }
 

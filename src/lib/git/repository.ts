@@ -12,7 +12,7 @@ import type {
   ForcePushInspection, MergeInspection, MergeResult, PullInspection, PullResult, PushOptions, PushResult, RepositoryInfo, ResetInspection, ResetMode, ResetResult, RollbackResult,
   SquashInspection, SquashResult, Stash, StashApplyResult, TagInspection,
   StashFile, StashResult, StatsRange, StatsReport, Suggestion, SuggestProviders,
-  KeyStatus, OllamaStatus, LmstudioStatus, LmstudioModel, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
+  KeyStatus, CommitGroupsResult, OllamaStatus, LmstudioStatus, LmstudioModel, RecoveryEntry, RecoveryResult, BlameResult, BisectState, CompareResult, Worktree, Submodule, SigningInfo, LfsStatus, ImageDiff, GithubStatus, PullRequest, CommitChecks, ConsolePreview, ConsoleResult
 } from './types';
 
 export class GitRepository {
@@ -217,6 +217,14 @@ export class GitRepository {
   }
 
   /** Commit the staged working tree: exactly the ticked files and hunks. */
+  /**
+   * Commit the staged change as several commits, one per group, in order.
+   * Staged files left out of every group stay staged.
+   */
+  commitGroups(groups: { message: string; files: string[] }[], sign: boolean | null = null): Promise<CommitGroupsResult> {
+    return transport.call('changes.commitGroups', { path: this.path, groups, sign });
+  }
+
   /** `sign` true or false overrides the repository's signing setting for this commit. */
   commit(paths: string[], message: string, amend = false, sign: boolean | null = null): Promise<CommitResult> {
     return transport.call('changes.commit', { path: this.path, paths, message, amend, sign });

@@ -90,6 +90,37 @@ one.
 
 ![A message that breaks the rules, the problems named below it, then Suggest writing a subject that follows them](media/suggest.gif)
 
+### Split into several commits
+
+Sometimes the ticked files hold work for different tasks, such as a bug fix
+and an unrelated change to the documentation. When you press **Suggest**, the
+model also checks for this. If it finds separate pieces of work, a list of
+suggested commits appears under the message box. Each one has its own message
+and its own files.
+
+| What you can do | How |
+|---|---|
+| Change a message | Edit it in its box. It is checked against the same rules as the main message. |
+| Leave a commit out | Untick it. Its files stay staged, so you can commit them later. |
+| See a commit's files | Click its file count, such as **7 files**. Click a file's name to see its diff. |
+| Leave a file out of a commit | Open the files and untick it. It stays staged, so you can commit it later. |
+| Choose all or none | Use the box at the top of the list. |
+| Make the commits | Press **Make N commits**. They are made in the order shown. |
+| Keep it as one commit | Press **Dismiss**, or just press **Commit** as usual. |
+
+Files the AI did not put in any commit are listed last, under **Not placed by
+the AI**. That entry starts unticked and has no message. Write one to commit
+those files together, or leave it unticked.
+
+Each commit takes only the staged version of its files. A file you staged in
+parts goes in with exactly the parts you staged. If Git refuses one of the
+commits, for example because a hook fails, the commits made before it stay,
+and the rest stay in the list so you can fix them and try again.
+
+A change too large to send in full is shortened before it is sent: every file
+is still there, with its first changed lines. So a large change can be split
+too. A lockfile is sent only as a count of changed lines.
+
 ## The diff viewer
 
 There are two ways to open it:

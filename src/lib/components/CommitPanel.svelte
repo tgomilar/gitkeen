@@ -8,12 +8,14 @@
    */
   import Icon from './Icon.svelte';
   import TriCheckbox from './TriCheckbox.svelte';
+  import SuggestWaiting from './SuggestWaiting.svelte';
+  import 'motion-components/motion-icon-state';
   import ChangeRow from './ChangeRow.svelte';
   import ChangeTreeNode from './ChangeTreeNode.svelte';
   import ContextMenu from './ContextMenu.svelte';
   import StashSection from './StashSection.svelte';
   import { repoStore } from '../state/repo.svelte';
-  import { commitStore } from '../state/commit.svelte';
+  import { commitStore, splitFiles } from '../state/commit.svelte';
   import { settingsStore } from '../state/settings.svelte';
   import {
     commitChanges, commitAndPush, rollbackChanges, changeMenuItems, openChange,
@@ -21,9 +23,15 @@
   } from '../actions';
   import { buildChangeTree } from '../changes';
   import { pluralize } from '../format';
+  import { checkMessage } from '../git/commit-rules';
   import type { Change } from '../changes';
   import type { Stash } from '../git/types';
   import type { MenuItem } from '../menu';
+
+  // The commits the AI planned, apart from the files it could not place, so
+  // the heading counts the same things as the button.
+  const splitPlanned = $derived(commitStore.splitGroups.filter((g) => !g.leftover));
+  const splitLeftover = $derived(commitStore.splitGroups.find((g) => g.leftover) ?? null);
 
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
   let messageBox = $state<HTMLTextAreaElement | null>(null);
@@ -315,25 +323,110 @@
     </div>
 
     <!--
-      When a suggestion thought the change held unrelated work. It is advice:
-      nothing is re-ticked and nothing is committed, because which commits to
-      make is the user's call and a wrong guess would be expensive to undo.
+      When a suggestion thought the change held unrelated work: one commit per
+      piece of work, each with its own message. The user edits, ticks or
+      leaves out each one; nothing is committed until they press the button,
+      and the files of a commit left out stay staged for later.
     -->
-    {#if commitStore.splitGroups.length > 0}
+    {#if commitStore.suggesting === 'working' && commitStore.checkedPaths.length >= 2}
+      <SuggestWaiting
+        files={commitStore.checkedPaths}
+        model={commitStore.suggestProviders?.models[commitStore.suggestProviders?.preferred ?? ''] ?? null}
+        rulesFrom={commitStore.rules?.file ?? null}
+      />
+    {:else if commitStore.splitGroups.length > 0}
       <div class="split">
-        <p class="split-head">
-          This looks like {commitStore.splitGroups.length} separate changes.
+        <div class="split-head">
+          <TriCheckbox
+            checkState={commitStore.splitChosen.length === 0
+              ? 'none'
+              : commitStore.splitChosen.length === commitStore.splitGroups.length ? 'all' : 'some'}
+            label="Tick every suggested commit"
+            onchange={() => commitStore.chooseAllSplit(commitStore.splitChosen.length !== commitStore.splitGroups.length)}
+          />
+          <span>
+            Suggested as {pluralize(splitPlanned.length, 'commit')}
+            {#if splitLeftover}<span class="split-note">· {pluralize(splitLeftover.files.length, 'file')} not placed</span>{/if}
+          </span>
           <button class="dismiss" onclick={() => commitStore.dismissSplit()}>Dismiss</button>
-        </p>
+        </div>
         <ol>
           {#each commitStore.splitGroups as group, i (i)}
-            <li>
-              <span class="reason">{group.reason}</span>
-              <span class="count">{pluralize(group.files.length, 'file')}</span>
-              <span class="files">{group.files.join(', ')}</span>
+            {@const blocking = group.subject.trim() ? checkMessage(group.subject, commitStore.rules).blocking : []}
+            <li class:off={!group.on} style:animation-delay="{i * 70}ms">
+              <TriCheckbox
+                checkState={group.on ? 'all' : 'none'}
+                label={`Make the commit for ${group.reason}`}
+                onchange={() => (group.on = !group.on)}
+              />
+              <div class="split-body">
+                <input
+                  class="split-subject"
+                  class:bad={blocking.length > 0}
+                  bind:value={group.subject}
+                  placeholder="Write a commit message"
+                  spellcheck="false"
+                  aria-label={`Message for ${group.reason}`}
+                />
+                {#if blocking.length > 0}<span class="split-problem">{blocking[0].message}</span>{/if}
+                <span class="reason">{group.reason}</span>
+                {#if group.leftover}
+                  <span class="split-note">Write a message to commit these together, or leave them staged.</span>
+                {/if}
+                <button
+                  class="count"
+                  onclick={() => (group.open = !group.open)}
+                  aria-expanded={group.open}
+                  title={group.open ? 'Hide the files' : 'Show the files, to leave some out'}
+                >
+                  <span class="chevron" class:open={group.open} aria-hidden="true">›</span>
+                  {#if group.excluded.length}
+                    {splitFiles(group).length} of {pluralize(group.files.length, 'file')}
+                  {:else}
+                    {pluralize(group.files.length, 'file')}
+                  {/if}
+                </button>
+                {#if group.open}
+                  <!--
+                    Unticking a file leaves it out of this commit only: it stays
+                    staged, for a commit of its own later. Its name opens its diff.
+                  -->
+                  <ul class="split-files">
+                    {#each group.files as file (file)}
+                      {@const change = commitStore.all.find((c) => c.path === file)}
+                      <li class:off={group.excluded.includes(file)}>
+                        <TriCheckbox
+                          checkState={group.excluded.includes(file) ? 'none' : 'all'}
+                          label={`Include ${file} in this commit`}
+                          onchange={() => commitStore.toggleSplitFile(group, file)}
+                        />
+                        <button class="split-file" onclick={() => change && openChange(change)} title="Show the diff">
+                          <span class="name">{file.split('/').pop()}</span>
+                          {#if file.includes('/')}<span class="dir">{file.slice(0, file.lastIndexOf('/'))}</span>{/if}
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                {:else}
+                  <span class="files" title={splitFiles(group).join('\n')}>{splitFiles(group).join(', ')}</span>
+                {/if}
+              </div>
             </li>
           {/each}
         </ol>
+        <div class="split-foot">
+          <button
+            class="primary"
+            onclick={() => commitStore.commitSplit()}
+            disabled={!!commitStore.splitBlocked}
+            title={commitStore.splitBlocked ?? 'Make each ticked commit, in this order'}
+          >
+            {commitStore.splitChosen.length === 1 ? 'Make 1 commit' : `Make ${commitStore.splitChosen.length} commits`}
+          </button>
+          {#if commitStore.splitChosen.length < commitStore.splitGroups.length}
+            <span class="split-note">The files of unticked commits stay staged.</span>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -364,6 +457,7 @@
       {#if (commitStore.suggestProviders?.available.length ?? 0) > 0}
         <button
           class="secondary suggest"
+          class:working={commitStore.suggesting === 'working'}
           onclick={() => commitStore.suggest()}
           disabled={!commitStore.canSuggest}
           title={commitStore.canSuggest
@@ -372,6 +466,10 @@
               ]}`
             : 'Tick at least one file to describe'}
         >
+          {#if commitStore.suggesting}
+            <!-- Decorative: the button's own name and the busy summary say what is happening. -->
+            <motion-icon-state class="suggest-icon" name="loading" active={commitStore.suggesting === 'done'}></motion-icon-state>
+          {/if}
           Suggest
         </button>
       {:else if commitStore.suggestProviders}
@@ -611,6 +709,20 @@
   }
   .problem + .origin { padding-left: 15px; }
 
+  .suggest {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .suggest-icon {
+    --mc-icon-size: 13px;
+    --mc-icon-color: var(--accent);
+  }
+
+  /* Off while it works, so it cannot be pressed twice, but not faded: the spinner is the point. */
+  .suggest.working:disabled { opacity: 1; }
+
   .split {
     margin-top: 8px;
     padding: 8px 10px;
@@ -622,9 +734,9 @@
 
   .split-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     color: var(--text-dim);
   }
 
@@ -640,19 +752,130 @@
 
   .split ol {
     margin: 0;
-    padding-left: 18px;
+    padding: 0;
+    list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
   }
 
-  .split li { color: var(--text); }
+  .split li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--text);
+  }
+  /* The checkbox lines up with the message, the thing it is about. */
+  .split li > :global(.box) { margin-top: 5px; }
+  .split li.off .split-body { opacity: 0.5; }
+
+  /* The answer arrives commit by commit, where the waiting cards just were. */
+  .split li { animation: split-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+  @keyframes split-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .split li { animation: none; }
+  }
+
+  .split-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .split-subject {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 3px;
+    padding: 3px 6px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .split-subject:focus { border-color: var(--accent); outline: none; }
+  .split-subject.bad { border-color: var(--danger); }
+
+  .split-problem {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--danger);
+    font-size: 11px;
+  }
+
+  .split-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .split-note {
+    color: var(--text-faint);
+    font-size: 11px;
+  }
 
   .reason { font-weight: 500; }
 
   .count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     margin-left: 6px;
+    padding: 0 3px;
+    background: none;
+    border: 0;
+    border-radius: 3px;
     color: var(--text-faint);
+    font: inherit;
+    cursor: pointer;
+  }
+  .count:hover { background: var(--bg-hover); color: var(--text); }
+
+  .split-files {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .split-files li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .split-files li.off .split-file { opacity: 0.5; text-decoration: line-through; }
+
+  .split-file {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 1px 4px;
+    background: none;
+    border: 0;
+    border-radius: 3px;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .split-file:hover { background: var(--bg-hover); }
+  .split-file .name { flex: none; font-size: 11.5px; }
+  .split-file .dir {
+    overflow: hidden;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* The paths are the detail: available, but never the thing read first. */

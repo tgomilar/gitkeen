@@ -13,12 +13,30 @@
 import { repoStore, describe } from './repo.svelte';
 import { toasts } from './toasts.svelte';
 import { toChange } from '../changes';
+import { pluralize } from '../format';
 import type { SigningInfo } from '../git/types';
 import type { Change } from '../changes';
 import { checkMessage, describeRules } from '../git/commit-rules';
 import type {
-  HeadCommit, PushOptions, Stash, StashFile, SuggestProviders, SuggestedGroup
+  HeadCommit, PushOptions, Stash, StashFile, SuggestProviders
 } from '../git/types';
+
+/** A suggested commit as the panel holds it: its message can be edited, and it can be left out. */
+export interface SplitCommit {
+  reason: string;
+  subject: string;
+  files: string[];
+  on: boolean;
+  /** The files the model left out of every group. */
+  leftover: boolean;
+  /** Files unticked in this commit's list: left out of it, and still staged afterwards. */
+  excluded: string[];
+  /** True while its file list is open. */
+  open: boolean;
+}
+
+/** The files a suggested commit will actually take: its own, less any unticked. */
+export const splitFiles = (group: SplitCommit) => group.files.filter((f) => !group.excluded.includes(f));
 
 class CommitStore {
   message = $state('');
@@ -45,10 +63,30 @@ class CommitStore {
 
   /**
    * How the ticked change could be split, when the last suggestion thought it
-   * held more than one piece of work. Advice only: nothing is re-ticked and
-   * nothing is committed on its own.
+   * held more than one piece of work. Each is a commit the user can edit, tick
+   * or leave out; nothing is committed until they press the button, because
+   * which commits to make is their call.
    */
-  splitGroups = $state<SuggestedGroup[]>([]);
+  splitGroups = $state<SplitCommit[]>([]);
+
+  /** Drives the Suggest button's icon: spinning while asked, a check when answered. */
+  suggesting = $state<'working' | 'done' | null>(null);
+
+  /** The suggested commits ticked to be made. */
+  splitChosen = $derived(this.splitGroups.filter((g) => g.on));
+
+  /** Why the ticked commits cannot be made yet, or null when they can. */
+  splitBlocked = $derived.by(() => {
+    if (this.busy) return this.busy;
+    if (this.splitChosen.length === 0) return 'Tick at least one commit to make.';
+    for (const group of this.splitChosen) {
+      if (!group.subject.trim()) return `Write a message for "${group.reason}".`;
+      if (splitFiles(group).length === 0) return `"${group.subject}" has every file unticked.`;
+      const blocking = checkMessage(group.subject, this.rules).blocking;
+      if (blocking.length > 0) return `"${group.subject}": ${blocking[0].message}`;
+    }
+    return null;
+  });
 
   /** Collapsed group and folder keys. */
   collapsed = $state<Set<string>>(new Set());
@@ -178,6 +216,50 @@ class CommitStore {
     this.collapsed = new Set();
   }
 
+  /** Leave a file out of one suggested commit, or put it back in. */
+  toggleSplitFile(group: SplitCommit, path: string) {
+    group.excluded = group.excluded.includes(path)
+      ? group.excluded.filter((f) => f !== path)
+      : [...group.excluded, path];
+  }
+
+  /** Tick or untick every suggested commit at once. */
+  chooseAllSplit(on: boolean) {
+    for (const group of this.splitGroups) group.on = on;
+  }
+
+  /**
+   * Make the ticked suggested commits, in the order shown.
+   *
+   * Files of the commits left unticked stay staged, so they can go into a
+   * commit of their own afterwards. Committed groups leave the list; if Git
+   * refuses one part way, those already made stand, and what is left is still
+   * there to fix and try again.
+   */
+  async commitSplit(): Promise<boolean> {
+    const repo = repoStore.repo;
+    if (!repo || this.splitBlocked) return false;
+    const chosen = this.splitChosen.map((g) => ({ message: g.subject.trim(), files: splitFiles(g) }));
+    const sign = this.sign;
+    const result = await this.run('Committing', () => repo.commitGroups(chosen, sign));
+    await repoStore.refresh();
+
+    // A ticked commit is done once none of the files it took is staged any
+    // more. Its unticked files may well still be, so they do not keep it here.
+    const staged = new Set(this.checkedPaths);
+    this.splitGroups = this.splitGroups.filter((g) => !g.on || splitFiles(g).some((f) => staged.has(f)));
+    if (!result) return false;
+
+    this.message = '';
+    this.draft = '';
+    const n = result.commits.length;
+    toasts.success(
+      `Made ${n} ${n === 1 ? 'commit' : 'commits'}`,
+      this.checkedPaths.length ? `${pluralize(this.checkedPaths.length, 'file')} still staged.` : null
+    );
+    return true;
+  }
+
   /** Drop the split advice, once it no longer describes what is ticked. */
   dismissSplit() {
     this.splitGroups = [];
@@ -301,17 +383,35 @@ class CommitStore {
     const repo = repoStore.repo;
     if (!repo || !this.canSuggest) return false;
 
+    this.suggesting = 'working';
     const result = await this.run('Suggesting', () =>
       repo.suggest(this.checkedPaths, { provider, amend: this.amend })
     );
-    if (!result) return false;
+    if (!result) {
+      this.suggesting = null;
+      return false;
+    }
+    // The spinner turns into a check for a moment, so the finished suggestion
+    // is noticed even when the eye is on the file list.
+    this.suggesting = 'done';
+    setTimeout(() => {
+      if (this.suggesting === 'done') this.suggesting = null;
+    }, 1200);
 
     this.message = result.subject;
     if (this.amend) this.draft = result.subject;
-    this.splitGroups = result.groups ?? [];
+    // The files the model did not place start unticked: they have no message,
+    // and whether they belong together is for the user to say.
+    this.splitGroups = (result.groups ?? []).map((g) => ({
+      reason: g.reason, subject: g.subject, files: g.files, on: !g.leftover, leftover: !!g.leftover,
+      excluded: [], open: false
+    }));
 
     if (result.clipped) {
-      toasts.info('Suggested from part of the diff', 'The change was too large to send in full.');
+      toasts.info(
+        'Suggested from a shortened diff',
+        'The change was too large to send in full, so each file was shortened to its first changed lines.'
+      );
     }
     if (!result.ok) {
       toasts.info(

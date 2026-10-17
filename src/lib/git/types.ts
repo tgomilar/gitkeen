@@ -173,7 +173,20 @@ export interface LmstudioModel {
 export interface SuggestedGroup {
   /** What this group of files is, in a few words. */
   reason: string;
+  /** The commit subject for this group alone. Empty when the model gave none. */
+  subject: string;
   files: string[];
+  problems: MessageProblem[];
+  /** False when the subject breaks a blocking rule, or there is none. */
+  ok: boolean;
+  /** True for the files the model left out of every group, gathered so none is lost. */
+  leftover?: boolean;
+}
+
+/** The commits a split was made into, oldest first. */
+export interface CommitGroupsResult {
+  ok: boolean;
+  commits: { commit: string; message: string; files: number }[];
 }
 
 /** A suggested subject line, already checked against the repository's rules. */
