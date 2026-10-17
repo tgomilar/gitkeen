@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,9 +80,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This version is also the Node inside the app: the backend is built
+      # into a copy of the official Node binary of the same version. Node 24
+      # is the same npm as on a developer's Mac, so npm ci accepts the lock
+      # file written there.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
